@@ -1,0 +1,98 @@
+<title>Karaoke Bingo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one phone-width column. Marquee title, the 5x5 card filling the width, then a status line and a button. */
+:root {
+  --bg: #f6f1f7; --panel: #ffffff; --ink: #24142c; --muted: #6d5c74; --line: #e3d6e6;
+  --hot: #c2185b; --gold: #b7791f; --on: #fbe3ee; --win: #fbefd8;
+  --f-display: "Bungee", "Impact", "Arial Black", sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "DM Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #b6a3bd; --line: #3a2843;
+  --hot: #ff5c9d; --gold: #f5b84a; --on: #4a1d35; --win: #4a3514; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #b6a3bd; --line: #3a2843;
+  --hot: #ff5c9d; --gold: #f5b84a; --on: #4a1d35; --win: #4a3514; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); }
+.wrap { max-width: 560px; margin: 0 auto; padding-block: 20px 40px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+h1 { font-family: var(--f-display); font-weight: 400; margin: 0; font-size: clamp(30px, 9vw, 44px); line-height: 1; color: var(--hot); }
+h1 span { color: var(--gold); }
+.status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.status.bad { color: var(--hot); }
+
+.kb { display: grid; gap: 12px; }
+.kb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.kb-night { font-family: var(--f-display); font-size: 18px; }
+.kb-count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kb-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.kb-letter { font-family: var(--f-display); text-align: center; font-size: 22px; color: var(--hot); }
+.kb-sq { font: inherit; cursor: pointer; aspect-ratio: 1; max-width: 100%; min-width: 0; padding: 4px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; text-align: center; overflow: hidden; }
+.kb-t { font-size: clamp(9px, 2.6vw, 13px); line-height: 1.15; font-weight: 600; overflow-wrap: anywhere; hyphens: auto; }
+.kb-w { font-family: var(--f-mono); font-size: clamp(8px, 2.2vw, 11px); color: var(--hot); line-height: 1.1; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kb-sq.on { background: var(--on); border-color: var(--hot); }
+.kb-sq.on .kb-t { text-decoration: line-through; text-decoration-color: var(--hot); text-decoration-thickness: 2px; }
+.kb-sq.win { background: var(--win); border-color: var(--gold); }
+.kb-sq.free { background: var(--hot); border-color: var(--hot); color: #fff; }
+.kb-sq.free .kb-t { font-family: var(--f-display); font-weight: 400; text-decoration: none; }
+.kb-sq.free .kb-w { color: #fff; opacity: .85; }
+.kb-sq:focus-visible, .kb-new:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.kb-info { min-height: 3em; font-size: 15px; line-height: 1.4; }
+.kb-info.bingo { font-family: var(--f-display); font-size: 22px; color: var(--hot); }
+.kb-new { justify-self: start; font: 600 14px var(--f-body); cursor: pointer; padding: 9px 14px; border-radius: 6px; border: 1px solid var(--hot); background: transparent; color: var(--hot); }
+@media (prefers-reduced-motion: no-preference) {
+  .kb.kb-pop .kb-grid { animation: pop .6s ease-out; }
+  @keyframes pop { 0% { transform: scale(1); } 30% { transform: scale(1.04) rotate(-1deg); } 60% { transform: scale(.99) rotate(1deg); } 100% { transform: none; } }
+}
+.how { font-size: 13px; color: var(--muted); margin: 0; }
+</style>
+
+<div class="wrap">
+  <h1>Karaoke <span>Bingo</span></h1>
+  <div class="status" id="status">Loading tonight's songs…</div>
+  <div class="kb" id="bingo"></div>
+  <p class="how">Every phone gets its own card. Squares mark themselves as the host's song list fills up. The first full row, column or diagonal wins.</p>
+</div>
+
+<script src="bingo.js"></script>
+<script>
+(function () {
+  const SERVER = "Cloudflare Developer Platform", TOOL = "d1_database_query";
+  const INPUT = { database_id: "61453b2b-22e8-480d-a1ac-a6db72aa29a9",
+    sql: "SELECT night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at" };
+  const status = document.getElementById("status");
+  const setStatus = (m, bad) => { status.textContent = m || ""; status.classList.toggle("bad", !!bad); status.hidden = !m; };
+  let rows = [];
+  const board = KaraokeBingo.mount(document.getElementById("bingo"), { getRows: async () => rows, onStatus: (m, bad) => { if (bad) setStatus(m, true); } });
+  function rowsFrom(r) { let p = r && r.payload; if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { return null; } }
+    if (Array.isArray(p) && p[0] && Array.isArray(p[0].results)) return p[0].results; if (p && Array.isArray(p.results)) return p.results; return null; }
+  const FIX = {
+    needs_reauth: "Reconnect Cloudflare Developer Platform in claude.ai Settings → Connectors.",
+    server_not_connected: "Add the Cloudflare Developer Platform connector in claude.ai Settings → Connectors to load songs.",
+    not_in_manifest: "Cloudflare access is off for this page. Turn it on from the page's Permissions menu.",
+    approval_required: "Allow this page to use your Cloudflare connector to load songs.",
+    selection_required: "Pick which Cloudflare connector to use when claude.ai asks, then reload.",
+    blocked_by_policy: "Your organization blocks this Cloudflare tool for you.",
+  };
+  (async () => {
+    const mcp = await claude.use("mcp");
+    if (!mcp) { setStatus("Open this page in claude.ai to load songs.", true); return; }
+    mcp.watchTool(SERVER, TOOL, INPUT, (ev) => {
+      if (ev.type === "data") { const r = rowsFrom(ev.result); if (!r) { setStatus("The database answered in a shape this page doesn't understand.", true); return; }
+        rows = r; board.refresh(); setStatus(null); }
+      else { const c = ev.error && ev.error.code;
+        if (c === "approval_required") { setStatus(FIX[c], true); const b = document.createElement("button"); b.className = "kb-new"; b.type = "button"; b.textContent = "Allow and load"; b.style.marginLeft = "8px";
+          b.addEventListener("click", async () => { b.disabled = true; try { const r = rowsFrom(await mcp.callTool(SERVER, TOOL, INPUT)); if (r) { rows = r; board.refresh(); setStatus(null); } } catch (e) { setStatus(FIX[e.code] || "Couldn't load songs.", true); } });
+          status.append(b); return; }
+        setStatus(FIX[c] || (rows.length ? "Couldn't refresh just now; showing the last songs loaded." : "Couldn't reach the karaoke database. Try again in a minute."), true); }
+    }, { refetchInterval: 60000, cache: { staleTime: 30000, gcTime: 3600000 } });
+  })();
+})();
+</script>

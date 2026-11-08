@@ -1,0 +1,36 @@
+-- Cloudflare D1 database "karaoke-stats" (binding DB in site/wrangler.toml).
+-- Dumped from the live database on 2026-11-08. The sync script
+-- (sync/karaoke_sync.py) uploads plays here; the site reads from it.
+
+CREATE TABLE plays (
+  uuid text primary key,          -- KaraFun's id for this play
+  played_at integer not null,     -- unix seconds (UTC)
+  played_at_local text,
+  night text,                     -- karaoke night, 6am to 6am local
+  session_start integer,
+  singer text,
+  type_id integer,                -- 1 = catalog song
+  song_id integer,
+  artist text,
+  title text,
+  release_year integer,
+  length_s integer,
+  pitch integer,
+  tempo integer,
+  lead_vocal_a real,
+  lead_vocal_b real,
+  backing real,
+  first_seen text
+);
+CREATE INDEX plays_night on plays(night);
+CREATE INDEX plays_played_at on plays(played_at);
+CREATE INDEX plays_singer on plays(singer);
+
+CREATE TABLE sessions (session_start integer primary key, session_end integer, name text);
+
+CREATE TABLE sync_runs (ran_at text primary key, device text, source_rows integer, uploaded integer);
+
+CREATE VIEW v_night_stats as select night, count(*) as songs, count(distinct singer) as singers, min(played_at_local) as first_song, max(played_at_local) as last_song from plays group by night order by night;
+CREATE VIEW v_singer_stats as select singer, count(*) as songs, count(distinct night) as nights, min(played_at_local) as first_song, max(played_at_local) as last_song from plays group by singer order by songs desc;
+CREATE VIEW v_song_stats as select artist, title, count(*) as times_sung, count(distinct singer) as singers from plays where title is not null group by song_id order by times_sung desc;
+CREATE VIEW v_artist_stats as select artist, count(*) as times_sung from plays where artist is not null group by artist order by times_sung desc;

@@ -1,0 +1,378 @@
+<title>The Mics</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a marquee header, a strip of night "tickets", then a grid of award plaques and the recap card beside them. */
+:root {
+  --bg: #f6f1f7; --panel: #ffffff; --ink: #24142c; --muted: #6d5c74; --line: #e3d6e6;
+  --hot: #c2185b; --gold: #b7791f; --gold-soft: #fbefd8; --hot-soft: #fbe3ee;
+  --f-display: "Bungee", "Impact", "Arial Black", sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #b6a3bd; --line: #3a2843;
+  --hot: #ff5c9d; --gold: #f5b84a; --gold-soft: #3a2a14; --hot-soft: #3d1a2c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #b6a3bd; --line: #3a2843;
+  --hot: #ff5c9d; --gold: #f5b84a; --gold-soft: #3a2a14; --hot-soft: #3d1a2c; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px; }
+header { display: grid; gap: 6px; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(34px, 6vw, 56px); line-height: 1; margin: 0; letter-spacing: .01em; color: var(--hot); }
+h1 span { color: var(--gold); }
+.sub { color: var(--muted); margin: 0; max-width: 62ch; }
+.status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.status.bad { color: var(--hot); }
+
+.nights { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.night { flex: 0 0 auto; font: inherit; cursor: pointer; text-align: left; background: var(--panel); color: var(--ink);
+  border: 1px dashed var(--line); border-radius: 6px; padding: 10px 14px; display: grid; gap: 2px; min-width: 128px; }
+.night b { font-family: var(--f-display); font-weight: 400; font-size: 15px; letter-spacing: .02em; }
+.night small { font-family: var(--f-mono); color: var(--muted); font-size: 12px; }
+.night[aria-pressed="true"] { border: 1px solid var(--hot); background: var(--hot-soft); }
+.night:focus-visible, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.tally { display: flex; flex-wrap: wrap; gap: 8px 28px; font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.tally strong { font-family: var(--f-display); font-weight: 400; font-size: 26px; color: var(--ink); display: block; line-height: 1.1; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); } }
+h2 { font-family: var(--f-display); font-weight: 400; font-size: 20px; margin: 0 0 12px; letter-spacing: .02em; text-wrap: balance; }
+
+.awards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.award { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.award .label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.award .who { font-weight: 700; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.award .what { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.award .stat { font-family: var(--f-mono); font-size: 12px; color: var(--hot); font-variant-numeric: tabular-nums; }
+.award.headline { border-color: var(--hot); }
+
+.side { display: grid; gap: 12px; }
+canvas { width: 100%; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); background: #1a0f20; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button.act { font: 600 14px var(--f-body); cursor: pointer; border-radius: 6px; padding: 9px 14px; border: 1px solid var(--hot); background: var(--hot); color: #fff; }
+button.act.ghost { background: transparent; color: var(--hot); }
+textarea { width: 100%; box-sizing: border-box; min-height: 120px; font: 13px/1.5 var(--f-mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; resize: vertical; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+
+.records { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 28px; }
+.rec { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rec .label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); grid-column: 1 / -1; }
+.rec .who { font-weight: 600; overflow-wrap: anywhere; }
+.rec .stat { font-family: var(--f-mono); font-size: 13px; color: var(--hot); font-variant-numeric: tabular-nums; }
+.rec .what { grid-column: 1 / -1; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) { .award { transition: border-color .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>The <span>Mics</span></h1>
+    <p class="sub">Awards for every karaoke night, worked out from what got sung. Pick a night, then grab its recap card for socials.</p>
+    <div class="status" id="status">Loading plays from the karaoke database…</div>
+  </header>
+
+  <nav class="nights" id="nights" aria-label="Karaoke nights"></nav>
+
+  <div class="tally" id="tally"></div>
+
+  <div class="main">
+    <section>
+      <h2 id="awards-h">Tonight's winners</h2>
+      <div class="awards" id="awards"></div>
+    </section>
+    <aside class="side">
+      <h2>Recap card</h2>
+      <canvas id="card" width="1080" height="1350" aria-label="Recap card for the selected night"></canvas>
+      <div class="btns">
+        <button class="act" id="save-card" type="button">Save image</button>
+        <button class="act ghost" id="copy-cap" type="button">Copy caption</button>
+      </div>
+      <p class="note" id="save-note">Square-ish 1080×1350, sized for an Instagram post.</p>
+      <textarea id="caption" aria-label="Caption for social post"></textarea>
+    </aside>
+  </div>
+
+  <section>
+    <h2>Hall of fame</h2>
+    <div class="records" id="records"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const SERVER = "Cloudflare Developer Platform";
+  const TOOL = "d1_database_query";
+  const INPUT = { database_id: "61453b2b-22e8-480d-a1ac-a6db72aa29a9",
+    sql: "SELECT night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at" };
+
+  const $ = (id) => document.getElementById(id);
+  let plays = [], nights = [], current = null;
+
+  // ---------- helpers ----------
+  const key = (s) => (s || "").trim().toLowerCase();
+  const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
+  const mmss = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  const nightLabel = (n, long) => {
+    const d = new Date(n + "T12:00:00");
+    return d.toLocaleDateString("en-US", long ? { weekday: "long", month: "long", day: "numeric" } : { weekday: "short", month: "short", day: "numeric" });
+  };
+  const localHour = (ts) => new Date(ts * 1000).getHours();
+  function groupSize(name) {
+    const n = key(name);
+    if (/^table\s*\d+/.test(n)) return 4; // a whole table counts as a crowd
+    const parts = n.split(/\s*(?:,|&|\/|\band\b|\bn\b|\+)\s*/).filter(Boolean);
+    return parts.length;
+  }
+  function songLine(p) { return p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song"; }
+
+  // ---------- awards for one night ----------
+  function awardsFor(rows) {
+    const out = [];
+    const songs = rows.filter((p) => p.title);
+    const timed = songs.filter((p) => p.length_s);
+    const dated = songs.filter((p) => p.release_year);
+
+    // MVP: most songs, then most mic time
+    const bySinger = new Map();
+    rows.forEach((p) => { if (!key(p.singer)) return; const k = key(p.singer);
+      const e = bySinger.get(k) || { name: clean(p.singer), n: 0, secs: 0 }; e.n++; e.secs += p.length_s || 0; bySinger.set(k, e); });
+    const mvp = [...bySinger.values()].sort((a, b) => b.n - a.n || b.secs - a.secs)[0];
+    if (mvp && mvp.n > 1) out.push({ id: "mvp", headline: true, label: "Mic Hog", who: mvp.name, what: "Most songs of the night", stat: mvp.n + " songs · " + mmss(mvp.secs) + " on the mic" });
+
+    // Broken Record: same singer, same song, more than once
+    const rep = new Map();
+    songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); const e = rep.get(k) || { p, n: 0 }; e.n++; rep.set(k, e); });
+    const br = [...rep.values()].filter((e) => e.n > 1 && key(e.p.singer)).sort((a, b) => b.n - a.n)[0];
+    if (br) out.push({ id: "broken", headline: true, label: "Broken Record", who: clean(br.p.singer), what: songLine(br.p), stat: br.n + " times in one night" });
+
+    // Déjà Vu: same song title from different singers or versions
+    const byTitle = new Map();
+    songs.forEach((p) => { const k = key(p.title); const e = byTitle.get(k) || []; e.push(p); byTitle.set(k, e); });
+    const dv = [...byTitle.values()].filter((l) => new Set(l.map((p) => key(p.singer) + "|" + key(p.artist))).size > 1).sort((a, b) => b.length - a.length)[0];
+    if (dv) { const names = [...new Set(dv.map((p) => clean(p.singer) || "someone"))];
+      out.push({ id: "dejavu", label: "Déjà Vu", who: names.join(" + "), what: "“" + dv[0].title + "”, more than once", stat: dv.length + " plays" + (new Set(dv.map((p) => key(p.artist))).size > 1 ? ", different versions" : "") }); }
+
+    // Marathon & Speed Run
+    if (timed.length) {
+      const long = timed.reduce((a, b) => (b.length_s > a.length_s ? b : a));
+      const short = timed.reduce((a, b) => (b.length_s < a.length_s ? b : a));
+      out.push({ id: "marathon", headline: !br, label: "Marathon", who: clean(long.singer) || "Someone", what: songLine(long), stat: mmss(long.length_s) + " long" });
+      out.push({ id: "speed", label: "Speed Run", who: clean(short.singer) || "Someone", what: songLine(short), stat: "over in " + mmss(short.length_s) });
+    }
+    // Time Traveler & Fresh Drop
+    if (dated.length) {
+      const old = dated.reduce((a, b) => (b.release_year < a.release_year ? b : a));
+      const fresh = dated.reduce((a, b) => (b.release_year > a.release_year ? b : a));
+      out.push({ id: "time", headline: true, label: "Time Traveler", who: clean(old.singer) || "Someone", what: songLine(old), stat: "from " + old.release_year });
+      out.push({ id: "fresh", label: "Fresh Drop", who: clean(fresh.singer) || "Someone", what: songLine(fresh), stat: "from " + fresh.release_year });
+    }
+    // Squad Goals: biggest group on the mic
+    const sq = rows.filter((p) => key(p.singer)).map((p) => ({ p, n: groupSize(p.singer) })).sort((a, b) => b.n - a.n)[0];
+    if (sq && sq.n > 1) out.push({ id: "squad", label: "Squad Goals", who: clean(sq.p.singer), what: songLine(sq.p), stat: /^table/i.test(sq.p.singer.trim()) ? "a whole table" : sq.n + " voices" });
+    // Opening Act & Last Call
+    const first = rows[0], last = rows[rows.length - 1];
+    if (first) out.push({ id: "open", label: "Opening Act", who: clean(first.singer) || "Someone", what: songLine(first), stat: "first brave soul" });
+    if (last && last !== first) out.push({ id: "last", label: "Last Call", who: clean(last.singer) || "Someone", what: songLine(last), stat: "closed the night" });
+    // Artist of the night
+    const art = new Map();
+    songs.forEach((p) => { if (!p.artist) return; const k = key(p.artist); const e = art.get(k) || { name: p.artist, n: 0, who: new Set() }; e.n++; e.who.add(clean(p.singer)); art.set(k, e); });
+    const top = [...art.values()].sort((a, b) => b.n - a.n)[0];
+    if (top && top.n > 1) out.push({ id: "artist", label: "Artist of the Night", who: top.name, what: "Sung by " + [...top.who].filter(Boolean).join(", "), stat: top.n + " songs" });
+    // Decade of the night
+    const dec = new Map();
+    dated.forEach((p) => { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); });
+    const td = [...dec.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (td) out.push({ id: "decade", label: "Decade of the Night", who: "The " + String(td[0]).slice(2) + "s", what: Math.round((100 * td[1]) / dated.length) + "% of songs with a known year", stat: td[1] + " songs" });
+    return out;
+  }
+
+  function tallyFor(rows) {
+    const singers = new Set(rows.map((p) => key(p.singer)).filter(Boolean)).size;
+    const secs = rows.reduce((s, p) => s + (p.length_s || 0), 0);
+    const hours = new Map(); rows.forEach((p) => { const h = localHour(p.played_at); hours.set(h, (hours.get(h) || 0) + 1); });
+    const ph = [...hours.entries()].sort((a, b) => b[1] - a[1])[0];
+    const fmtH = (h) => { const x = h % 12 || 12; return x + (h < 12 ? "am" : "pm"); };
+    return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) + "–" + fmtH((ph[0] + 1) % 24) : "—" };
+  }
+
+  // ---------- rendering ----------
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function renderNights() {
+    const box = $("nights"); box.replaceChildren();
+    nights.slice().reverse().forEach((n) => {
+      const b = el("button", "night"); b.type = "button"; b.setAttribute("aria-pressed", String(n.night === current));
+      b.append(el("b", null, nightLabel(n.night)), el("small", null, n.rows.length + " songs"));
+      b.addEventListener("click", () => { current = n.night; try { localStorage.setItem("mics-night", current); } catch (e) {} render(); });
+      box.append(b);
+    });
+  }
+
+  function render() {
+    renderNights();
+    const n = nights.find((x) => x.night === current);
+    if (!n) return;
+    const t = tallyFor(n.rows);
+    const tally = $("tally"); tally.replaceChildren();
+    [["Songs", t.songs], ["Singers", t.singers], ["Minutes sung", t.minutes], ["Busiest hour", t.peak]].forEach(([l, v]) => {
+      const d = el("div"); d.append(el("strong", null, String(v)), document.createTextNode(l)); tally.append(d); });
+    $("awards-h").textContent = "Winners, " + nightLabel(n.night, true);
+    const aw = awardsFor(n.rows);
+    const box = $("awards"); box.replaceChildren();
+    aw.forEach((a) => { const c = el("article", "award" + (a.headline ? " headline" : ""));
+      c.append(el("div", "label", a.label), el("div", "who", a.who), el("div", "what", a.what), el("div", "stat", a.stat)); box.append(c); });
+    drawCard(n, t, aw);
+    $("caption").value = captionFor(n, t, aw);
+  }
+
+  function renderRecords() {
+    const rec = [];
+    const songs = plays.filter((p) => p.title);
+    const timed = songs.filter((p) => p.length_s), dated = songs.filter((p) => p.release_year);
+    if (timed.length) { const l = timed.reduce((a, b) => (b.length_s > a.length_s ? b : a));
+      rec.push(["Longest song ever", clean(l.singer), mmss(l.length_s), songLine(l) + ", " + nightLabel(l.night)]); }
+    if (dated.length) { const o = dated.reduce((a, b) => (b.release_year < a.release_year ? b : a));
+      rec.push(["Oldest song ever", clean(o.singer), String(o.release_year), songLine(o) + ", " + nightLabel(o.night)]); }
+    // most nights attended
+    const att = new Map(); plays.forEach((p) => { const k = key(p.singer); if (!k) return; const e = att.get(k) || { name: clean(p.singer), nights: new Set(), n: 0 }; e.nights.add(p.night); e.n++; att.set(k, e); });
+    const reg = [...att.values()].sort((a, b) => b.nights.size - a.nights.size || b.n - a.n).slice(0, 3);
+    if (reg.length) rec.push(["Most loyal regulars", reg.map((r) => r.name).join(", "), reg[0].nights.size + " nights", reg.map((r) => r.name + ": " + r.nights.size + " nights, " + r.n + " songs").join(" · ")]);
+    // signature song: same singer+song across the most nights
+    const sig = new Map(); songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); if (!key(p.singer)) return; const e = sig.get(k) || { p, n: 0 }; e.n++; sig.set(k, e); });
+    const s = [...sig.values()].sort((a, b) => b.n - a.n)[0];
+    if (s && s.n > 1) rec.push(["Signature song", clean(s.p.singer), s.n + " times", songLine(s.p)]);
+    // biggest night
+    const big = nights.slice().sort((a, b) => b.rows.length - a.rows.length)[0];
+    if (big) rec.push(["Biggest night", nightLabel(big.night, true), big.rows.length + " songs", tallyFor(big.rows).singers + " different singers"]);
+    // most-sung song overall
+    const sc = new Map(); songs.forEach((p) => { const k = key(p.title) + "|" + key(p.artist); const e = sc.get(k) || { p, n: 0 }; e.n++; sc.set(k, e); });
+    const tops = [...sc.values()].sort((a, b) => b.n - a.n)[0];
+    if (tops && tops.n > 1) rec.push(["Most-sung song", "“" + tops.p.title + "”", tops.n + " plays", tops.p.artist || ""]);
+    const box = $("records"); box.replaceChildren();
+    rec.forEach(([l, w, st, wh]) => { const r = el("div", "rec"); r.append(el("div", "label", l), el("div", "who", w), el("div", "stat", st), el("div", "what", wh)); box.append(r); });
+  }
+
+  // ---------- recap card (canvas) ----------
+  function wrapText(ctx, text, x, y, maxW, lh, maxLines) {
+    const words = text.split(" "); let line = "", lines = [];
+    words.forEach((w) => { const t = line ? line + " " + w : w; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; });
+    if (line) lines.push(line);
+    if (lines.length > maxLines) { lines = lines.slice(0, maxLines); lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, "") + "…"; }
+    lines.forEach((l, i) => ctx.fillText(l, x, y + i * lh)); return lines.length * lh;
+  }
+  function drawCard(n, t, aw) {
+    const c = $("card"), ctx = c.getContext("2d"), W = 1080, H = 1350;
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#2a0f33"); g.addColorStop(1, "#120818");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // spotlight
+    const r = ctx.createRadialGradient(W / 2, -80, 40, W / 2, -80, 900); r.addColorStop(0, "rgba(245,184,74,.28)"); r.addColorStop(1, "rgba(245,184,74,0)");
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    // marquee bulbs
+    ctx.fillStyle = "#f5b84a"; for (let x = 40; x < W; x += 50) { ctx.beginPath(); ctx.arc(x, 34, 7, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(x, H - 34, 7, 0, 7); ctx.fill(); }
+    const P = 80;
+    ctx.fillStyle = "#ff5c9d"; ctx.font = "400 104px Bungee, Impact, sans-serif"; ctx.fillText("THE MICS", P, 190);
+    ctx.fillStyle = "#f6ecf8"; ctx.font = "600 44px Figtree, system-ui, sans-serif"; ctx.fillText(nightLabel(n.night, true), P, 260);
+    ctx.fillStyle = "#b6a3bd"; ctx.font = "500 32px 'DM Mono', monospace";
+    ctx.fillText(t.songs + " songs  ·  " + t.singers + " singers  ·  " + t.minutes + " min", P, 315);
+    ctx.fillStyle = "rgba(255,255,255,.14)"; ctx.fillRect(P, 350, W - 2 * P, 2);
+    const order = ["mvp", "broken", "marathon", "time", "squad", "dejavu", "fresh", "last"];
+    const pick = order.map((id) => aw.find((a) => a.id === id)).filter(Boolean).slice(0, 5);
+    let y = 420;
+    pick.forEach((a) => {
+      ctx.fillStyle = "#f5b84a"; ctx.font = "500 26px 'DM Mono', monospace"; ctx.fillText(a.label.toUpperCase(), P, y);
+      ctx.fillStyle = "#ffffff"; ctx.font = "700 48px Figtree, system-ui, sans-serif"; y += 56 + wrapText(ctx, a.who, P, y + 56, W - 2 * P, 54, 1) - 54;
+      ctx.fillStyle = "#d9c8de"; ctx.font = "400 30px Figtree, system-ui, sans-serif"; y += 44; wrapText(ctx, a.what + "  —  " + a.stat, P, y, W - 2 * P, 38, 1);
+      y += 76;
+    });
+    ctx.fillStyle = "#ff5c9d"; ctx.font = "400 34px Bungee, Impact, sans-serif"; ctx.fillText("SEE YOU AT THE MIC", P, H - 90);
+  }
+
+  function captionFor(n, t, aw) {
+    const get = (id) => aw.find((a) => a.id === id);
+    const lines = ["🎤 The Mics, " + nightLabel(n.night, true), t.songs + " songs from " + t.singers + " singers. Here are your winners:"];
+    ["mvp", "broken", "marathon", "time", "squad", "last"].forEach((id) => { const a = get(id); if (a) lines.push("• " + a.label + ": " + a.who + " (" + a.what + ")"); });
+    lines.push("", "#karaoke #karaokenight");
+    return lines.join("\n");
+  }
+
+  // ---------- data ----------
+  function setStatus(msg, bad) { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); }
+  function load(rows) {
+    plays = rows.map((p) => ({ ...p, played_at: Number(p.played_at), length_s: p.length_s ? Number(p.length_s) : null, release_year: p.release_year ? Number(p.release_year) : null }));
+    const byNight = new Map(); plays.forEach((p) => { if (!p.night) return; (byNight.get(p.night) || byNight.set(p.night, []).get(p.night)).push(p); });
+    nights = [...byNight.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([night, rows]) => ({ night, rows }));
+    let saved = null; try { saved = localStorage.getItem("mics-night"); } catch (e) {}
+    if (!nights.some((x) => x.night === current)) current = nights.some((x) => x.night === saved) ? saved : (nights.length ? nights[nights.length - 1].night : null);
+    if (!nights.length) { setStatus("No karaoke nights in the database yet. They show up after the daily sync."); return; }
+    render(); renderRecords();
+  }
+  function rowsFrom(result) {
+    let p = result && result.payload;
+    if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { return null; } }
+    if (Array.isArray(p) && p[0] && Array.isArray(p[0].results)) return p[0].results;
+    if (p && Array.isArray(p.results)) return p.results;
+    if (p && p.result && Array.isArray(p.result)) return rowsFrom({ payload: p.result });
+    return null;
+  }
+  const FIX = {
+    needs_reauth: "Your Cloudflare connector needs signing in again. Reconnect Cloudflare Developer Platform in claude.ai Settings → Connectors.",
+    server_not_connected: "This page reads the karaoke database through the Cloudflare Developer Platform connector. Add it in claude.ai Settings → Connectors.",
+    selection_required: "You have more than one Cloudflare connector. Pick one when claude.ai asks, then reload.",
+    not_in_manifest: "Cloudflare access is turned off for this page. Turn it on from the page's Permissions menu.",
+    approval_required: "Allow this page to use your Cloudflare connector to load the plays.",
+    blocked_by_policy: "Your organization blocks this Cloudflare tool for you.",
+  };
+  async function start() {
+    const mcp = await claude.use("mcp");
+    if (!mcp) { setStatus("Open this page in claude.ai to load the karaoke database.", true); return; }
+    let hasData = false;
+    mcp.watchTool(SERVER, TOOL, INPUT, (ev) => {
+      if (ev.type === "data") {
+        const rows = rowsFrom(ev.result);
+        if (!rows) { setStatus("The database answered in a shape this page doesn't understand.", true); return; }
+        hasData = true; load(rows);
+        const at = ev.result.cache && ev.result.cache.storedAt ? new Date(ev.result.cache.storedAt) : new Date();
+        setStatus(rows.length + " plays across " + nights.length + " nights · updated " + at.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+      } else {
+        const code = ev.error && ev.error.code;
+        if (code === "approval_required") { setStatus(FIX.approval_required, true); askOnce(mcp); return; }
+        if (FIX[code]) { if (!hasData || /reauth|not_connected|policy|manifest/.test(code)) setStatus(FIX[code], true); return; }
+        setStatus(hasData ? "Couldn't refresh just now; showing the last loaded plays." : "Couldn't reach the karaoke database (" + (ev.error && ev.error.message || code) + "). Try reloading in a minute.", true);
+      }
+    }, { cache: { staleTime: 30 * 60 * 1000, gcTime: 24 * 3600 * 1000 } });
+  }
+  function askOnce(mcp) {
+    const s = $("status"); if (s.querySelector("button")) return;
+    const b = el("button", "act ghost", "Allow and load"); b.type = "button"; b.style.marginLeft = "8px";
+    b.addEventListener("click", async () => { b.disabled = true;
+      try { const r = await mcp.callTool(SERVER, TOOL, INPUT); const rows = rowsFrom(r); if (rows) { load(rows); setStatus(rows.length + " plays across " + nights.length + " nights"); } }
+      catch (e) { setStatus(FIX[e.code] || ("Couldn't load: " + e.message), true); } });
+    s.append(b);
+  }
+
+  // ---------- actions ----------
+  $("save-card").addEventListener("click", async () => {
+    const note = $("save-note");
+    const dl = await claude.use("downloads");
+    if (!dl) { note.textContent = "Saving isn't available in this view. Long-press or right-click the card to save it."; return; }
+    $("card").toBlob(async (blob) => {
+      try { const r = await dl.save({ filename: "the-mics-" + (current || "night") + ".png", data: blob }); note.textContent = r.status === "saved" ? "Saved." : "Sent."; }
+      catch (e) { note.textContent = e.code === "declined" ? "Not saved." : "Couldn't save the image (" + e.code + ")."; }
+    }, "image/png");
+  });
+  $("copy-cap").addEventListener("click", async () => {
+    const ta = $("caption");
+    try { await navigator.clipboard.writeText(ta.value); $("save-note").textContent = "Caption copied."; }
+    catch (e) { ta.focus(); ta.select(); $("save-note").textContent = "Press Ctrl+C to copy the selected caption."; }
+  });
+
+  // redraw card once the webfonts arrive
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (current) render(); });
+  start();
+})();
+</script>

@@ -1,0 +1,18 @@
+# Holds the Cloudflare API token. Copy the .sample.json and fill it in locally.
+karaoke_sync_config.json
+
+# Local data and logs from the laptop
+*.db
+*.db-journal
+sync_log.txt
+*.csv
+*.zip
+
+# Tooling
+__pycache__/
+*.pyc
+node_modules/
+.wrangler/
+.dev.vars
+.DS_Store
+Thumbs.db

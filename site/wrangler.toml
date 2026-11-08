@@ -1,0 +1,17 @@
+# Public, read-only karaoke stats site for phones.
+# Deploy from this folder with:  npx wrangler deploy
+name = "karaoke-stats"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "karaoke-stats"
+database_id = "61453b2b-22e8-480d-a1ac-a6db72aa29a9"
+
+# Serve bingo.js to browsers as a file instead of bundling it into the Worker.
+[[rules]]
+type = "Text"
+globs = ["**/bingo.js"]
+fallthrough = true
