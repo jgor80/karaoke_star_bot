@@ -503,16 +503,29 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const h = Math.round(m / 60); return h < 24 ? h + "h ago" : nightLabel(night || localDate(ts));
   }
 
+  // ---------- one count per person ----------
+  // Everything that ranks singers goes through here, so the same person gets the same count everywhere:
+  // spelling variants and costume names are merged (KaraokeFun.canonicalize) and duets/groups count for each
+  // member who also sings solo (KaraokeFun.people). Without fun.js, fall back to the name as typed.
+  function personTotals(rows) {
+    const inRows = new Set(rows), out = [];
+    if (window.KaraokeFun && people.size) {
+      people.forEach((e) => { const r = rows === plays ? e.rows : e.rows.filter((p) => inRows.has(p)); if (r.length) out.push({ k: e.key, name: e.name, rows: r }); });
+    } else {
+      const by = new Map(); rows.forEach((p) => { const k = key(p.singer); if (!k) return; const e = by.get(k) || { k, name: clean(p.singer), rows: [] }; e.rows.push(p); by.set(k, e); });
+      out.push(...by.values());
+    }
+    out.forEach((e) => { e.n = e.rows.length; e.secs = e.rows.reduce((a, p) => a + (p.length_s || 0), 0); e.nights = new Set(e.rows.map((p) => p.night)); });
+    return out.sort((a, b) => b.n - a.n || b.nights.size - a.nights.size || b.secs - a.secs || a.name.localeCompare(b.name));
+  }
+
   // ---------- awards (shared with "The Mics") ----------
   function awardsFor(rows) {
     const out = [];
     const songs = rows.filter((p) => p.title);
     const timed = songs.filter((p) => p.length_s);
     const dated = songs.filter((p) => p.release_year);
-    const bySinger = new Map();
-    rows.forEach((p) => { if (!key(p.singer)) return; const k = key(p.singer);
-      const e = bySinger.get(k) || { name: clean(p.singer), n: 0, secs: 0 }; e.n++; e.secs += p.length_s || 0; bySinger.set(k, e); });
-    const mvp = [...bySinger.values()].sort((a, b) => b.n - a.n || b.secs - a.secs)[0];
+    const mvp = personTotals(rows)[0];
     if (mvp && mvp.n > 1) out.push({ id: "mvp", headline: true, label: "Mic Hog", who: mvp.name, what: "Most songs of the night", stat: mvp.n + " songs · " + mmss(mvp.secs) + " on the mic" });
     const rep = new Map();
     songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); const e = rep.get(k) || { p, n: 0 }; e.n++; rep.set(k, e); });
@@ -606,15 +619,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const rows = n.rows, me = getMe();
     $("tally-cap").textContent = tonight ? "Tonight so far" : nightLabel(n.night, true);
     renderTally($("tally"), tallyFor(rows));
-    $("lb-h").textContent = (tonight ? "Tonight's" : "That night's") + " leaderboard";
-    $("dares-h").textContent = tonight ? "Tonight's dares" : "That night's dares";
-    $("feed-h").textContent = tonight ? "Earlier tonight" : "Before that";
-    $("aw-h").textContent = tonight ? "Awards so far" : "That night's awards";
+    const when = nightLabel(n.night);
+    $("lb-h").textContent = tonight ? "Tonight's leaderboard" : "Leaderboard · " + when;
+    $("dares-h").textContent = tonight ? "Tonight's dares" : "Dares · " + when;
+    $("feed-h").textContent = tonight ? "Earlier tonight" : "Earlier · " + when;
+    $("aw-h").textContent = tonight ? "Awards so far" : "Awards · " + when;
 
     // leaderboard: songs per singer, ties broken by mic time
-    const by = new Map();
-    rows.forEach((p) => { const k = key(p.singer); if (!k) return; const e = by.get(k) || { k, name: clean(p.singer), n: 0, secs: 0 }; e.n++; e.secs += p.length_s || 0; by.set(k, e); });
-    const all = [...by.values()].sort((a, b) => b.n - a.n || b.secs - a.secs);
+    const all = personTotals(rows);
     const ol = $("leaderboard"); ol.replaceChildren();
     if (!all.length) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
     const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.dataset.who = e.name; li.append(el("span", "rank", String(i + 1)), el("span", "main-t", e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
@@ -654,13 +666,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     if (w) {
       wb.replaceChildren();
       const t = el("b", null, "“" + w.title + "”");
-      wb.append(document.createTextNode("Song watch: "), t, document.createTextNode(" has been sung on " + w.pastNights + " of " + plural(w.totalPast, "past night") + ". "));
-      wb.append(w.tonight.length ? el("span", "yes", (tonight ? "It's happened tonight" : "It happened") + (w.tonight.length > 1 ? " " + w.tonight.length + " times" : "") + "!")
-        : document.createTextNode(tonight ? "Will it happen tonight?" : "Not that night."));
+      const times = w.tonight.length > 1 ? " " + w.tonight.length + " times" : "";
+      wb.append(document.createTextNode("Song watch: "), t, document.createTextNode(" has come up on " + w.pastNights + " of " + plural(w.totalPast, tonight ? "past night" : "other night") + ". "));
+      wb.append(w.tonight.length ? el("span", "yes", (tonight ? "And it’s happened tonight" + times + "!" : "And it came up on " + nightLabel(n.night) + times + "."))
+        : document.createTextNode(tonight ? "Will it happen tonight?" : "It got skipped on " + nightLabel(n.night) + "."));
     }
     const un = KaraokeFun.unlockedOn(people, n.night);
     $("unlocked-sec").hidden = !un.length;
-    $("unlocked-sec").querySelector("h2").textContent = "Badges unlocked " + (tonight ? "tonight" : nightLabel(n.night));
+    $("unlocked-sec").querySelector("h2").textContent = tonight ? "Badges unlocked tonight" : "Badges unlocked · " + nightLabel(n.night);
     const box2 = $("unlocked"); box2.replaceChildren();
     const groups = new Map();
     un.forEach((u) => { const g = groups.get(u.badge.id) || { b: u.badge, who: [] }; if (!g.who.includes(u.who)) g.who.push(u.who); groups.set(u.badge.id, g); });
@@ -736,10 +749,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
   // ---------- singers tab ----------
   function singerIndex() {
-    const by = new Map();
-    plays.forEach((p) => { const k = key(p.singer); if (!k) return;
-      const e = by.get(k) || { name: clean(p.singer), rows: [], nights: new Set() }; e.rows.push(p); e.nights.add(p.night); by.set(k, e); });
-    const list = [...by.values()].sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
+    // People (merged names, duets included) plus duets/groups/tables under their own name so they can be searched too.
+    const list = personTotals(plays), have = new Set(list.map((e) => e.k)), by = new Map();
+    plays.forEach((p) => { const k = key(p.singer); if (!k || have.has(k)) return;
+      const e = by.get(k) || { k, group: true, name: clean(p.singer), rows: [], nights: new Set() }; e.rows.push(p); e.nights.add(p.night); by.set(k, e); });
+    list.push(...by.values());
+    list.sort((a, b) => b.rows.length - a.rows.length || b.nights.size - a.nights.size || (b.secs || 0) - (a.secs || 0) || a.name.localeCompare(b.name));
     list.forEach((e, i) => { e.rank = i + 1; });
     return list;
   }
@@ -840,7 +855,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (signature && signature[1] > 1) fact("Signature song", "×" + signature[1]);
       const person = people.get(key(e.name));
       const extra = [];
-      const typed = [...new Set(e.rows.map((p) => clean(p.as_typed || p.singer)))].filter((x) => x !== e.name);
+      const typed = [...new Set(e.rows.filter((p) => key(p.singer) === e.k).map((p) => clean(p.as_typed || p.singer)))].filter((x) => x !== e.name);
       if (typed.length) extra.push(el("div", "also", "Also typed as: " + typed.join(", ")));
       if (person) { const isMe = getMe() === key(e.name); const mb = el("button", "act me-btn" + (isMe ? " ghost" : ""), isMe ? "That’s not me" : "That’s me 🙋"); mb.type = "button";
         mb.addEventListener("click", () => { setMe(isMe ? null : key(e.name)); if (!isMe) show("tonight"); }); extra.push(mb); }
@@ -849,7 +864,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       const ol = el("ol");
       e.rows.slice().reverse().forEach((p) => { const li = el("li");
         li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()));
-        if (p.title) { const sb = el("button", "who-link song-link", songLine(p)); sb.type = "button"; sb.addEventListener("click", () => openSearch(p.title)); li.append(sb); }
+        const withWho = key(p.singer) !== e.k ? " (with " + clean(p.singer) + ")" : "";
+        if (p.title) { const sb = el("button", "who-link song-link", songLine(p) + withWho); sb.type = "button"; sb.addEventListener("click", () => openSearch(p.title)); li.append(sb); }
         else li.append(el("span", "muted", songLine(p)));
         ol.append(li); });
       b.append(badges); if (earned.childNodes.length) b.append(earned); b.append(...extra, el("div", "me-kicker", "Songs"), ol); d.append(b);
@@ -867,7 +883,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       rec.push(["Longest song ever", clean(l.singer), mmss(l.length_s), songLine(l) + ", " + nightLabel(l.night)]); }
     if (dated.length) { const o = dated.reduce((a, b) => (b.release_year < a.release_year ? b : a));
       rec.push(["Oldest song ever", clean(o.singer), String(o.release_year), songLine(o) + ", " + nightLabel(o.night)]); }
-    const att = new Map(); plays.forEach((p) => { const k = key(p.singer); if (!k) return; const e = att.get(k) || { name: clean(p.singer), nights: new Set(), n: 0 }; e.nights.add(p.night); e.n++; att.set(k, e); });
+    const att = new Map(personTotals(plays).map((e) => [e.k, e]));
     const reg = [...att.values()].sort((a, b) => b.nights.size - a.nights.size || b.n - a.n).slice(0, 3);
     if (reg.length) rec.push(["Most loyal regulars", reg.map((r) => r.name).join(", "), plural(reg[0].nights.size, "night"), reg.map((r) => r.name + ": " + r.nights.size + " nights, " + r.n + " songs").join(" · ")]);
     const top1 = [...att.values()].sort((a, b) => b.n - a.n)[0];
@@ -916,9 +932,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     box.hidden = !e; $("find-me").hidden = !!e || !window.KaraokeFun || !people.size;
     if (!e) return;
     box.replaceChildren();
-    const mine = n.rows.filter((p) => key(p.singer) === k);
-    const by = new Map(); n.rows.forEach((p) => { const kk = key(p.singer); if (kk) by.set(kk, (by.get(kk) || 0) + 1); });
-    const rank = mine.length ? [...by.values()].filter((v) => v > mine.length).length + 1 : null;
+    const tot = personTotals(n.rows), mineE = tot.find((x) => x.k === k), mine = mineE ? mineE.rows : [];
+    const rank = mineE ? tot.filter((x) => x.n > mineE.n).length + 1 : null;
     const top = el("div", "me-top");
     const nm = el("div"); nm.append(el("div", "me-kicker", "That’s you"), el("div", "me-name", e.name));
     const nb = el("button", "linkish", "Not you?"); nb.type = "button"; nb.addEventListener("click", () => setMe(null));
@@ -939,6 +954,13 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   }
 
   // ---------- data ----------
+  // last_sync is UTC "YYYY-MM-DD HH:MM:SS" (or ISO). Show it in the phone's time: "4:23 PM" today, else "Nov 8, 4:23 PM".
+  function syncLabel(v) {
+    const d = new Date(String(v).replace(" ", "T").replace(/Z?$/, "Z"));
+    if (isNaN(d)) return String(v);
+    const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ", " + t;
+  }
   function setStatus(msg, bad) { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); }
   function load(data) {
     plays = data.plays.map((p) => ({ ...p, played_at: Number(p.played_at), length_s: p.length_s ? Number(p.length_s) : null, release_year: p.release_year ? Number(p.release_year) : null }))
@@ -965,7 +987,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       const text = await r.text(); const data = JSON.parse(text);
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
-      setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync ? " · synced " + String(data.last_sync).replace("T", " ").slice(5, 16) : ""));
+      setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync ? " · updated " + syncLabel(data.last_sync) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);
       const pill = $("live-pill"); pill.textContent = "Offline"; pill.classList.remove("live");

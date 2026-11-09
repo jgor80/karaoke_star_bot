@@ -5,6 +5,10 @@
  */
 (function (global) {
   const key = (s) => (s || "").trim().toLowerCase();
+  // Songs from a film, musical, show or game. KaraFun marks most as "Title Source (film)" / "(musical)",
+  // and some as "Artist (Source)" or "Source (Artist)", e.g. "The Beach Boys (Cocktail)", "Toy Story (Randy Newman)".
+  // A trailing "(band)" or "(live...)" is just a disambiguation, not a source.
+  const SCREEN = /\b(film|musical|movie|soundtrack)\b|\((?!band\)|live\b)[^)]+\)\s*$/i;
   const songs = (r) => r.filter((p) => p.title);
   const hit = (p, extra) => ({ who: (p.singer || "Someone").trim(), what: p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a song", extra });
   const isGroup = (s) => /^table\s*\d+/i.test((s || "").trim()) || /(,|&|\/|\band\b|\bn\b|\+)/i.test(s || "");
@@ -35,7 +39,7 @@
     { id: "oasis", text: "Somebody sings Oasis", test: nth(art(/\boasis\b/i), 1) },
     { id: "mambo", text: "Mambo No. 5", test: nth(ttl(/mambo no\.? ?5/i), 1) },
     { id: "eclipse", text: "Total Eclipse of the Heart", test: nth(ttl(/total eclipse of the heart/i), 1) },
-    { id: "screen", text: "Two songs from movies or musicals", test: nth(art(/\b(film|musical|movie)\b/i), 2) },
+    { id: "screen", text: "Two songs from movies or musicals", test: nth(art(SCREEN), 2) },
     { id: "number", text: "Two song titles with a number", test: nth(ttl(/\d/), 2) },
     { id: "love", text: "“Love” in two titles", test: nth(ttl(/\blove/i), 2) },
     { id: "night", text: "Night, moon or sun in a title", test: nth(ttl(/\b(night|moon|sun)\b/i), 1) },
