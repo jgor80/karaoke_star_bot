@@ -1,9 +1,11 @@
-// Serves the phone page and one read-only JSON endpoint.
+// Serves the phone page, the TV screen (/tv) and one read-only JSON endpoint.
 // The only SQL here is fixed SELECTs: visitors can't send queries or write anything.
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
 import { scheduleStatus } from "./schedule.js";
+import AWARDS from "./awards.js";
+import TV from "./tv.html";
 
 const PLAYS_SQL =
   "SELECT night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
@@ -38,11 +40,19 @@ export default {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" },
       });
     }
+    if (url.pathname === "/tv" || url.pathname === "/tv/") {
+      return new Response(TV, {
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" },
+      });
+    }
     if (url.pathname === "/bingo.js") {
       return new Response(BINGO, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     if (url.pathname === "/fun.js") {
       return new Response(FUN, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
+    }
+    if (url.pathname === "/awards.js") {
+      return new Response(AWARDS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     return new Response("Not found", { status: 404 });
   },

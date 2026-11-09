@@ -56,12 +56,73 @@
     { id: "s60", text: "60 songs sung tonight", test: (r) => r.length >= 60 && hit(r[59], "song #60") },
   ];
 
+
+  // ---------- song squares ----------
+  // Cards mix challenge squares with specific songs nobody may pick: karaoke standards that get sung at
+  // bars everywhere, guilty pleasures, and deep cuts that are in the KaraFun catalog but rarely sung.
+  // A song square only marks when that exact title is sung, so a full line is rare.
+  const STANDARDS = [
+    ["Don't Stop Believin'", "Journey"], ["Bohemian Rhapsody", "Queen"], ["Sweet Caroline", "Neil Diamond"], ["Livin' on a Prayer", "Bon Jovi"],
+    ["I Will Survive", "Gloria Gaynor"], ["Total Eclipse of the Heart", "Bonnie Tyler"], ["Mr. Brightside", "The Killers"], ["Africa", "Toto"],
+    ["Dancing Queen", "ABBA"], ["Girls Just Want to Have Fun", "Cyndi Lauper"], ["I Wanna Dance with Somebody", "Whitney Houston"], ["Like a Prayer", "Madonna"],
+    ["Toxic", "Britney Spears"], ["...Baby One More Time", "Britney Spears"], ["Rolling in the Deep", "Adele"], ["Someone Like You", "Adele"],
+    ["Shallow", "Lady Gaga & Bradley Cooper"], ["Since U Been Gone", "Kelly Clarkson"], ["Wonderwall", "Oasis"], ["Friends in Low Places", "Garth Brooks"],
+    ["Jolene", "Dolly Parton"], ["9 to 5", "Dolly Parton"], ["Man! I Feel Like a Woman!", "Shania Twain"], ["Before He Cheats", "Carrie Underwood"],
+    ["Goodbye Earl", "The Chicks"], ["Islands in the Stream", "Dolly Parton & Kenny Rogers"], ["Summer Nights", "Grease"], ["You're the One That I Want", "Grease"],
+    ["Piano Man", "Billy Joel"], ["Tiny Dancer", "Elton John"], ["Don't Go Breaking My Heart", "Elton John & Kiki Dee"], ["Billie Jean", "Michael Jackson"],
+    ["Respect", "Aretha Franklin"], ["Proud Mary", "Tina Turner"], ["I Want It That Way", "Backstreet Boys"], ["Bye Bye Bye", "*NSYNC"],
+    ["Hey Ya!", "OutKast"], ["Uptown Funk", "Mark Ronson ft. Bruno Mars"], ["Shake It Off", "Taylor Swift"], ["Love Story", "Taylor Swift"],
+    ["Mamma Mia", "ABBA"], ["Take On Me", "a-ha"], ["Don't You (Forget About Me)", "Simple Minds"], ["Ice Ice Baby", "Vanilla Ice"],
+    ["No Scrubs", "TLC"], ["Waterfalls", "TLC"], ["Bad Romance", "Lady Gaga"], ["Poker Face", "Lady Gaga"], ["Umbrella", "Rihanna"],
+    ["Crazy in Love", "Beyoncé"], ["Single Ladies (Put a Ring on It)", "Beyoncé"], ["Creep", "Radiohead"], ["Zombie", "The Cranberries"],
+    ["Torn", "Natalie Imbruglia"], ["Hit Me with Your Best Shot", "Pat Benatar"], ["Sweet Child O' Mine", "Guns N' Roses"], ["Brown Eyed Girl", "Van Morrison"],
+    ["Don't Stop Me Now", "Queen"], ["Valerie", "Amy Winehouse"], ["Teenage Dirtbag", "Wheatus"], ["All Star", "Smash Mouth"],
+    ["Semi-Charmed Life", "Third Eye Blind"], ["bad guy", "Billie Eilish"], ["drivers license", "Olivia Rodrigo"], ["good 4 u", "Olivia Rodrigo"],
+    ["Flowers", "Miley Cyrus"], ["Espresso", "Sabrina Carpenter"], ["Last Friday Night (T.G.I.F.)", "Katy Perry"], ["Hips Don't Lie", "Shakira"],
+    ["My Heart Will Go On", "Céline Dion"], ["Purple Rain", "Prince"], ["Wagon Wheel", "Darius Rucker"], ["Tennessee Whiskey", "Chris Stapleton"],
+    ["Love Shack", "The B-52's"], ["Let It Go", "Frozen"], ["Gimme! Gimme! Gimme! (A Man After Midnight)", "ABBA"], ["Killing Me Softly with His Song", "Fugees"],
+    ["Wannabe", "Spice Girls"], ["Pink Pony Club", "Chappell Roan"], ["Good Luck, Babe!", "Chappell Roan"], ["Mambo No. 5", "Lou Bega"],
+  ];
+  const GUILTY = [
+    ["Barbie Girl", "Aqua"], ["MMMBop", "Hanson"], ["The Final Countdown", "Europe"], ["Never Gonna Give You Up", "Rick Astley"],
+    ["Macarena", "Los del Río"], ["Rasputin", "Boney M."], ["Achy Breaky Heart", "Billy Ray Cyrus"], ["Who Let the Dogs Out", "Baha Men"],
+    ["I'm Too Sexy", "Right Said Fred"], ["Cotton Eye Joe", "Rednex"], ["Mmm Mmm Mmm Mmm", "Crash Test Dummies"], ["Blue (Da Ba Dee)", "Eiffel 65"],
+    ["Ice Ice Baby", "Vanilla Ice"], ["Kokomo", "The Beach Boys"], ["Copacabana", "Barry Manilow"], ["Margaritaville", "Jimmy Buffett"],
+    ["It's Raining Men", "The Weather Girls"], ["Total Eclipse of the Heart", "Bonnie Tyler"], ["My Humps", "Black Eyed Peas"], ["Friday", "Rebecca Black"],
+    ["Bye Bye Bye", "*NSYNC"], ["Tubthumping", "Chumbawamba"], ["Ghostbusters", "Ray Parker Jr."], ["Eye of the Tiger", "Survivor"],
+    ["The Ketchup Song (Aserejé)", "Las Ketchup"], ["Gangnam Style", "PSY"], ["Call Me Maybe", "Carly Rae Jepsen"], ["Cha Cha Slide", "DJ Casper"],
+  ];
+  const DEEP = [
+    ["The Ballroom Blitz", "Sweet"], ["Once in a Lifetime", "Talking Heads"], ["Mr. Blue Sky", "Electric Light Orchestra"], ["Bizarre Love Triangle", "New Order"],
+    ["Come On Eileen", "Dexys Midnight Runners"], ["Video Killed the Radio Star", "The Buggles"], ["The Safety Dance", "Men Without Hats"], ["Running Up That Hill", "Kate Bush"],
+    ["Paradise by the Dashboard Light", "Meat Loaf"], ["Bat Out of Hell", "Meat Loaf"], ["Steal My Sunshine", "Len"], ["Bitter Sweet Symphony", "The Verve"],
+    ["Buddy Holly", "Weezer"], ["Kids in America", "Kim Wilde"], ["Rapper's Delight", "The Sugarhill Gang"], ["Lady Marmalade", "Labelle"],
+    ["Harper Valley PTA", "Jeannie C. Riley"], ["Delta Dawn", "Tanya Tucker"], ["The Gambler", "Kenny Rogers"], ["Maps", "Yeah Yeah Yeahs"],
+    ["Float On", "Modest Mouse"], ["Take Me Out", "Franz Ferdinand"], ["Hey There Delilah", "Plain White T's"], ["Fernando", "ABBA"],
+    ["Life on Mars?", "David Bowie"], ["Love Will Tear Us Apart", "Joy Division"], ["Don't You Want Me", "The Human League"], ["Rock Lobster", "The B-52's"],
+    ["99 Luftballons", "Nena"], ["Electric Avenue", "Eddy Grant"], ["Turning Japanese", "The Vapors"], ["Whip It", "Devo"],
+    ["Under Pressure", "Queen & David Bowie"], ["Heart of Glass", "Blondie"], ["Tainted Love", "Soft Cell"], ["Bette Davis Eyes", "Kim Carnes"],
+    ["Dancing in the Moonlight", "Toploader"], ["Ring of Fire", "Johnny Cash"], ["Midnight Train to Georgia", "Gladys Knight & the Pips"], ["Psycho Killer", "Talking Heads"],
+    ["Stacy's Mom", "Fountains of Wayne"], ["Torn", "Natalie Imbruglia"], ["Black Hole Sun", "Soundgarden"], ["Hallelujah", "Jeff Buckley"],
+  ];
+  const normT = (s) => (s || "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+  const SONGS = new Map();
+  [["std", STANDARDS], ["guilty", GUILTY], ["deep", DEEP]].forEach(([tier, list]) => list.forEach(([t, a]) => {
+    const id = "song:" + normT(t).replace(/ /g, "-");
+    if (!SONGS.has(id)) SONGS.set(id, { id, tier, title: t, artist: a, text: "“" + t + "”", test: nth((p) => p.title && normT(p.title) === normT(t), 1) });
+  }));
+  const TIER_LABEL = { std: "Standard", guilty: "Guilty pleasure", deep: "Deep cut" };
+  const byTier = (t) => [...SONGS.values()].filter((x) => x.tier === t);
+  function square(id) { return SONGS.get(id) || SQUARES.find((s) => s.id === id); }
+
   // Seeded shuffle so a card stays the same on reload
   function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+  // A card: 7 standards, 3 guilty pleasures, 3 deep cuts and 11 challenge squares, shuffled, free center.
   function makeCard(seed) {
-    const r = rng(seed), pool = SQUARES.slice();
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    const pick = pool.slice(0, 24).map((s) => s.id);
+    const r = rng(seed);
+    const take = (pool, n) => { pool = pool.slice(); for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } return pool.slice(0, n).map((x) => x.id); };
+    const pick = [...take(byTier("std"), 7), ...take(byTier("guilty"), 3), ...take(byTier("deep"), 3), ...take(SQUARES, 11)];
+    for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
     pick.splice(12, 0, "free");
     return pick;
   }
@@ -75,7 +136,7 @@
     allRows.forEach((p) => { if (p.night >= night) return; const k = key(p.singer); if (!k) return; const s = seen.get(k) || new Set(); s.add(p.night); seen.set(k, s); });
     seen.forEach((s, k) => pastNights.set(k, s.size));
     const ctx = { pastNights };
-    const marks = card.map((id) => (id === "free" ? { free: true } : (SQUARES.find((s) => s.id === id).test(rows, ctx) || null)));
+    const marks = card.map((id) => (id === "free" ? { free: true } : (square(id).test(rows, ctx) || null)));
     const lines = [];
     for (let i = 0; i < 5; i++) { lines.push([0, 1, 2, 3, 4].map((j) => i * 5 + j)); lines.push([0, 1, 2, 3, 4].map((j) => j * 5 + i)); }
     lines.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]);
@@ -111,8 +172,8 @@
         const sq = el("button", "kb-sq" + (m ? " on" : "") + (winSet.has(i) ? " win" : "") + (id === "free" ? " free" : ""));
         sq.type = "button";
         if (id === "free") { sq.append(el("span", "kb-t", "FREE"), el("span", "kb-w", "on the house")); }
-        else { const s = SQUARES.find((x) => x.id === id); sq.append(el("span", "kb-t", s.text)); if (m) sq.append(el("span", "kb-w", m.who)); }
-        sq.setAttribute("aria-label", (id === "free" ? "Free square" : SQUARES.find((x) => x.id === id).text) + (m && !m.free ? ", done by " + m.who + " with " + m.what : m ? "" : ", not yet"));
+        else { const s = square(id); if (s.tier) { sq.classList.add("song", "t-" + s.tier); sq.append(el("span", "kb-tier", TIER_LABEL[s.tier])); } sq.append(el("span", "kb-t", s.text)); if (m) sq.append(el("span", "kb-w", m.who)); }
+        sq.setAttribute("aria-label", (id === "free" ? "Free square" : square(id).text + (square(id).artist ? " by " + square(id).artist : "")) + (m && !m.free ? ", done by " + m.who + " with " + m.what : m ? "" : ", not yet"));
         sq.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach((x) => x.classList.remove("sel")); sq.classList.add("sel"); detail(id, m); });
         grid.append(sq);
       });
@@ -129,7 +190,7 @@
       const info = root.querySelector("#kb-info"); if (!info) return;
       if (id === "free") info.textContent = "The free square. Everybody gets one.";
       else if (m) info.textContent = m.who + " got it with " + m.what + (m.extra ? " (" + m.extra + ")" : "") + ".";
-      else info.textContent = "Still waiting on: " + SQUARES.find((x) => x.id === id).text + ".";
+      else { const q = square(id); info.textContent = q.tier ? TIER_LABEL[q.tier] + ": somebody has to sing " + q.text + " by " + q.artist + ". Know the words?" : "Still waiting on: " + q.text + "."; }
     }
     async function refresh() {
       try {
@@ -146,5 +207,5 @@
     return { refresh, setRows(rows) { opts.getRows = async () => rows; return refresh(); } };
   }
 
-  global.KaraokeBingo = { SQUARES, makeCard, evaluate, tonight, mount };
+  global.KaraokeBingo = { SQUARES, SONGS, makeCard, evaluate, tonight, mount };
 })(typeof window !== "undefined" ? window : globalThis);
