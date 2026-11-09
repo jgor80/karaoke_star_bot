@@ -15,7 +15,8 @@
     crowd: "👑", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
     "b-crowd": "🔥", "b-drop": "🎤", "b-encore": "🔁", "b-tomato": "🍅", "s-crowd": "👑", "s-hype": "📣",
     "s-mvp": "🏆", "s-loyal": "📅", "s-mic": "⏱️", "s-badges": "🎖️", "s-range": "🌈", "s-duet": "👯", "s-onesong": "🔁", "s-crate": "📦", "s-trend": "📈" };
-  const icon = (id) => ICON[id] || "⭐";
+  // Genre badge icons come from KaraokeFun.GENRES (fun.js) when it's loaded.
+  const icon = (id) => ICON[id] || ((global.KaraokeFun && (global.KaraokeFun.GENRES.find((g) => g.id === id) || {}).icon)) || (id === "g-hopper" ? "🎛️" : "⭐");
 
   // ---------- live emoji reactions ----------
   // Keep keys in sync with REACTION_KEYS in reactions_api.js. "hype" ones count toward Crowd Favorite.

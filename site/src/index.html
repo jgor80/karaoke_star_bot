@@ -38,6 +38,9 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .logo span { color: var(--gold); }
 .pill { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.bands { margin: 10px 0 4px; }
+.band-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.band { font: inherit; font-size: 15px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
 .pill.live { border-color: var(--hot); color: var(--hot); }
 .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); margin-right: 6px; vertical-align: 1px; }
 @media (prefers-reduced-motion: no-preference) { .pill.live::before { animation: blink 1.4s infinite; } }
@@ -474,7 +477,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <ol class="list" id="top-songs"></ol>
     </div>
     <div class="sec">
-      <h2>Top artists</h2>
+      <h2>Crowd’s favorite bands</h2>
       <ol class="list" id="top-artists"></ol>
     </div>
     <div class="sec">
@@ -520,10 +523,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 (function () {
   const REFRESH_MS = 30000;
   const LIVE_REFRESH_MS = 10000;  // during the scheduled session (from /api/plays "schedule")
-  const LIVE_WINDOW_S = 45 * 60;   // a night counts as "live" if a song started in the last 45 min
+  const LIVE_WINDOW_S = 20 * 60;   // the session closes after 20 minutes with no new song
   const TONIGHT_WINDOW_S = 10 * 3600;
 
   const $ = (id) => document.getElementById(id);
+  let liveNow = false; // set by renderTonight; polls faster while live
   let schedule = null; // {venue, status: live|overtime|off, next_label, ...} from the server
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
@@ -579,11 +583,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const last = plays[plays.length - 1];
     const recent = last && now() - last.played_at < LIVE_WINDOW_S;
     const sched = schedule ? schedule.status : "off";
-    // Live during Sunday hours, in overtime (1-2am) only while songs are still coming, or any time songs are flowing.
-    const live = sched === "live" || recent;
+    // Live while songs keep coming. The session closes once 20 minutes pass with no new song.
+    // In Sunday hours it also counts as live before the first song of the night (waiting for someone to start).
+    const started = !!(schedule && last && last.played_at >= schedule.session_start);
+    const live = recent || (sched === "live" && !started);
+    liveNow = !!live;
     const tonight = last && now() - last.played_at < TONIGHT_WINDOW_S;
     const pill = $("live-pill");
-    pill.textContent = live ? "Live" : tonight ? "Tonight" : "Off night";
+    pill.textContent = live ? "Live" : tonight ? "Wrapped" : "Off night";
     pill.classList.toggle("live", !!live);
 
     // hero
@@ -840,8 +847,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       const badges = el("div", "badges");
       const secs = e.rows.reduce((a, p) => a + (p.length_s || 0), 0);
       const yrs = e.rows.map((p) => p.release_year).filter(Boolean);
-      const fav = new Map(); e.rows.forEach((p) => { if (p.artist) fav.set(p.artist, (fav.get(p.artist) || 0) + 1); });
-      const favA = [...fav.entries()].sort((a, b) => b[1] - a[1])[0];
+      const bands = window.KaraokeFun ? KaraokeFun.favoriteBands(e.rows, 3) : [];
       const rep = new Map(); e.rows.forEach((p) => { if (p.title) rep.set(key(p.title), (rep.get(key(p.title)) || 0) + 1); });
       const signature = [...rep.entries()].sort((a, b) => b[1] - a[1])[0];
       badges.className = "facts";
@@ -849,7 +855,6 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       fact("On the mic", mmss(secs));
       fact("Nights", String(e.nights.size));
       if (yrs.length) fact("Oldest pick", String(Math.min(...yrs)));
-      if (favA && favA[1] > 1) fact("Loves", favA[0]);
       if (signature && signature[1] > 1) fact("Signature song", "×" + signature[1]);
       const person = people.get(key(e.name));
       const extra = [];
@@ -866,7 +871,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
         if (p.title) { const sb = el("button", "who-link song-link", songLine(p) + withWho); sb.type = "button"; sb.addEventListener("click", () => openSearch(p.title)); li.append(sb); }
         else li.append(el("span", "muted", songLine(p)));
         ol.append(li); });
-      b.append(badges); if (earned.childNodes.length) b.append(earned); b.append(...extra, el("div", "me-kicker", "Songs"), ol); d.append(b);
+      b.append(badges);
+      if (bands.length) b.append(bandList(bands));
+      if (earned.childNodes.length) b.append(earned); b.append(...extra, el("div", "me-kicker", "Songs"), ol); d.append(b);
     });
     keepOpen(d, "singer:" + key(e.name), startOpen);
     return d;
@@ -896,8 +903,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
     const sc = new Map(); songs.forEach((p) => { const k = key(p.title) + "|" + key(p.artist); const e = sc.get(k) || { p, n: 0, who: new Set() }; e.n++; e.who.add(key(p.singer)); sc.set(k, e); });
     fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"), (e) => e.p.title);
-    const ac = new Map(); songs.forEach((p) => { if (!p.artist) return; const k = key(p.artist); const e = ac.get(k) || { name: p.artist, n: 0, t: new Set() }; e.n++; e.t.add(key(p.title)); ac.set(k, e); });
-    fillTop($("top-artists"), [...ac.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => e.name, (e) => plural(e.t.size, "different song"), (e) => plural(e.n, "play"), (e) => e.name);
+    // Ranked by how many different people sang them, then plays. Group names credit each part ("Lady Gaga & Bruno Mars").
+    const ac = new Map();
+    songs.forEach((p) => { (window.KaraokeFun ? KaraokeFun.favoriteBands([p], 9) : p.artist ? [{ name: p.artist }] : []).forEach((b) => {
+      const k = key(b.name); const e = ac.get(k) || { name: b.name, n: 0, t: new Set(), who: new Set() }; e.n++; e.t.add(key(p.title)); e.who.add(key(p.singer)); ac.set(k, e); }); });
+    fillTop($("top-artists"), [...ac.values()].sort((a, b) => b.who.size - a.who.size || b.n - a.n).slice(0, 10), (e) => e.name, (e) => plural(e.who.size, "singer") + " · " + plural(e.t.size, "different song"), (e) => plural(e.n, "play"), (e) => e.name);
 
     const dec = new Map(); dated.forEach((p) => { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); });
     const dl = [...dec.entries()].sort((a, b) => a[0] - b[0]); const mx = Math.max(1, ...dl.map((d) => d[1]));
@@ -1057,20 +1067,29 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
      ["Rank", rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
+    const myBands = KaraokeFun.favoriteBands(e.rows, 3);
+    if (myBands.length) box.append(bandList(myBands, "Your favorite bands"));
     const prog = KaraokeFun.progress(e).slice(0, 2);
     prog.forEach((x) => { const r = el("div", "prog"); const bar = el("span", "pb"); const i = el("i"); i.style.width = Math.round(100 * x.have / x.need) + "%"; bar.append(i);
       r.append(el("span", null, icon(x.id) + " Next: " + x.name + " · " + x.desc), el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
   }
 
+  // "Favorite bands" chips: tap one to see everything sung by that artist.
+  function bandList(bands, title) {
+    const w = el("div", "bands"); w.append(el("div", "me-kicker", title || "Favorite bands"));
+    const row = el("div", "band-row");
+    bands.forEach((x) => { const b = el("button", "band", x.name + (x.n > 1 ? " ×" + x.n : "")); b.type = "button"; b.addEventListener("click", () => openSearch(x.name)); row.append(b); });
+    w.append(row); return w;
+  }
   function fillTop(ol, items, main, sub, val, q) {
     ol.replaceChildren();
     items.forEach((e, i) => { const li = el("li"); if (q) li.dataset.who = q(e); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", main(e)), el("span", "val", val(e)), el("span", "sub-t", sub(e))); ol.append(li); });
   }
 
   // ---------- data ----------
-  // last_sync is UTC "YYYY-MM-DD HH:MM:SS" (or ISO). Show it in the phone's time: "4:23 PM" today, else "Nov 8, 4:23 PM".
+  // v is a unix time (last_sync_ts from the server). Show it in the phone's time: "4:23 PM" today, else "Nov 8, 4:23 PM".
   function syncLabel(v) {
-    const d = new Date(String(v).replace(" ", "T").replace(/Z?$/, "Z"));
+    const d = new Date(Number(v) * 1000);
     if (isNaN(d)) return String(v);
     const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ", " + t;
@@ -1103,7 +1122,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (data.schedule) schedule = data.schedule;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
-      setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync ? " · updated " + syncLabel(data.last_sync) : ""));
+      setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);
       const pill = $("live-pill"); pill.textContent = "Offline"; pill.classList.remove("live");
@@ -1166,7 +1185,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   refresh();
   (function loop() {
     // Every 10s during the scheduled session, every 30s otherwise.
-    setTimeout(async () => { if (!document.hidden) await refresh(); loop(); }, schedule && schedule.status !== "off" ? LIVE_REFRESH_MS : REFRESH_MS);
+    setTimeout(async () => { if (!document.hidden) await refresh(); loop(); }, liveNow || (schedule && schedule.status === "live") ? LIVE_REFRESH_MS : REFRESH_MS);
   })();
   setInterval(() => { if (!document.hidden && plays.length) renderTonight(); }, 5000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
