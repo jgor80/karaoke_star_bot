@@ -473,10 +473,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script>
 (function () {
   const REFRESH_MS = 30000;
+  const LIVE_REFRESH_MS = 10000;  // during the scheduled session (from /api/plays "schedule")
   const LIVE_WINDOW_S = 45 * 60;   // a night counts as "live" if a song started in the last 45 min
   const TONIGHT_WINDOW_S = 10 * 3600;
 
   const $ = (id) => document.getElementById(id);
+  let schedule = null; // {venue, status: live|overtime|off, next_label, ...} from the server
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
@@ -528,7 +530,10 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   function renderTonight() {
     const n = currentNight();
     const last = plays[plays.length - 1];
-    const live = last && now() - last.played_at < LIVE_WINDOW_S;
+    const recent = last && now() - last.played_at < LIVE_WINDOW_S;
+    const sched = schedule ? schedule.status : "off";
+    // Live during Sunday hours, in overtime (1-2am) only while songs are still coming, or any time songs are flowing.
+    const live = sched === "live" || recent;
     const tonight = last && now() - last.played_at < TONIGHT_WINDOW_S;
     const pill = $("live-pill");
     pill.textContent = live ? "Live" : tonight ? "Tonight" : "Off night";
@@ -551,8 +556,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("hero-meta").textContent = "";
       $("hero-meta").append(el("span", null, "Song #" + idx + " tonight"), el("span", null, mmss(Math.min(len, Math.floor(elapsed))) + " / " + mmss(len)));
     }
+    const venue = schedule ? schedule.venue : "";
+    const waiting = live && !tonight; // the session has started but no songs yet
     $("hero-off").hidden = !!tonight || !n;
-    if (!tonight && n) $("hero-off").textContent = "No karaoke going right now. Here’s how " + nightLabel(n.night, true) + " went.";
+    if (!tonight && n) $("hero-off").textContent = waiting
+      ? "Karaoke is on now at " + venue + ". First song coming up. Here’s how " + nightLabel(n.night, true) + " went."
+      : "No karaoke going right now." + (schedule ? " Next: " + schedule.next_label + " at " + venue + "." : "") + " Here’s how " + nightLabel(n.night, true) + " went.";
 
     if (!n) return;
     const rows = n.rows, me = getMe();
@@ -925,6 +934,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (!r.ok) throw new Error("HTTP " + r.status);
       const text = await r.text(); const data = JSON.parse(text);
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
+      if (data.schedule) schedule = data.schedule;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync ? " · updated " + syncLabel(data.last_sync) : ""));
     } catch (e) {
@@ -987,7 +997,10 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   // ---------- go ----------
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (nights.length) renderAwards(); });
   refresh();
-  setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+  (function loop() {
+    // Every 10s during the scheduled session, every 30s otherwise.
+    setTimeout(async () => { if (!document.hidden) await refresh(); loop(); }, schedule && schedule.status !== "off" ? LIVE_REFRESH_MS : REFRESH_MS);
+  })();
   setInterval(() => { if (!document.hidden && plays.length) renderTonight(); }, 5000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 })();

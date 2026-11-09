@@ -3,6 +3,7 @@
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
+import { scheduleStatus } from "./schedule.js";
 import AWARDS from "./awards.js";
 import TV from "./tv.html";
 
@@ -16,15 +17,18 @@ export default {
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
 
     if (url.pathname === "/api/plays") {
-      // Cache for 15s at the edge so a full bar refreshing every 30s costs a few D1 reads a minute.
+      // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
+      // During the scheduled session the cache is shorter so new songs show up fast.
+      const schedule = scheduleStatus(Math.floor(Date.now() / 1000));
+      const maxAge = schedule.status === "off" ? 15 : 5;
       const cache = caches.default;
       const key = new Request(url.origin + "/api/plays");
       let res = await cache.match(key);
       if (!res) {
         const [plays, sync] = await env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, served_at: Math.floor(Date.now() / 1000) }),
-          { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=15" } }
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, served_at: Math.floor(Date.now() / 1000), schedule }),
+          { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));
       }
