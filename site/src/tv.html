@@ -122,6 +122,13 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 
 .empty { font-size: calc(3.4 * var(--u)); color: var(--muted); text-align: center; padding: calc(20 * var(--u)) calc(6 * var(--u)); }
 .status { position: fixed; right: calc(2 * var(--u)); bottom: calc(1.4 * var(--u)); font-family: var(--f-mono); font-size: calc(1.5 * var(--u)); color: var(--muted); opacity: .7; }
+.secret-tv { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(23, 13, 28, .9); }
+.secret-tv .st-in { background: var(--gold); color: #1a0710; border-radius: calc(4 * var(--u)); padding: calc(6 * var(--u)) calc(8 * var(--u)); text-align: center; display: grid; gap: calc(2.5 * var(--u)); max-width: 80vw; box-shadow: 0 0 calc(12 * var(--u)) rgba(245, 184, 74, .6); }
+.secret-tv .st-big { font-family: var(--f-display); font-size: calc(10 * var(--u)); line-height: 1.05; }
+.secret-tv .st-who { font-size: calc(6 * var(--u)); font-weight: 800; overflow-wrap: anywhere; }
+.secret-tv .st-rw { font-size: calc(5 * var(--u)); font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) { .secret-tv .st-in { animation: stpop .6s cubic-bezier(.2, 1.6, .4, 1); } }
+@keyframes stpop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .status.bad { color: var(--hot); opacity: 1; }
 
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
@@ -141,6 +148,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
 <div class="status" id="status"></div>
 <div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
+<div class="secret-tv" id="secret-tv" hidden role="alert"><div class="st-in"><div class="st-big">🤫 Secret song found!</div><div class="st-who" id="st-who"></div><div class="st-rw" id="st-rw"></div></div></div>
 <button class="fs" id="fs" type="button" hidden>⛶ Full screen</button>
 
 <script src="/fun.js"></script>
@@ -355,10 +363,26 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
       const sig = JSON.stringify(v); // only redraw when something on screen would change, so the scroll doesn't jump
       if (sig !== lastView) { lastView = sig; render(v); }
       watchRx(v.current);
+      secretMoment(data);
       setStatus(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
     } catch (e) {
       setStatus(lastView ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Retrying…", true);
     }
+  }
+
+  // ---------- secret song moment ----------
+  // A secret song found in the last 15 minutes takes over the screen for 20 seconds, once per TV.
+  const secretShown = new Set(); let secretT = 0;
+  function secretMoment(data) {
+    const found = data.secrets_found || [];
+    const fresh = found.filter((s) => !secretShown.has(s.id));
+    fresh.forEach((s) => secretShown.add(s.id));
+    const s = fresh.filter((x) => now() - x.found_at < 15 * 60).pop();
+    if (!s) return;
+    $("st-who").textContent = ((s.singer || "").trim() || "Someone") + " sang “" + s.title + "”";
+    $("st-rw").textContent = s.reward ? "🎁 " + s.reward : "";
+    $("secret-tv").hidden = false; clearTimeout(secretT);
+    secretT = setTimeout(() => { $("secret-tv").hidden = true; }, 20000);
   }
 
   // ---------- live reactions overlay ----------
