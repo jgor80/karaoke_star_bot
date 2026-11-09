@@ -12,8 +12,70 @@
   const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
     duet: "👯", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
     mvp: "🎤", dejavu: "🔁", speed: "⚡", time: "🕰️", squad: "👯", open: "🚪", last: "🌙", artist: "🎸", decade: "📼",
+    crowd: "👑", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
+    "b-crowd": "🔥", "b-drop": "🎤", "b-encore": "🔁", "b-tomato": "🍅", "s-crowd": "👑", "s-hype": "📣",
     "s-mvp": "🏆", "s-loyal": "📅", "s-mic": "⏱️", "s-badges": "🎖️", "s-range": "🌈", "s-duet": "👯", "s-onesong": "🔁", "s-crate": "📦", "s-trend": "📈" };
   const icon = (id) => ICON[id] || "⭐";
+
+  // ---------- live emoji reactions ----------
+  // Keep keys in sync with REACTION_KEYS in reactions_api.js. "hype" ones count toward Crowd Favorite.
+  const REACTIONS = [
+    { k: "fire", e: "🔥", name: "Fire", hype: true },
+    { k: "micdrop", e: "🎤", name: "Mic drop", hype: true },
+    { k: "encore", e: "🔁", name: "Encore", hype: true },
+    { k: "chills", e: "😭", name: "Chills", hype: true },
+    { k: "dance", e: "💃", name: "Dance", hype: true },
+    { k: "keychange", e: "📈", name: "Key change", hype: true },
+    { k: "cringe", e: "😬", name: "Cringe" },
+    { k: "offkey", e: "🙉", name: "Off-key" },
+    { k: "tomato", e: "🍅", name: "Tomato" },
+    { k: "snooze", e: "😴", name: "Snooze" },
+  ];
+  const HYPE = new Set(REACTIONS.filter((x) => x.hype).map((x) => x.k));
+  const ROAST = new Set(["cringe", "offkey", "tomato", "snooze"]);
+  const sumOf = (c, set) => Object.entries(c || {}).reduce((a, [k, n]) => a + (!set || set.has(k) ? n : 0), 0);
+  // /api/plays {reactions: [{play, r, n}], reactors: [{night, who, r, n}]} -> {bySong: Map(uuid -> {r: n}), reactors}
+  function reactionIndex(data) {
+    const bySong = new Map();
+    ((data && data.reactions) || []).forEach((x) => { const c = bySong.get(x.play) || {}; c[x.r] = (c[x.r] || 0) + Number(x.n); bySong.set(x.play, c); });
+    return { bySong, reactors: ((data && data.reactors) || []).map((x) => ({ ...x, n: Number(x.n) })) };
+  }
+  // Crowd awards for a set of plays. Songs and singers come from the plays, reactors from who tapped.
+  function reactionAwards(rows, reax, season) {
+    const out = [];
+    if (!reax || !reax.bySong.size) return out;
+    const songs = rows.filter((p) => p.uuid && reax.bySong.has(p.uuid)).map((p) => ({ p, c: reax.bySong.get(p.uuid) }));
+    if (!songs.length) return out;
+    const bySinger = new Map();
+    songs.forEach(({ p, c }) => { const k = key(p.singer); if (!k) return; const e = bySinger.get(k) || { name: clean(p.singer), c: {}, songs: 0 }; e.songs++;
+      Object.entries(c).forEach(([r, n]) => { e.c[r] = (e.c[r] || 0) + n; }); bySinger.set(k, e); });
+    const topSinger = (score, min) => [...bySinger.values()].map((e) => ({ e, v: score(e.c) })).filter((x) => x.v >= min).sort((a, b) => b.v - a.v || a.e.songs - b.e.songs)[0];
+    const topSong = (score, min) => songs.map((x) => ({ ...x, v: score(x.c) })).filter((x) => x.v >= min).sort((a, b) => b.v - a.v || a.p.played_at - b.p.played_at)[0];
+    const pl = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+    let w;
+    if ((w = topSinger((c) => sumOf(c, HYPE), 3))) out.push({ id: season ? "s-crowd" : "crowd", headline: !season, label: season ? "Season Crowd Favorite" : "Crowd Favorite", who: w.e.name,
+      what: season ? "Most hype reactions all season" : "The room went wild", stat: pl(w.v, "hype reaction") });
+    if (season) {
+      const nights = new Set(rows.map((p) => p.night)), givers = new Map();
+      reax.reactors.forEach((x) => { if (!nights.has(x.night)) return; givers.set(x.who, (givers.get(x.who) || 0) + x.n); });
+      const g = [...givers.entries()].filter(([who]) => !/^Anon /.test(who)).sort((a, b) => b[1] - a[1])[0];
+      if (g && g[1] >= 10) out.push({ id: "s-hype", label: "Loudest Phone", who: g[0], what: "Most reactions sent all season", stat: pl(g[1], "reaction") });
+      return out;
+    }
+    const one = (r) => (c) => c[r] || 0;
+    if ((w = topSong(one("micdrop"), 2))) out.push({ id: "rx-micdrop", label: "Mic Drop Moment", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: pl(w.v, "mic drop") });
+    if ((w = topSong(one("encore"), 2))) out.push({ id: "rx-encore", label: "Encore! Encore!", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: w.v + " begged for more" });
+    if ((w = topSong(one("keychange"), 2))) out.push({ id: "rx-key", label: "Truck Driver’s Gear Change", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: pl(w.v, "key change") + " called" });
+    if ((w = topSinger(one("tomato"), 2))) out.push({ id: "rx-tomato", label: "Produce Aisle", who: w.e.name, what: "Most tomatoes thrown (with love)", stat: pl(w.v, "tomato").replace("tomatos", "tomatoes") });
+    if ((w = topSinger((c) => (c.offkey || 0) + (c.cringe || 0), 2))) out.push({ id: "rx-pitch", label: "Pitch Police Report", who: w.e.name, what: "Most off-key and cringe calls", stat: pl(w.v, "citation") });
+    if ((w = topSong(one("snooze"), 2))) out.push({ id: "rx-snooze", label: "Snooze Button", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: w.v + " people nodded off" });
+    const night = rows[0] && rows[0].night, giv = new Map(), crit = new Map();
+    reax.reactors.forEach((x) => { if (x.night !== night) return; giv.set(x.who, (giv.get(x.who) || 0) + x.n); if (ROAST.has(x.r)) crit.set(x.who, (crit.get(x.who) || 0) + x.n); });
+    const best = (m, min) => [...m.entries()].filter(([who, n]) => n >= min && !/^Anon /.test(who)).sort((a, b) => b[1] - a[1])[0];
+    if ((w = best(giv, 5))) out.push({ id: "rx-hype", label: "Hype Machine", who: w[0], what: "Sent the most reactions", stat: pl(w[1], "reaction") });
+    if ((w = best(crit, 3))) out.push({ id: "rx-critic", label: "Resident Critic", who: w[0], what: "Most tomatoes, snoozes and cringes sent", stat: pl(w[1], "roast") });
+    return out;
+  }
 
   function groupSize(name) {
     const n = key(name);
@@ -35,8 +97,9 @@
     return out.sort((a, b) => b.n - a.n || b.nights.size - a.nights.size || b.secs - a.secs || a.name.localeCompare(b.name));
   }
 
-  // -> [{id, label, who, what, stat, headline?}]; `totals` is rows -> personTotals list (for Mic Hog)
-  function awardsFor(rows, totals) {
+  // -> [{id, label, who, what, stat, headline?}]; `totals` is rows -> personTotals list (for Mic Hog),
+  // `reax` is reactionIndex(...) for the crowd awards (optional).
+  function awardsFor(rows, totals, reax) {
     const out = [];
     const songs = rows.filter((p) => p.title);
     const timed = songs.filter((p) => p.length_s);
@@ -77,6 +140,7 @@
     dated.forEach((p) => { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); });
     const td = [...dec.entries()].sort((a, b) => b[1] - a[1])[0];
     if (td) out.push({ id: "decade", label: "Decade of the Night", who: "The " + String(td[0]).slice(2) + "s", what: Math.round((100 * td[1]) / dated.length) + "% of songs with a known year", stat: td[1] + " songs" });
+    out.push(...reactionAwards(rows, reax));
     return out;
   }
 
@@ -89,5 +153,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { ICON, icon, groupSize, personTotals, awardsFor, tallyFor, songLine };
+  global.OkeAwards = { ICON, icon, groupSize, personTotals, awardsFor, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -34,3 +34,22 @@ CREATE VIEW v_night_stats as select night, count(*) as songs, count(distinct sin
 CREATE VIEW v_singer_stats as select singer, count(*) as songs, count(distinct night) as nights, min(played_at_local) as first_song, max(played_at_local) as last_song from plays group by singer order by songs desc;
 CREATE VIEW v_song_stats as select artist, title, count(*) as times_sung, count(distinct singer) as singers from plays where title is not null group by song_id order by times_sung desc;
 CREATE VIEW v_artist_stats as select artist, count(*) as times_sung from plays where artist is not null group by artist order by times_sung desc;
+
+-- Live emoji reactions from the phone site (POST /api/react). The Worker creates this table itself
+-- (CREATE TABLE IF NOT EXISTS in site/src/reactions_api.js), so there's no manual migration.
+-- device_id is a random id kept on the phone and ip_hash a daily-salted hash; both are only for rate
+-- limiting and are never returned by the API. `who` is the name the person typed, or "Anon XXXX".
+CREATE TABLE IF NOT EXISTS reactions (
+  id integer primary key autoincrement,
+  play_uuid text not null,        -- plays.uuid of the song on the mic
+  night text, singer text,        -- copied from plays when the reaction comes in
+  reaction text not null,         -- fire, micdrop, encore, chills, dance, keychange, cringe, offkey, tomato, snooze
+  who text not null,
+  device_id text not null,
+  ip_hash text,
+  created_at integer not null     -- unix seconds (UTC)
+);
+CREATE INDEX IF NOT EXISTS reactions_play on reactions(play_uuid);
+CREATE INDEX IF NOT EXISTS reactions_device on reactions(device_id, created_at);
+CREATE INDEX IF NOT EXISTS reactions_ip on reactions(ip_hash, created_at);
+CREATE INDEX IF NOT EXISTS reactions_night on reactions(night);
