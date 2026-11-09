@@ -17,6 +17,8 @@
   const lateNight = (p) => { const d = new Date(p.played_at * 1000), h = d.getHours(); return (h === 1 && d.getMinutes() >= 30) || (h >= 2 && h < 6); };
   const PUNK = /misfits|green day|the clash|nofx|ramones|blink|sex pistols|^l7$|bad religion|dead kennedys|alkaline trio|front bottoms|ajj/i;
   const BRIT = /^oasis$|^pulp$|^blur$|^the verve$|^suede$|^radiohead$|^the smiths$/i;
+  const HYPE_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
+  const hypeOf = (c) => HYPE_KEYS.reduce((a, k) => a + (c[k] || 0), 0);
   const COLOR = /\b(red|blue|black|white|green|pink|gold|golden|purple|yellow|silver|orange)\b/i;
 
   // ---------- badges ----------
@@ -42,6 +44,11 @@
     { id: "owl", name: "Night Owl", desc: "Sang after 1:30am", test: (r, i) => lateNight(r[i]) },
     { id: "opener", name: "Opening Act", desc: "Sang the first song of a night", test: (r, i, ctx) => ctx.firstOf.get(r[i].night) === r[i] },
     { id: "closer", name: "Closer", desc: "Sang the last song of a night", test: (r, i, ctx) => ctx.lastOf.get(r[i].night) === r[i] && r[i].night !== ctx.liveNight },
+    // Crowd reactions (live emoji taps on the phone site). ctx.rx(row) -> {reaction: count} for that song.
+    { id: "b-crowd", name: "Crowd Pleaser", desc: "10 hype reactions on one song", test: (r, i, ctx) => hypeOf(ctx.rx(r[i])) >= 10 },
+    { id: "b-drop", name: "Mic Dropper", desc: "3 mic drops on one song", test: (r, i, ctx) => (ctx.rx(r[i]).micdrop || 0) >= 3 },
+    { id: "b-encore", name: "Encore Earned", desc: "3 encore calls on one song", test: (r, i, ctx) => (ctx.rx(r[i]).encore || 0) >= 3 },
+    { id: "b-tomato", name: "Tomato Survivor", desc: "Took 3 tomatoes on one song", test: (r, i, ctx) => (ctx.rx(r[i]).tomato || 0) >= 3 },
     { id: "trend", name: "Trendsetter", desc: "Sang a song someone else picked up later", test: (r, i, ctx) => r[i].title && ctx.byTitle.get(key(r[i].title)).some((p) => p.played_at > r[i].played_at && key(p.singer) !== key(r[i].singer)) },
   ];
 
@@ -58,16 +65,18 @@
     return solo;
   }
 
-  function context(plays, liveNight) {
+  // reax: Map(play uuid -> {reaction: count}) from OkeAwards.reactionIndex(...).bySong (optional)
+  function context(plays, liveNight, reax) {
     const firstOf = new Map(), lastOf = new Map(), byTitle = new Map();
     plays.forEach((p) => { if (!firstOf.has(p.night)) firstOf.set(p.night, p); lastOf.set(p.night, p);
       if (p.title) { const k = key(p.title); (byTitle.get(k) || byTitle.set(k, []).get(k)).push(p); } });
-    return { firstOf, lastOf, byTitle, liveNight };
+    const none = {};
+    return { firstOf, lastOf, byTitle, liveNight, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
   }
 
   // -> Map(personKey -> {name, rows, badges: [{id, name, desc, at: row}]})
-  function badgesAll(plays, liveNight) {
-    const ctx = context(plays, liveNight);
+  function badgesAll(plays, liveNight, reax) {
+    const ctx = context(plays, liveNight, reax);
     const ppl = people(plays);
     ppl.forEach((e) => {
       e.badges = [];

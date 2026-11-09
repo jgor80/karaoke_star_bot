@@ -87,6 +87,13 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .rank .v { font-family: var(--f-mono); font-size: calc(2.4 * var(--u)); color: var(--hot); white-space: nowrap; }
 h3 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: calc(2.2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 
+/* live reactions: phones' emoji taps float up the side of the screen */
+.rx-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.rx-fly { position: absolute; bottom: -10vh; font-size: calc(7 * var(--u)); will-change: transform, opacity; animation: rxup 4.2s ease-out forwards; }
+@keyframes rxup { 0% { transform: translate(0, 0) scale(.7); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(var(--dx), -95vh) scale(1.25); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .rx-layer { display: none; } }
+.rxnote { font-size: calc(2.2 * var(--u)); color: var(--muted); margin: 0; }
+
 /* bar charts: decade mix and songs by hour */
 .chart { background: var(--panel); border: 2px solid var(--line); border-radius: calc(2 * var(--u)); padding: calc(2.4 * var(--u)) calc(2.6 * var(--u)) calc(1.6 * var(--u)); }
 .bars { display: flex; align-items: flex-end; gap: calc(1.2 * var(--u)); height: calc(26 * var(--u)); }
@@ -133,6 +140,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 </header>
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
 <div class="status" id="status"></div>
+<div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
 <button class="fs" id="fs" type="button" hidden>⛶ Full screen</button>
 
 <script src="/fun.js"></script>
@@ -168,9 +176,19 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
     const isLatest = night === nights[nights.length - 1];
     const live = isLatest && now() - last.played_at < LIVE_WINDOW_S;
     const tonight = isLatest && now() - last.played_at < TONIGHT_WINDOW_S;
-    const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null) : null;
+    const reax = OkeAwards.reactionIndex(data);
+    const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null, reax.bySong) : null;
     const totals = (r) => OkeAwards.personTotals(r, people, plays);
-    const awards = OkeAwards.awardsFor(rows, totals).sort((a, b) => !!b.headline - !!a.headline);
+    const awards = OkeAwards.awardsFor(rows, totals, reax).sort((a, b) => !!b.headline - !!a.headline);
+    // Crowd reactions for the night: totals per emoji and the most-reacted songs
+    const rxTot = {}; const rxSongs = [];
+    rows.forEach((p) => { const c = p.uuid && reax.bySong.get(p.uuid); if (!c) return; Object.entries(c).forEach(([k, n]) => { rxTot[k] = (rxTot[k] || 0) + n; });
+      rxSongs.push({ name: (p.singer || "Someone").trim(), sub: p.title ? "“" + p.title + "”" : "", n: OkeAwards.sumOf(c),
+        top: Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => (OkeAwards.REACTIONS.find((x) => x.k === k) || { e: "" }).e + n).join(" ") }); });
+    const reactions = OkeAwards.REACTIONS.filter((x) => rxTot[x.k]).map((x) => ({ label: x.e, n: rxTot[x.k] }));
+    const topReacted = rxSongs.sort((a, b) => b.n - a.n).slice(0, 6);
+    // The song on the mic right now, so phones' reactions can float up the screen
+    const singing = live && last.uuid && now() - last.played_at < (last.length_s || 300) + 180;
     // Badges first earned this night, one card per badge with everyone who got it. First-timers get their own card.
     const groups = new Map();
     if (people) KaraokeFun.unlockedOn(people, night).slice().reverse().forEach((u) => {
@@ -194,7 +212,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
     const dares = window.KaraokeFun ? KaraokeFun.daresStatus(plays, night).map((d) => ({ text: d.text, by: d.claimedBy ? (d.claimedBy.singer || "Someone").trim() : null,
       song: d.claimedBy ? OkeAwards.songLine(d.claimedBy) : null })) : [];
     return { night, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
-      singers, songs, artists, decades, hours, dares, schedule: data.schedule || null };
+      singers, songs, artists, decades, hours, dares, reactions, topReacted, current: singing ? last.uuid : null, schedule: data.schedule || null };
   }
 
   // ---------- render ----------
@@ -240,6 +258,15 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
     if (v.singers.length) {
       box.append(heading(v.tonight ? "Tonight's top singers" : "Top singers", plural(v.tally.singers, "singer") + " in all"));
       box.append(twoCols(v.singers, (e) => (e.mins ? e.mins + " min on the mic" : ""), (e) => plural(e.n, "song")));
+    }
+    if (v.reactions.length) {
+      box.append(heading(v.tonight ? "Crowd reactions tonight" : "Crowd reactions", v.reactions.reduce((a, x) => a + x.n, 0) + " taps from the crowd"));
+      const cols = el("div", "cols");
+      cols.append(barChart("Every emoji", v.reactions));
+      if (v.topReacted.length) { const c = el("div"); c.append(el("h3", null, "Most-reacted songs"), rankList(v.topReacted, (e) => e.sub, (e) => e.top)); cols.append(c); }
+      box.append(cols);
+    } else if (v.tonight) {
+      box.append(heading("React from your phone"), el("p", "rxnote", "Open " + (location.host || "okenight.com") + " and tap 🔥 🎤 🍅 😴 on whoever is singing. The crowd’s reactions decide some of tonight’s awards."));
     }
     if (v.badges.length) {
       const h2 = el("h2", null, v.tonight ? "Badges unlocked tonight" : "Badges unlocked"); h2.append(el("small", null, plural(v.nBadges, "badge") + " earned"));
@@ -327,10 +354,38 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
       if (!v) { $("title").textContent = "No karaoke nights yet"; return setStatus(""); }
       const sig = JSON.stringify(v); // only redraw when something on screen would change, so the scroll doesn't jump
       if (sig !== lastView) { lastView = sig; render(v); }
+      watchRx(v.current);
       setStatus(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
     } catch (e) {
       setStatus(lastView ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Retrying…", true);
     }
+  }
+
+  // ---------- live reactions overlay ----------
+  // While a song is on, check its reaction counts every 4s and float up one emoji per new tap (at most 14 at a time).
+  let rxPlay = null, rxSeen = null, rxT = 0;
+  function watchRx(play) {
+    if (play === rxPlay) return;
+    rxPlay = play; rxSeen = null; clearTimeout(rxT);
+    if (play) pollRx();
+  }
+  async function pollRx() {
+    const play = rxPlay; if (!play) return;
+    try {
+      const r = await fetch("/api/reactions?play=" + encodeURIComponent(play));
+      if (r.ok && play === rxPlay) {
+        const c = (await r.json()).counts || {};
+        if (rxSeen) { const burst = []; Object.entries(c).forEach(([k, n]) => { for (let i = (rxSeen[k] || 0); i < n && burst.length < 14; i++) burst.push(k); }); burst.forEach((k, i) => setTimeout(() => flyRx(k), i * 180)); }
+        rxSeen = { ...(rxSeen || {}), ...c };
+      }
+    } catch (e) {}
+    if (play === rxPlay) rxT = setTimeout(pollRx, 4000);
+  }
+  function flyRx(k) {
+    const x = OkeAwards.REACTIONS.find((r) => r.k === k); if (!x) return;
+    const f = el("span", "rx-fly", x.e), side = Math.random() < 0.5;
+    f.style.left = (side ? 2 + Math.random() * 12 : 86 + Math.random() * 12) + "vw"; f.style.setProperty("--dx", Math.round(Math.random() * 8 - 4) + "vw");
+    $("rx-layer").append(f); setTimeout(() => f.remove(), 4400);
   }
 
   // ---------- QR so the crowd can open the site on their phones ----------
