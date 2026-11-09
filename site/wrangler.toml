@@ -5,6 +5,12 @@ main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
+# Serve the site at okenight.com (the domain must be a zone in this Cloudflare account).
+routes = [
+  { pattern = "okenight.com", custom_domain = true },
+  { pattern = "www.okenight.com", custom_domain = true },
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "karaoke-stats"
