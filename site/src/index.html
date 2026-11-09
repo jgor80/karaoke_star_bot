@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#170d1c">
-<title>Karaoke Night</title>
+<title>Oke Night</title>
 <meta name="description" content="Live karaoke stats: who's on the mic, tonight's leaderboard, awards and records.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -220,7 +220,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <body>
 <header>
   <div class="wrap top">
-    <div class="logo">Karaoke <span>Night</span></div>
+    <div class="logo">Oke <span>Night</span></div>
     <span class="pill" id="live-pill">Loading</span>
     <div class="spacer"></div>
     <button class="icon-btn" id="share-btn" type="button" aria-haspopup="dialog">
@@ -790,7 +790,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   $("share-native").addEventListener("click", async () => {
     const url = location.origin + "/";
-    if (navigator.share) { try { await navigator.share({ title: "Karaoke Night", text: "Live karaoke stats 🎤", url }); } catch (e) {} return; }
+    if (navigator.share) { try { await navigator.share({ title: "Oke Night", text: "Live karaoke stats 🎤", url }); } catch (e) {} return; }
     try { await navigator.clipboard.writeText(url); $("share-native").textContent = "Link copied"; } catch (e) {}
   });
   $("share-card").addEventListener("click", () => {

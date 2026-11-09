@@ -15,3 +15,9 @@ database_id = "61453b2b-22e8-480d-a1ac-a6db72aa29a9"
 type = "Text"
 globs = ["**/bingo.js", "**/fun.js"]
 fallthrough = true
+
+# Once okenight.com is on this Cloudflare account, uncomment to serve the site there:
+# routes = [
+#   { pattern = "okenight.com", custom_domain = true },
+#   { pattern = "www.okenight.com", custom_domain = true },
+# ]
