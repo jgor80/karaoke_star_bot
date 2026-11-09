@@ -66,6 +66,15 @@ create table if not exists d1_uploaded (
   uuid        text primary key,
   uploaded_at text not null
 );
+-- When a play that already went to Cloudflare changes (a singer name fixed in KaraFun,
+-- a title filled in), forget that it was uploaded so the next upload re-sends it.
+create trigger if not exists plays_resend after update on plays
+when old.singer is not new.singer or old.artist is not new.artist or old.title is not new.title
+  or old.release_year is not new.release_year or old.length_s is not new.length_s
+  or old.session_start is not new.session_start
+begin
+  delete from d1_uploaded where uuid = new.uuid;
+end;
 create table if not exists sync_runs (
   ran_at      text primary key,
   source_rows integer,
@@ -162,17 +171,19 @@ def sync(source, target):
     with db:
         db.executescript(SCHEMA)
         before = db.execute("select count(*) from plays").fetchone()[0]
+        # KaraFun keeps only its last 200 plays. If its oldest play is newer than the newest one
+        # we already saved, some plays fell out of KaraFun before this script could copy them.
+        newest_saved = db.execute("select max(played_at) from plays").fetchone()[0]
+        oldest_source = min((p[1] for p in plays), default=None)
+        gap = bool(before and newest_saved and oldest_source and oldest_source > newest_saved)
         db.executemany(UPSERT_SESSION, sessions)
         db.executemany(UPSERT_PLAY, [tuple(p) + (now,) for p in plays])
-        # Fill in titles of community songs, then re-send any play whose title we just learned.
-        untitled = {r[0] for r in db.execute("select uuid from plays where title is null")}
+        # Fill in titles of community songs. The plays_resend trigger re-sends any play that changes.
         db.executemany(FILL_COMMUNITY, [(c[1], c[2], c[3], c[0]) for c in community])
-        named = [u for (u,) in db.execute("select uuid from plays where title is not null") if u in untitled]
-        db.executemany("delete from d1_uploaded where uuid = ?", [(u,) for u in named])
         total = db.execute("select count(*) from plays").fetchone()[0]
         db.execute("insert or replace into sync_runs values (?,?,?,?)", (now, len(plays), total - before, total))
     db.close()
-    return len(plays), total - before, total
+    return len(plays), total - before, total, gap
 
 
 D1_PLAY_COLS = ["uuid", "played_at", "played_at_local", "night", "session_start", "singer",
@@ -225,6 +236,12 @@ def upload(target, cfg):
     for p in plays:
         played_local, night = local_times(p[1])
         rows.append([p[0], p[1], played_local, night] + list(p[2:]))
+    # Only send sessions around the plays being uploaded; older ones are already in D1.
+    if rows:
+        oldest = min(r[1] for r in rows) - 86400
+        sessions = [x for x in sessions if x[0] is not None and x[0] >= oldest]
+    else:
+        sessions = []
     if sessions:
         upsert_rows(cfg, "sessions", ["session_start", "session_end", "name"], "session_start",
                     ["session_end", "name"], sessions)
@@ -241,8 +258,11 @@ def upload(target, cfg):
 def run_once(a):
     """One sync (and upload, when configured). Returns (ok, message)."""
     try:
-        rows, new, total = sync(a.source, a.target)
+        rows, new, total, gap = sync(a.source, a.target)
         msg = f"ok: read {rows} plays from KaraFun, {new} new, {total} total"
+        if gap:
+            msg += (" WARNING: KaraFun's oldest saved song is newer than our newest, so some songs"
+                    " were lost before this sync could copy them (KaraFun keeps only 200)")
         if os.path.exists(a.config):
             with open(a.config, encoding="utf-8") as f:
                 cfg = json.load(f)

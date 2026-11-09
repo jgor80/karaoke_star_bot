@@ -57,16 +57,19 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 </head>
 <body>
 <main>
-  <h1>🤫 Secret songs<small>Oke Night host page. Only you can see the hidden songs.</small></h1>
+  <h1>🎤 Host page<small>Oke Night. Secret songs and host settings. Only the host can open this page.</small></h1>
 
   <section class="card" id="login" hidden>
     <h2 id="login-h">Host key</h2>
     <p class="hint" id="login-hint">Enter your host key.</p>
-    <form class="row" id="login-form">
-      <input id="key" type="password" autocomplete="current-password" placeholder="Host key" aria-label="Host key" required>
+    <form class="card" id="login-form" style="padding:0;border:0;background:none">
+      <label id="code-l" hidden>Setup code (the HOST_SETUP_CODE secret on the Worker)<input id="code" type="password" autocomplete="off" placeholder="Setup code"></label>
+      <label id="key-l">Host key<input id="key" type="password" autocomplete="current-password" placeholder="Host key" required></label>
+      <label id="name-l" hidden>Your singer name in KaraFun (gets the host tag on the site)<input id="setup-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
       <button type="submit" id="login-btn">Open</button>
     </form>
     <p class="err" id="login-err"></p>
+    <button type="button" class="ghost small" id="forgot">Forgot the key? Reset it with the setup code</button>
   </section>
 
   <div id="app" hidden>
@@ -75,6 +78,14 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <p class="hint" id="alert-state">Turn alerts on to get a flashing screen, a sound and a buzz on this phone when a secret song is sung. Keep this page open.</p>
       <div class="row"><button type="button" id="alerts-btn">Turn on alerts</button><button type="button" class="ghost small" id="test-btn">Send a test push</button></div>
       <p class="hint" id="ntfy">For alerts when this page is closed, install the free <b>ntfy</b> app, tap <b>+</b>, and subscribe to <code id="topic">…</code>. <a id="topic-link" href="#" target="_blank" rel="noopener" style="color:var(--hot)">Open it</a></p>
+    </section>
+
+    <section class="card">
+      <h2>You, the host</h2>
+      <form class="card" id="host-form" style="padding:0;border:0;background:none">
+        <label>Your singer name in KaraFun. The site and TV show it with a 🎤 Host tag. Leave it empty for no tag.<input id="host-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
+        <div class="row"><button type="submit" class="small">Save</button><span class="hint" id="host-saved"></span></div>
+      </form>
     </section>
 
     <section class="card">
@@ -115,6 +126,8 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   const KEY = "okenight-host-key", SEEN = "okenight-host-seen";
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
   let key = store.get(KEY), seen = new Set(JSON.parse(store.get(SEEN) || "[]")), first = true, alertsOn = false, audio = null, beepT = 0, pollT = 0;
+  // Older versions saved bare ids. Start fresh then, so this first load doesn't re-alarm old finds.
+  if ([...seen].some((x) => !String(x).includes("@"))) seen = new Set();
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const when = (ts) => new Date(ts * 1000).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
@@ -130,7 +143,9 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     setupMode = !!needsSetup;
     $("app").hidden = true; $("login").hidden = false;
     $("login-h").textContent = setupMode ? "Set up your host key" : "Host key";
-    $("login-hint").textContent = setupMode ? "First time here: pick a host key (6+ characters). You’ll use it to open this page on any phone." : "Enter your host key.";
+    $("login-hint").textContent = setupMode ? "Enter the setup code, then pick a host key (6+ characters). You’ll use the key to open this page on any phone." : "Enter your host key.";
+    $("code-l").hidden = $("name-l").hidden = !setupMode; $("code").required = setupMode; $("forgot").hidden = setupMode;
+    $("key-l").firstChild.textContent = setupMode ? "New host key" : "Host key";
     $("login-btn").textContent = setupMode ? "Set key" : "Open";
     $("key").autocomplete = setupMode ? "new-password" : "current-password";
     $("login-err").textContent = msg || "";
@@ -139,10 +154,18 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     ev.preventDefault();
     const k = $("key").value.trim(); if (!k) return;
     if (setupMode) {
-      key = k; const r = await api("POST", { action: "setup", key: k });
-      if (!r.ok) return showLogin(r.status !== 403, r.d.error || "Couldn’t set it up.");
+      key = k; const r = await api("POST", { action: "setup", key: k, code: $("code").value, host_name: $("setup-name").value });
+      if (!r.ok) return showLogin(true, r.d.error || "Couldn’t set it up.");
+      $("code").value = "";
     }
     key = k; store.set(KEY, k); load();
+  });
+  $("forgot").addEventListener("click", () => showLogin(true));
+  $("host-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const r = await api("POST", { action: "host_name", host_name: $("host-name").value });
+    $("host-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
+    hostNameSet = false; load();
   });
   $("logout").addEventListener("click", () => { store.set(KEY, null); key = null; clearTimeout(pollT); showLogin(false); });
 
@@ -158,7 +181,10 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     render(r.d);
     pollT = setTimeout(load, document.hidden ? 30000 : 8000);
   }
+  let hostNameSet = false;
   function render(d) {
+    // Fill the host name once, so polling doesn't overwrite what's being typed.
+    if (!hostNameSet) { $("host-name").value = d.host_name || ""; hostNameSet = true; }
     if (d.ntfy_topic) { $("topic").textContent = d.ntfy_topic; $("topic-link").href = "https://ntfy.sh/" + d.ntfy_topic; }
     const hid = d.secrets.filter((s) => !s.found_uuid), fnd = d.secrets.filter((s) => s.found_uuid);
     $("hidden-h").textContent = "Hidden (" + hid.length + ")";
@@ -175,9 +201,11 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       if (s.reward) li.append(el("span", "rw", "🎁 " + s.reward));
       li.append(actions(s, true)); fl.append(li); });
     // New finds since last look: alarm (not for ones already found before this phone first loaded)
-    const fresh = fnd.filter((s) => !seen.has(s.id));
+    // A find is keyed by id and when it was found, so a secret that was hidden again alarms again when re-found.
+    const fk = (s) => s.id + "@" + s.found_at;
+    const fresh = fnd.filter((s) => !seen.has(fk(s)));
     if (!first || seen.size) fresh.filter((s) => d.now - s.found_at < 6 * 3600).forEach(alarm);
-    fresh.forEach((s) => seen.add(s.id)); store.set(SEEN, JSON.stringify([...seen]));
+    fresh.forEach((s) => seen.add(fk(s))); store.set(SEEN, JSON.stringify([...seen]));
     first = false;
   }
   function actions(s, found) {

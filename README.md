@@ -42,7 +42,11 @@ KaraFun desktop (Windows laptop)
 4. Run `install_daily_sync.bat` (daily at noon) and, if you want stats updating
    during the night, `install_live_sync.bat`.
 
-Plays are deduplicated by KaraFun's play id, and a "night" runs 6am to 6am.
+Plays are deduplicated by KaraFun's play id, and a "night" runs 6am to 6am. A play that
+changes in KaraFun after it was uploaded (a singer name fixed, say) is sent again. If
+KaraFun's 200-song history rolled over before a sync could copy it, `sync_log.txt` says so.
+During the night, the phone site shows a "stats paused" note when the laptop hasn't
+synced for 15 minutes.
 
 ## Deploying the site
 
@@ -50,6 +54,23 @@ Plays are deduplicated by KaraFun's play id, and a "night" runs 6am to 6am.
 cd site
 npx wrangler deploy
 ```
+
+## The host page
+
+`/host` is the host's page: hide secret songs, get alerts when one is sung, and set the
+host's singer name. The site and the TV show that name with a 🎤 Host tag (it starts as
+Bleacher Jeff).
+
+Setting up the host key, or resetting a forgotten one, needs a setup code that only the
+owner of the Cloudflare account can set. Set it once:
+
+```
+cd site
+npx wrangler secret put HOST_SETUP_CODE
+```
+
+Then open `/host`, tap "Forgot the key? Reset it with the setup code", and enter the setup
+code and a new host key. Without the secret, nobody can set or reset the key.
 
 ## Not in this repo
 

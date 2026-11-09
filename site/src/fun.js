@@ -14,7 +14,17 @@
   const isGroup = (s) => isTable(s) || SPLIT.test((s || "").trim());
   const decade = (y) => Math.floor(y / 10) * 10;
   const art = (re) => (p) => p.title && re.test(p.artist || "");
-  const lateNight = (p) => { const d = new Date(p.played_at * 1000), h = d.getHours(); return (h === 1 && d.getMinutes() >= 30) || (h >= 2 && h < 6); };
+  // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
+  const VENUE_TZ = "America/Chicago";
+  let venueFmt = null;
+  const venueHM = (ts) => {
+    try {
+      venueFmt = venueFmt || new Intl.DateTimeFormat("en-US", { timeZone: VENUE_TZ, hour: "numeric", minute: "numeric", hourCycle: "h23" });
+      const parts = venueFmt.formatToParts(new Date(ts * 1000)), get = (t) => Number((parts.find((x) => x.type === t) || {}).value);
+      return { h: get("hour") % 24, m: get("minute") };
+    } catch (e) { const d = new Date(ts * 1000); return { h: d.getHours(), m: d.getMinutes() }; }
+  };
+  const lateNight = (p) => { const { h, m } = venueHM(p.played_at); return (h === 1 && m >= 30) || (h >= 2 && h < 6); };
   const PUNK = /misfits|green day|the clash|nofx|ramones|blink|sex pistols|^l7$|bad religion|dead kennedys|alkaline trio|front bottoms|ajj/i;
   const BRIT = /^oasis$|^pulp$|^blur$|^the verve$|^suede$|^radiohead$|^the smiths$/i;
   const HYPE_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
@@ -111,15 +121,25 @@
     { id: "trend", name: "Trendsetter", desc: "Sang a song someone else picked up later", test: (r, i, ctx) => r[i].title && ctx.byTitle.get(key(r[i].title)).some((p) => p.played_at > r[i].played_at && key(p.singer) !== key(r[i].singer)) },
   ];
 
-  // People: solo singer names, plus each part of a group name that is also a solo singer ("Val and bleacher jeff" -> val, bleacher jeff).
+  // People: solo singer names, plus each part of a duet or group name ("Val and bleacher jeff" -> val, bleacher jeff).
+  // Someone who only ever sings in duets still gets leaderboard credit and badges. Parts are only split on
+  // clear separators (& , / + "and"), not "n", so a name like "Rock n Roll Rob" stays one person.
+  const DUET_SPLIT = /\s*(?:,|&|\/|\band\b|\+)\s*/i;
   function people(plays) {
     const solo = new Map();
     plays.forEach((p) => { const k = key(p.singer); if (k && !isGroup(p.singer)) { if (!solo.has(k)) solo.set(k, { key: k, name: clean(p.singer), rows: [] }); } });
-    const add = (k, p) => { const e = solo.get(k); if (e && e.rows[e.rows.length - 1] !== p) e.rows.push(p); };
+    const add = (k, p, name) => {
+      let e = solo.get(k);
+      if (!e && name && k.length >= 2) solo.set(k, (e = { key: k, name, rows: [] }));
+      if (e && e.rows[e.rows.length - 1] !== p) e.rows.push(p);
+    };
     plays.forEach((p) => {
       const k = key(p.singer); if (!k) return;
       if (!isGroup(p.singer)) { add(k, p); return; }
-      if (!isTable(p.singer)) k.split(SPLIT).map((x) => x.trim()).filter(Boolean).forEach((part) => add(part, p));
+      if (isTable(p.singer)) return;
+      // Parts already known as solo singers (any separator), then duet-only people (clear separators only).
+      k.split(SPLIT).map((x) => x.trim()).filter(Boolean).forEach((part) => add(part, p));
+      clean(p.singer).split(DUET_SPLIT).map((x) => x.trim()).filter(Boolean).forEach((name) => add(key(name), p, name));
     });
     return solo;
   }
@@ -167,7 +187,7 @@
     { id: "seventies", text: "Take us back to the '70s", test: (p) => p.release_year >= 1970 && p.release_year < 1980 },
     { id: "punk", text: "Start a mosh pit: sing a punk song", test: art(PUNK) },
     { id: "country", text: "Country night: Dolly, Shania, Garth, the Chicks…", test: art(/dolly parton|shania|garth brooks|the chicks|carrie underwood|alan jackson|brooks & dunn|zach bryan|midland/i) },
-    { id: "firsttimer", text: "A first-timer takes the mic after 11pm", test: (p, ctx) => !ctx.pastSingers.has(key(p.singer)) && key(p.singer) && (new Date(p.played_at * 1000).getHours() >= 23 || new Date(p.played_at * 1000).getHours() < 6) },
+    { id: "firsttimer", text: "A first-timer takes the mic after 11pm", test: (p, ctx) => !ctx.pastSingers.has(key(p.singer)) && key(p.singer) && (venueHM(p.played_at).h >= 23 || venueHM(p.played_at).h < 6) },
     { id: "table", text: "Get your whole table up there", test: (p) => isTable(p.singer) || (p.singer || "").split(SPLIT).filter(Boolean).length >= 3 },
   ];
   function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }

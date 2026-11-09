@@ -2,9 +2,10 @@
 //
 // GET  /api/host                      (header x-host-key) -> {secrets, ntfy_topic}
 // POST /api/host {action, ...}        (header x-host-key)  add {title, artist?, reward?} | remove {id} | reset {id}
-// POST /api/host {action:"setup", key} first-time only: sets the host key when none exists yet
+// POST /api/host {action:"setup", code, key, host_name?}  sets or resets the host key; needs the HOST_SETUP_CODE Worker secret
+// POST /api/host {action:"host_name", host_name}           (header x-host-key) the host's singer name ("" = nobody)
 // checkSecrets(env)                   -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
-// publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n} folded into /api/plays
+// publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n, host} folded into /api/plays
 //
 // Unfound secrets (titles and rewards) are only ever returned to the host key.
 
@@ -64,21 +65,41 @@ export async function checkSecrets(env) {
       if (p) upd.push(env.DB.prepare("UPDATE secret_songs SET found_uuid = ?, found_at = ? WHERE id = ? AND found_uuid IS NULL").bind(p.uuid, p.played_at, s.id)); });
     if (upd.length) await env.DB.batch(upd);
   }
+  // notified_at: NULL = not pushed yet, negative = a push in progress (claimed at -notified_at),
+  // positive = pushed. A failed push goes back to NULL, so the every-minute cron retries it
+  // for up to an hour after the find. A claim left behind by a crashed run is retried after 2 minutes.
+  const t = now();
   const todo = (await env.DB.prepare(
-    "SELECT s.id, s.title, s.artist, s.reward, p.singer, p.title AS sung_title, p.artist AS sung_artist FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.found_uuid IS NOT NULL AND s.notified_at IS NULL").all()).results;
+    `SELECT s.id, s.title, s.artist, s.reward, s.notified_at, p.singer, p.title AS sung_title, p.artist AS sung_artist
+     FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid
+     WHERE s.found_uuid IS NOT NULL AND s.found_at > ?1
+       AND (s.notified_at IS NULL OR (s.notified_at < 0 AND -s.notified_at < ?2))`).bind(t - 3600, t - 120).all()).results;
   if (!todo.length) return;
   const cfg = await config(env);
   for (const s of todo) {
     // Claim it first so two overlapping runs don't both push.
-    const claim = await env.DB.prepare("UPDATE secret_songs SET notified_at = ? WHERE id = ? AND notified_at IS NULL").bind(now(), s.id).run();
+    const claim = await env.DB.prepare("UPDATE secret_songs SET notified_at = ?1 WHERE id = ?2 AND notified_at IS ?3")
+      .bind(cfg.ntfy_topic ? -t : t, s.id, s.notified_at).run();
     if (!claim.meta.changes || !cfg.ntfy_topic) continue;
     const who = (s.singer || "Someone").trim();
     const body = who + " just sang “" + (s.sung_title || s.title) + "”" + (s.reward ? ". Reward: " + s.reward : "");
+    let sent = false;
     try {
-      await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body,
+      const r = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body,
         headers: { Title: "Secret song found!", Priority: "high", Tags: "shushing_face,microphone", Click: "https://okenight.com/host" } });
-    } catch (e) { /* the host page still alerts */ }
+      sent = r.ok;
+    } catch (e) { /* retried on the next run; the host page still alerts */ }
+    await env.DB.prepare("UPDATE secret_songs SET notified_at = ?1 WHERE id = ?2 AND notified_at = ?3")
+      .bind(sent ? now() : null, s.id, -t).run();
   }
+}
+
+// The host's singer name, shown with a host tag on the phone site and the TV. Set on /host.
+export const DEFAULT_HOST = "Bleacher Jeff";
+function cleanHostName(s) { return String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); }
+async function hostName(env) {
+  const v = (await config(env)).host_name;
+  return v === undefined ? DEFAULT_HOST : v;
 }
 
 // Found secrets (with who sang them) and how many are still hidden. Never includes unfound titles.
@@ -89,8 +110,8 @@ export async function publicSecrets(env) {
       env.DB.prepare("SELECT s.id, s.title, s.artist, s.reward, s.found_uuid, s.found_at, p.singer, p.night FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.found_uuid IS NOT NULL ORDER BY s.found_at"),
       env.DB.prepare("SELECT count(*) AS n FROM secret_songs WHERE found_uuid IS NULL"),
     ]);
-    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0 };
-  } catch (e) { return { secrets_found: [], secrets_left: 0 }; }
+    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: await hostName(env) };
+  } catch (e) { return { secrets_found: [], secrets_left: 0, host: DEFAULT_HOST }; }
 }
 
 export async function handleHost(req, env) {
@@ -100,16 +121,25 @@ export async function handleHost(req, env) {
   if (req.method === "POST") { try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); } }
 
   if (body.action === "setup") {
-    // First-time setup only: whoever sets the key first owns the host page. After that, setup is refused.
-    if (cfg.key_hash) return json({ error: "Already set up. Enter your host key." }, 403);
+    // Setting (or resetting) the host key needs the setup code, a Worker secret only the owner can set:
+    //   npx wrangler secret put HOST_SETUP_CODE
+    // So nobody who stumbles on /host can claim it, and a forgotten key can be replaced.
+    if (!env.HOST_SETUP_CODE) return json({ error: "Setup is locked. Set the HOST_SETUP_CODE secret on the Worker first (see the README)." }, 403);
+    const code = String(body.code || "");
+    const codeOk = same(await sha256("code:" + code), await sha256("code:" + env.HOST_SETUP_CODE));
+    if (!codeOk) { await new Promise((r) => setTimeout(r, 400)); return json({ error: "That setup code isn’t right.", needs_setup: true }, 403); }
     const key = String(body.key || "").trim();
-    if (key.length < 6) return json({ error: "Use at least 6 characters." }, 400);
-    const salt = randomId(16), topic = "okenight-" + randomId(16);
-    await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES ('key_salt', ?)").bind(salt),
-      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES ('key_hash', ?)").bind(await sha256(salt + ":" + key)),
-      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES ('ntfy_topic', ?)").bind(topic),
-    ]);
+    if (key.length < 6) return json({ error: "Use at least 6 characters.", needs_setup: true }, 400);
+    const salt = randomId(16);
+    const stmts = [
+      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('key_salt', ?)").bind(salt),
+      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('key_hash', ?)").bind(await sha256(salt + ":" + key)),
+      // Keep the push topic across key resets so the host's phone stays subscribed.
+      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES ('ntfy_topic', ?)").bind("okenight-" + randomId(16)),
+    ];
+    const name = cleanHostName(body.host_name);
+    if (name) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('host_name', ?)").bind(name));
+    await env.DB.batch(stmts);
     return json({ ok: true });
   }
   if (!cfg.key_hash) return json({ error: "setup", needs_setup: true }, 401);
@@ -129,6 +159,10 @@ export async function handleHost(req, env) {
     } else if (body.action === "reset") {
       // Hide it again: only songs sung from now on count.
       await env.DB.prepare("UPDATE secret_songs SET found_uuid = NULL, found_at = NULL, notified_at = NULL, created_at = ? WHERE id = ?").bind(now(), id).run();
+    } else if (body.action === "host_name") {
+      const name = cleanHostName(body.host_name);
+      if (name) await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('host_name', ?)").bind(name).run();
+      else await env.DB.prepare("DELETE FROM host_config WHERE k = 'host_name'").run();
     } else if (body.action === "test") {
       if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
       return json({ ok: true });
@@ -137,5 +171,6 @@ export async function handleHost(req, env) {
   await checkSecrets(env);
   const { results } = await env.DB.prepare(
     "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").all();
-  return json({ secrets: results, ntfy_topic: cfg.ntfy_topic || null, now: now() });
+  const name = (await config(env)).host_name;
+  return json({ secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: name === undefined ? DEFAULT_HOST : name, now: now() });
 }
