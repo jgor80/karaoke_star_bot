@@ -122,6 +122,19 @@ details.singer[open] summary { border-bottom: 1px solid var(--line); }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--gold-soft); color: var(--gold); }
 .more { width: 100%; margin-top: 8px; }
+.badge.earned { background: var(--hot-soft); color: var(--hot); }
+
+/* dares, watch, unlocked badges */
+.dares { display: grid; gap: 8px; }
+.dare { background: var(--panel); border: 1px dashed var(--gold); border-radius: 12px; padding: 11px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+.dare .txt { font-weight: 700; overflow-wrap: anywhere; }
+.dare .state { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
+.dare .by { grid-column: 1 / -1; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.dare.done { border-style: solid; border-color: var(--hot); background: var(--hot-soft); }
+.dare.done .state { color: var(--hot); }
+.watch { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 14px; color: var(--muted); }
+.watch b { color: var(--ink); }
+.watch .yes { color: var(--hot); font-weight: 700; }
 
 /* records */
 .records { display: grid; gap: 8px; }
@@ -206,12 +219,21 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     </div>
     <div class="tally" id="tally"></div>
     <div class="sec">
+      <h2>Tonight's dares</h2>
+      <div class="dares" id="dares"></div>
+      <div class="watch" id="watch" hidden></div>
+    </div>
+    <div class="sec">
       <h2 id="lb-h">Tonight's leaderboard</h2>
       <ol class="list" id="leaderboard"></ol>
     </div>
     <div class="sec">
       <h2>Just sung</h2>
       <ol class="list feed" id="feed"></ol>
+    </div>
+    <div class="sec" id="unlocked-sec" hidden>
+      <h2>Badges unlocked tonight</h2>
+      <ol class="list" id="unlocked"></ol>
     </div>
     <div class="sec">
       <h2>Awards so far</h2>
@@ -309,6 +331,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 </dialog>
 
 <script src="/bingo.js"></script>
+<script src="/fun.js"></script>
 <script>
 (function () {
   const REFRESH_MS = 30000;
@@ -318,6 +341,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const $ = (id) => document.getElementById(id);
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40;
+  let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
 
   // ---------- helpers ----------
   const key = (s) => (s || "").trim().toLowerCase();
@@ -450,7 +474,37 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       li.append(el("span", "time", clock(p.played_at)));
       const d = el("div"); d.append(el("div", "main-t", clean(p.singer) || "Mystery singer"), el("div", "sub-t", songLine(p))); li.append(d); feed.append(li); });
 
+    renderFun(n, tonight);
     renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist"].includes(a.id)));
+  }
+
+  // ---------- dares, watch, unlocked badges ----------
+  function renderFun(n, tonight) {
+    if (!window.KaraokeFun) return;
+    const box = $("dares"); box.replaceChildren();
+    KaraokeFun.daresStatus(plays, n.night).forEach((d) => {
+      const c = el("div", "dare" + (d.claimedBy ? " done" : ""));
+      c.append(el("span", "txt", d.text), el("span", "state", d.claimedBy ? "Claimed" : "Open"));
+      c.append(el("span", "by", d.claimedBy ? (clean(d.claimedBy.singer) || "Someone") + " with " + songLine(d.claimedBy) + ", " + clock(d.claimedBy.played_at)
+        : tonight ? "First one to do it gets the glory." : "Nobody took this one."));
+      box.append(c);
+    });
+    const w = KaraokeFun.watchSong(plays, n.night), wb = $("watch");
+    wb.hidden = !w;
+    if (w) {
+      wb.replaceChildren();
+      const t = el("b", null, "“" + w.title + "”");
+      wb.append(document.createTextNode("Song watch: "), t, document.createTextNode(" has been sung on " + w.pastNights + " of " + plural(w.totalPast, "past night") + ". "));
+      wb.append(w.tonight.length ? el("span", "yes", (tonight ? "It's happened tonight" : "It happened") + (w.tonight.length > 1 ? " " + w.tonight.length + " times" : "") + "!")
+        : document.createTextNode(tonight ? "Will it happen tonight?" : "Not that night."));
+    }
+    const un = KaraokeFun.unlockedOn(people, n.night);
+    $("unlocked-sec").hidden = !un.length;
+    $("unlocked-sec").querySelector("h2").textContent = "Badges unlocked " + (tonight ? "tonight" : nightLabel(n.night));
+    const ol = $("unlocked"); ol.replaceChildren();
+    un.slice(0, 10).forEach((u) => { const li = el("li");
+      li.append(el("span", "time", clock(u.badge.at.played_at)), el("span", "main-t", u.who), el("span", "val", u.badge.name), el("span", "sub-t", u.badge.desc));
+      ol.append(li); });
   }
 
   // ---------- awards tab ----------
@@ -554,10 +608,13 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (yrs.length) badges.append(el("span", "badge", "Oldest pick: " + Math.min(...yrs)));
       if (favA && favA[1] > 1) badges.append(el("span", "badge", "Loves " + favA[0]));
       if (signature && signature[1] > 1) badges.append(el("span", "badge", "Signature song x" + signature[1]));
+      const person = people.get(key(e.name));
+      const earned = el("div", "badges");
+      if (person) person.badges.filter((x) => !["debut", "regular", "signature"].includes(x.id)).forEach((x) => { const bd = el("span", "badge earned", x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
       e.rows.slice().reverse().forEach((p) => { const li = el("li");
         li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()), el("span", null, songLine(p))); ol.append(li); });
-      b.append(badges, ol); d.append(b);
+      b.append(badges); if (earned.childNodes.length) b.append(earned); b.append(ol); d.append(b);
     });
     return d;
   }
@@ -607,6 +664,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       .sort((a, b) => a.played_at - b.played_at);
     const byNight = new Map(); plays.forEach((p) => { if (!p.night) return; (byNight.get(p.night) || byNight.set(p.night, []).get(p.night)).push(p); });
     nights = [...byNight.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([night, rows]) => ({ night, rows }));
+    const last = plays[plays.length - 1];
+    const liveNight = last && now() - last.played_at < TONIGHT_WINDOW_S ? last.night : null;
+    people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, liveNight) : new Map();
     renderAll();
   }
   let bingo = null;
