@@ -1,6 +1,6 @@
 # Public, read-only karaoke stats site for phones.
 # Deploy from this folder with:  npx wrangler deploy
-name = "karaoke-stats"
+name = "karaoke-star-bot"  # must match the Worker Cloudflare created from this repo
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
