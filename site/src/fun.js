@@ -124,5 +124,84 @@
     return { title: w.title, artist: w.artist, pastNights, totalPast, tonight };
   }
 
-  global.KaraokeFun = { BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people };
+
+  // ---------- one name per person ----------
+  // Names are hand-typed into the queue, so the same person shows up as "Scotty 2 Hotty" / "Scotty2hotty",
+  // "Bleacher Jeff (fin)" or "Vincent Vega (Bleacher Jeff)". canonicalize() rewrites p.singer to one name per
+  // person and keeps the original in p.as_typed. Groups and tables are left alone (their parts are credited in people()).
+  const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  function canonicalize(plays) {
+    const counts = new Map(); // norm(base) -> Map(spelling -> n)
+    const baseOf = (s) => clean((s || "").replace(/\([^)]*\)/g, " "));
+    const parenOf = (s) => { const m = /\(([^)]+)\)/.exec(s || ""); return m ? clean(m[1]) : null; };
+    plays.forEach((p) => { const s = clean(p.singer); if (!s || isGroup(s) || /\(/.test(s)) return;
+      const k = norm(s); const m = counts.get(k) || new Map(); m.set(s, (m.get(s) || 0) + 1); counts.set(k, m); });
+    const display = (k) => { const m = counts.get(k); return m ? [...m.entries()].sort((a, b) => b[1] - a[1] || (b[0] !== b[0].toLowerCase()) - (a[0] !== a[0].toLowerCase()))[0][0] : null; };
+    plays.forEach((p) => {
+      const s = clean(p.singer); p.as_typed = p.singer;
+      if (!s || isGroup(baseOf(s))) return;
+      let k = norm(s);
+      const par = parenOf(s);
+      if (par && !/^not\b/i.test(par)) {
+        if (counts.has(norm(par))) k = norm(par);            // "Vincent Vega (Bleacher Jeff)" -> Bleacher Jeff
+        else if (counts.has(norm(baseOf(s)))) k = norm(baseOf(s)); // "Bleacher Jeff (fin)" -> Bleacher Jeff
+      }
+      const d = display(k); if (d) p.singer = d;
+    });
+    return plays;
+  }
+
+  // ---------- season awards (all nights) ----------
+  function seasonAwards(plays, ppl) {
+    const out = [], list = [...ppl.values()].filter((e) => e.rows.length);
+    const best = (score, min) => list.filter((e) => (min ? e.rows.length >= min : true)).map((e) => ({ e, v: score(e) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v || b.e.rows.length - a.e.rows.length)[0];
+    const nightsOf = (e) => new Set(e.rows.map((p) => p.night)).size;
+    let w;
+    if ((w = best((e) => e.rows.length))) out.push({ id: "s-mvp", label: "Season MVP", who: w.e.name, what: "Most songs of the season", stat: w.v + " songs" });
+    if ((w = best(nightsOf)) && w.v > 1) out.push({ id: "s-loyal", label: "Perfect Attendance", who: w.e.name, what: "Showed up and sang the most nights", stat: w.v + " nights" });
+    if ((w = best((e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0)))) out.push({ id: "s-mic", label: "Mic Time Champ", who: w.e.name, what: "Most minutes on the mic", stat: Math.round(w.v / 60) + " minutes" });
+    if ((w = best((e) => e.badges.filter((b) => b.id !== "debut").length))) out.push({ id: "s-badges", label: "Badge Hunter", who: w.e.name, what: "Most badges earned", stat: w.v + " badges" });
+    if ((w = best((e) => new Set(e.rows.filter((p) => p.release_year).map((p) => decade(p.release_year))).size, 3))) out.push({ id: "s-range", label: "Widest Range", who: w.e.name, what: "Songs from the most decades", stat: w.v + " decades" });
+    if ((w = best((e) => e.rows.filter((p) => isGroup(p.singer)).length)) && w.v > 1) out.push({ id: "s-duet", label: "Best Duet Partner", who: w.e.name, what: "Shared the mic the most", stat: w.v + " group songs" });
+    if ((w = best((e) => { const c = new Map(); e.rows.forEach((p) => { if (p.title) c.set(key(p.title), (c.get(key(p.title)) || 0) + 1); }); return Math.max(0, ...c.values()); })) && w.v > 2) {
+      const c = new Map(); w.e.rows.forEach((p) => { if (p.title) c.set(key(p.title), [(c.get(key(p.title)) || [0])[0] + 1, p]); });
+      const top = [...c.values()].sort((a, b) => b[0] - a[0])[0][1];
+      out.push({ id: "s-onesong", label: "One Song Wonder", who: w.e.name, what: "“" + top.title + "”, again and again", stat: w.v + " times" });
+    }
+    if ((w = best((e) => { const d = e.rows.filter((p) => p.release_year); return d.length ? Math.round((100 * d.filter((p) => p.release_year < 1980).length) / d.length) : 0; }, 3))) out.push({ id: "s-crate", label: "Crate Digger", who: w.e.name, what: "Highest share of pre-1980 songs (3+ songs)", stat: w.v + "%" });
+    const ctx = context(plays, null);
+    if ((w = best((e) => e.rows.filter((p) => p.title && ctx.byTitle.get(key(p.title)).some((q) => q.played_at > p.played_at && key(q.singer) !== key(p.singer))).length)) && w.v > 1) out.push({ id: "s-trend", label: "Tastemaker", who: w.e.name, what: "Most songs that others sang later", stat: w.v + " songs" });
+    return out;
+  }
+
+  // ---------- badge book ----------
+  function badgeBook(ppl) {
+    const list = [...ppl.values()].filter((e) => e.rows.length), total = list.length || 1;
+    const book = BADGES.filter((b) => b.id !== "debut").map((b) => {
+      const holders = list.filter((e) => e.badges.some((x) => x.id === b.id));
+      return { id: b.id, name: b.name, desc: b.desc, holders: holders.map((e) => e.name), pct: Math.round((100 * holders.length) / total) };
+    }).sort((a, b) => a.holders.length - b.holders.length || a.name.localeCompare(b.name));
+    const collectors = list.map((e) => ({ name: e.name, n: e.badges.filter((b) => b.id !== "debut").length })).filter((x) => x.n).sort((a, b) => b.n - a.n).slice(0, 10);
+    return { book, collectors, singers: list.length };
+  }
+
+  // ---------- progress toward badges not earned yet ----------
+  function progress(e) {
+    if (!e) return [];
+    const r = e.rows, has = new Set(e.badges.map((b) => b.id));
+    const nights = new Set(r.map((p) => p.night)).size;
+    const decs = new Set(r.filter((p) => p.release_year).map((p) => decade(p.release_year))).size;
+    const perNight = Math.max(0, ...[...new Set(r.map((p) => p.night))].map((n) => r.filter((p) => p.night === n).length));
+    const artistMax = Math.max(0, ...[...new Set(r.map((p) => key(p.artist)).filter(Boolean))].map((a) => r.filter((p) => key(p.artist) === a).length));
+    const cand = [
+      ["regular", nights, 3, "nights"], ["lifer", nights, 6, "nights"], ["hattrick", perNight, 3, "songs in a night"],
+      ["hopper", decs, 4, "decades"], ["timelord", decs, 6, "decades"], ["loyal", artistMax, 3, "songs by one artist"],
+      ["brit", r.filter(art(BRIT)).length, 2, "Britpop songs"], ["punk", r.filter(art(PUNK)).length, 2, "punk songs"],
+    ];
+    return cand.filter(([id, have, need]) => !has.has(id) && have < need && !(id === "lifer" && !has.has("regular")) && !(id === "timelord" && !has.has("hopper")))
+      .map(([id, have, need, unit]) => { const b = BADGES.find((x) => x.id === id); return { id, name: b.name, desc: b.desc, have, need, unit }; })
+      .sort((a, b) => b.have / b.need - a.have / a.need);
+  }
+
+  global.KaraokeFun = { BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, personKey: (s) => key(s) };
 })(typeof window !== "undefined" ? window : globalThis);
