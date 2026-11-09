@@ -28,7 +28,7 @@ KaraFun desktop (Windows laptop)
 | --- | --- |
 | `sync/` | Python sync script and the Windows installers for the daily and live (during the night) scheduled tasks. |
 | `schema/` | The D1 database schema (tables, indexes, views). |
-| `site/` | The public phone site: a Cloudflare Worker (`src/worker.js`) serving `src/index.html` and reading D1. |
+| `site/` | The public phone site: a Cloudflare Worker (`src/worker.js`) serving `src/index.html` and reading D1. `/tv` (`src/tv.html`) is a TV screen that scrolls the latest night's awards and badges; `?night=YYYY-MM-DD` pins a night, `?speed=2` scrolls faster. Night awards live in `src/awards.js`, shared by both pages. |
 | `awards/` | "The Mics" night awards and recap card page. |
 | `bingo/` | Karaoke bingo cards. The site uses its own copy in `site/src/bingo.js`. |
 
