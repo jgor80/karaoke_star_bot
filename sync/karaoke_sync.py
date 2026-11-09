@@ -105,6 +105,14 @@ select h.uuid, h.timestamp, h.session_timestamp, h.singer_name, h.type_id, h.ref
 from history_item h left join song s on s.song_id = h.ref_id and h.type_id = 1
 """
 
+# type_id 2 = a KaraFun "community" song (user-made karaoke). Its title lives in the
+# community table, not in song. Older KaraFun versions may lack that table.
+READ_COMMUNITY = "select community_id, artist, title, len from community"
+FILL_COMMUNITY = """
+update plays set artist = coalesce(artist, ?), title = coalesce(title, ?), length_s = coalesce(length_s, ?)
+where type_id = 2 and song_id = ? and title is null
+"""
+
 UPSERT_PLAY = """
 insert into plays (uuid, played_at, session_start, singer, type_id, song_id, artist, title,
                    release_year, length_s, pitch, tempo, lead_vocal_a, lead_vocal_b, backing,
@@ -143,6 +151,10 @@ def sync(source, target):
         src = sqlite3.connect(snap)
         plays = src.execute(READ_PLAYS).fetchall()
         sessions = src.execute("select start_time, end_time, name from history_session").fetchall()
+        try:
+            community = src.execute(READ_COMMUNITY).fetchall()
+        except sqlite3.Error:
+            community = []
         src.close()
 
     now = dt.datetime.now().isoformat(timespec="seconds")
@@ -152,6 +164,11 @@ def sync(source, target):
         before = db.execute("select count(*) from plays").fetchone()[0]
         db.executemany(UPSERT_SESSION, sessions)
         db.executemany(UPSERT_PLAY, [tuple(p) + (now,) for p in plays])
+        # Fill in titles of community songs, then re-send any play whose title we just learned.
+        untitled = {r[0] for r in db.execute("select uuid from plays where title is null")}
+        db.executemany(FILL_COMMUNITY, [(c[1], c[2], c[3], c[0]) for c in community])
+        named = [u for (u,) in db.execute("select uuid from plays where title is not null") if u in untitled]
+        db.executemany("delete from d1_uploaded where uuid = ?", [(u,) for u in named])
         total = db.execute("select count(*) from plays").fetchone()[0]
         db.execute("insert or replace into sync_runs values (?,?,?,?)", (now, len(plays), total - before, total))
     db.close()
