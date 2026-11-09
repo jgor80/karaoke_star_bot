@@ -4,7 +4,7 @@
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
-import { scheduleStatus } from "./schedule.js";
+import { scheduleStatus, localStampToUnix } from "./schedule.js";
 import AWARDS from "./awards.js";
 import TV from "./tv.html";
 import { handleReact, handleCounts, reactionTotals } from "./reactions_api.js";
@@ -34,7 +34,7 @@ export default {
       if (!res) {
         const [[plays, sync], reax] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, served_at: Math.floor(Date.now() / 1000), schedule, ...reax }),
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax }),
           { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));

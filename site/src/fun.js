@@ -19,6 +19,62 @@
   const BRIT = /^oasis$|^pulp$|^blur$|^the verve$|^suede$|^radiohead$|^the smiths$/i;
   const HYPE_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
   const hypeOf = (c) => HYPE_KEYS.reduce((a, k) => a + (c[k] || 0), 0);
+  // ---------- genres ----------
+  // Artist names (lowercase, leading "the " dropped) per genre. An artist can sit in more than one.
+  // Matched against each part of the artist field: "Lady Gaga & Bruno Mars", "Paramore (The Twilight Saga)",
+  // "Toy Story (Randy Newman)" are split on & , / feat. and parentheses.
+  const G = (s) => new Set(s.split("|").map((x) => clean(x.replace(/\bthe\b/g, " "))));
+  const GENRES = [
+    { id: "g-country", name: "Honky Tonker", genre: "country", icon: "🤠", artists: G("dolly parton|shania twain|garth brooks|chicks|dixie chicks|carrie underwood|alan jackson|brooks & dunn|zach bryan|kacey musgraves|midland|little big town|lady a|lady antebellum|brad paisley|charlie daniels band|johnny cash|willie nelson|reba mcentire|tim mcgraw|faith hill|keith urban|blake shelton|miranda lambert|kenny rogers|patsy cline|loretta lynn|george strait|luke combs|morgan wallen|chris stapleton|tyler childers|sturgill simpson|lainey wilson|toby keith|trisha yearwood|martina mcbride|billy ray cyrus|sugarland|rascal flatts|florida georgia line|kenny chesney|jason aldean|luke bryan|linda ronstadt|john denver|glen campbell|hank williams|randy newman|dwight yoakam|travis tritt|big & rich|gretchen wilson|orville peck|beyoncé") },
+    { id: "g-metal", name: "Headbanger", genre: "metal", icon: "🤘", artists: G("slipknot|lamb of god|killswitch engage|system of a down|tool|ghost|ghost (band)|rob zombie|marilyn manson|ministry|metallica|iron maiden|black sabbath|ozzy osbourne|megadeth|pantera|slayer|korn|disturbed|avenged sevenfold|judas priest|dio|motörhead|faith no more|white zombie|type o negative|deftones|rammstein|nine inch nails|mastodon|gojira|bring me the horizon|five finger death punch|godsmack|static-x|drowning pool|linkin park|evanescence|breaking benjamin|papa roach|limp bizkit|in this moment|spiritbox|sleep token|my life with thrill kill kult") },
+    { id: "g-grunge", name: "Flannel Season", genre: "grunge", icon: "🎸", artists: G("nirvana|soundgarden|pearl jam|alice in chains|stone temple pilots|mad season|bush|audioslave|toadies|urge overkill|hole|silverchair|smashing pumpkins|candlebox|temple of dog|screaming trees|foo fighters|mudhoney|l7|veruca salt|live|collective soul|sponge|seven mary three|chris cornell") },
+    { id: "g-emo", name: "Emo Phase", genre: "emo & pop punk", icon: "🖤", artists: G("paramore|panic! at disco|blink-182|sum 41|alkaline trio|front bottoms|cursive|my chemical romance|fall out boy|jimmy eat world|taking back sunday|dashboard confessional|brand new|yellowcard|new found glory|simple plan|good charlotte|used|all time low|avril lavigne|plain white t's|ajj|green day|bowling for soup|motion city soundtrack|saves day|thursday|hawthorne heights|mayday parade|pierce veil|sleeping with sirens|twenty one pilots|weezer|the starting line|something corporate|jack's mannequin|state champs|neck deep|modern baseball|mom jeans|tigers jaw|joyce manor|american football|manchester orchestra|bright eyes|mindless self indulgence") },
+    { id: "g-hiphop", name: "Bars", genre: "hip-hop & rap", icon: "🎧", artists: G("sir mix-a-lot|salt-n-pepa|outkast|big boi|andré 3000|50 cent|dr. dre|eminem|drake|lil wayne|tyler, creator|black eyed peas|beastie boys|run-dmc|notorious b.i.g.|2pac|tupac|snoop dogg|kanye west|jay-z|missy elliott|lizzo|nelly|coolio|house of pain|kendrick lamar|nicki minaj|cardi b|megan thee stallion|wu-tang clan|cypress hill|vanilla ice|mc hammer|ludacris|death grips|ice cube|n.w.a|naughty by nature|tone loc|young mc|digital underground|kris kross|bone thugs-n-harmony|ja rule|t-pain|flo rida|pitbull|macklemore|post malone|doja cat|lil nas x|childish gambino|busta rhymes|queen latifah|fugees|lauryn hill|a tribe called quest|de la soul|biz markie|dmx|ying yang twins|lil jon|petey pablo|chamillionaire|mims|sean paul|shaggy|kid cudi|travis scott") },
+    { id: "g-diva", name: "Pop Royalty", genre: "pop divas", icon: "👑", artists: G("lady gaga|britney spears|madonna|beyoncé|beyonce|chappell roan|olivia rodrigo|taylor swift|miley cyrus|kelly clarkson|tove lo|natasha bedingfield|lily allen|cher|whitney houston|mariah carey|celine dion|céline dion|christina aguilera|katy perry|ariana grande|dua lipa|rihanna|adele|kylie minogue|sabrina carpenter|billie eilish|charli xcx|p!nk|pink|janet jackson|cyndi lauper|shakira|bette midler|gwen stefani|fergie|kesha|carly rae jepsen|demi lovato|selena gomez|hilary duff|jessica simpson|mandy moore|spice girls|destiny's child|tlc|alanis morissette|lorde|lana del rey|sza|doja cat|meghan trainor|ava max|bebe rexha|alexandra burke|olivia dean|sienna spiro|ashe|aurora|kate bush|tina turner|donna summer|gloria gaynor|diana ross|dolly parton|shania twain|amy winehouse|hikaru utada") },
+    { id: "g-classic", name: "Classic Rock Radio", genre: "classic rock", icon: "📻", artists: G("queen|fleetwood mac|beatles|who|journey|bon jovi|guns n' roses|def leppard|styx|rush|toto|eagles|tom petty|tom petty and heartbreakers|steve miller band|reo speedwagon|whitesnake|jethro tull|blue öyster cult|creedence clearwater revival|buffalo springfield|pat benatar|eddie money|led zeppelin|rolling stones|aerosmith|ac/dc|kiss|boston|heart|foreigner|lynyrd skynyrd|doors|pink floyd|van halen|bruce springsteen|elton john|billy joel|bonnie tyler|meat loaf|warren zevon|jackson browne|david bowie|kinks|cream|jimi hendrix|janis joplin|santana|zz top|cheap trick|scorpions|poison|mötley crüe|twisted sister|survivor|kansas|bad company|thin lizzy|deep purple|the cars|the police|dire straits|john mellencamp|bob seger|joe walker|joan jett|joan jett & blackhearts|blondie|the pretenders|bryan adams|loverboy|night ranger|europe|asia|yes|genesis|phil collins|peter gabriel|electric light orchestra|supertramp|steely dan|chicago|doobie brothers|jefferson airplane|grateful dead|neil young|crosby, stills & nash|harry nilsson|looking glass|donovan|searchers|beach boys") },
+    { id: "g-synth", name: "New Wave Kid", genre: "new wave & synth", icon: "🕺", artists: G("depeche mode|tears for fears|when in rome|real life|corey hart|rockwell|cure|duran duran|a-ha|new order|pet shop boys|eurythmics|human league|soft cell|simple minds|men without hats|talk talk|ultravox|yazoo|erasure|joy division|smiths|morrissey|my life with thrill kill kult|thompson twins|spandau ballet|psychedelic furs|echo & bunnymen|oingo boingo|b-52's|devo|flock of seagulls|naked eyes|wang chung|frankie goes to hollywood|culture club|boy george|dead or alive|alphaville|kajagoogoo|bananarama|cyndi lauper|q lazzarus|waterboys|george michael|wham!|madonna|kate bush|tiffany|belinda carlisle|go-go's") },
+    { id: "g-soul", name: "Soul Train", genre: "soul, R&B & oldies", icon: "🎷", artists: G("otis redding|nina simone|bill withers|flamingos|elvis presley|chuck berry|bobby darin|amy winehouse|aretha franklin|marvin gaye|stevie wonder|al green|sam cooke|etta james|ray charles|temptations|supremes|jackson 5|michael jackson|ginuwine|carl thomas|tlc|boyz ii men|usher|destiny's child|en vogue|bruno mars|whitney houston|prince|james brown|smokey robinson|four tops|righteous brothers|ben e. king|drifters|platters|ronettes|shirelles|little richard|buddy holly|ritchie valens|roy orbison|everly brothers|frankie valli|four seasons|dion|bobby boris pickett|sonny & cher|norah jones|alicia keys|john legend|leon bridges|anderson .paak|silk sonic|lauryn hill|erykah badu|d'angelo|maxwell|r. kelly|brian mcknight|joe|jodeci|blackstreet|112|k-ci & jojo|aaliyah|brandy|monica|mary j. blige|ashanti|ciara|beyoncé") },
+    { id: "g-ska", name: "Skank Walker", genre: "ska & reggae", icon: "🎺", artists: G("mighty mighty bosstones|specials|sublime|no doubt|reel big fish|less than jake|streetlight manifesto|madness|bob marley|bob marley & wailers|los fabulosos cadillacs|operation ivy|save ferris|interrupters|ub40|toots & maytals|english beat|selecter|goldfinger|aquabats|slightly stoopid|311|dirty heads|rebelution|shaggy|sean paul|inner circle|lady saw|desmond dekker|jimmy cliff|catch 22|big d and kids table|voodoo glow skulls") },
+    { id: "g-dance", name: "Dance Floor Filler", genre: "disco & dance", icon: "🪩", artists: G("technotronic|dj casper|emf|abba|trammps|lou bega|bee gees|donna summer|gloria gaynor|kc and sunshine band|village people|chic|cascada|darude|vengaboys|aqua|haddaway|la bouche|real mccoy|c+c music factory|snap!|corona|ace of base|2 unlimited|eiffel 65|daft punk|calvin harris|david guetta|avicii|lmfao|black eyed peas|deee-lite|crystal waters|robin s|cher|kylie minogue|sister sledge|earth, wind & fire|kool & gang|boney m.|baha men|los del río|whigfield|scatman john|alice deejay|rednex|sash!") },
+    { id: "g-latin", name: "Viva", genre: "Latin & en español", icon: "💃", artists: G("vicente fernández|los fabulosos cadillacs|selena|shakira|ricky martin|bad bunny|luis miguel|juan gabriel|maná|enrique iglesias|gloria estefan|marc anthony|daddy yankee|j balvin|karol g|los tigres del norte|los ángeles azules|caifanes|café tacvba|soda stereo|héroes del silencio|aventura|romeo santos|pitbull|jennifer lopez|celia cruz|carlos santana|santana|ritchie valens|los lobos|selena quintanilla|thalía|paulina rubio|julieta venegas|natalia lafourcade|peso pluma|grupo frontera|rosalía|los bukis|alejandro fernández|chayanne|luis fonsi|el gran combo|juanes|jesse & joy|camila cabello|becky g|ozuna|maluma") },
+    { id: "g-radio", name: "'90s Alt Radio", genre: "'90s & '00s radio rock", icon: "📟", artists: G("eve 6|fastball|matchbox twenty|edwin mccain|sixpence none richer|better than ezra|4 non blondes|chumbawamba|cardigans|creed|3 doors down|nickelback|puddle of mudd|sr-71|hoobastank|sheryl crow|jewel|michelle branch|fray|goo goo dolls|third eye blind|semisonic|vertical horizon|lit|marcy playground|harvey danger|new radicals|smash mouth|sugar ray|barenaked ladies|counting crows|hootie & blowfish|toad wet sprocket|gin blossoms|dishwalla|deep blue something|spin doctors|blind melon|natalie imbruglia|meredith brooks|alanis morissette|everclear|lifehouse|train|vanessa carlton|natasha bedingfield|kelly clarkson|daughtry|switchfoot|staind|seether|default|theory of a deadman|three days grace|shinedown|evanescence|killers|kings of leon|neon trees|maroon 5|jonas brothers|plain white t's|panic! at disco|fountains of wayne|wheatus|bloodhound gang|len|dido|savage garden|stone temple pilots|bush|nine days|tonic|sister hazel|matchbox 20|our lady peace|tal bachman|john farnham|corey hart|michelle branch") },
+    { id: "g-weird", name: "Freak Flag", genre: "weird & wonderful", icon: "🦄", artists: G("ween|they might be giants|primus|cake|beck|pixies|violent femmes|wesley willis|mindless self indulgence|bloodhound gang|geese|viagra boys|death grips|tenacious d|weird al yankovic|\"weird al\" yankovic|flight of conchords|lonely island|devo|b-52's|oingo boingo|sparks|talking heads|butthole surfers|dead milkmen|frank zappa|captain beefheart|tiny tim|crash test dummies|presidents of united states of america|rednex|lou bega|gorillaz|aqua|ministry|my life with thrill kill kult|bobby boris pickett|wesley willis fiasco|ajj|cursive") },
+    { id: "g-indie", name: "Indie Darling", genre: "indie", icon: "📼", artists: G("ben folds five|ben folds|portishead|postal service|rilo kiley|yeah yeah yeahs|killers|kings of leon|neon trees|nothing but thieves|strokes|arctic monkeys|vampire weekend|modest mouse|death cab for cutie|shins|arcade fire|mgmt|phoenix|cage elephant|white stripes|black keys|interpol|franz ferdinand|bloc party|lcd soundsystem|tame impala|the national|bon iver|fleet foxes|mumford & sons|lumineers|of monsters and men|florence + machine|metric|beach house|mitski|phoebe bridgers|boygenius|japanese breakfast|snail mail|soccer mommy|big thief|wet leg|fontaines d.c.|idles|geese|rex orange county|noah kahan|fiona apple|aurora|pulp|radiohead|blur|oasis|verve|suede|smiths|front bottoms|cursive|neutral milk hotel|pavement|built to spill|sonic youth|pixies|breeders|belle and sebastian|magnetic fields|decemberists|walkmen|cults|young folks|passion pit|foster people|two door cinema club|the 1975|hozier|lorde|fiona apple|chappell roan") },
+  ];
+  const nameKey = (s) => clean(clean(s).toLowerCase().replace(/\bthe\b/g, " "));
+  const artistParts = (a) => (a || "").split(/\s*(?:\(|\)|,|&|\/|\bfeat\.?|\bft\.?|\bx\b|\bwith\b)\s*/i).map(nameKey).filter(Boolean);
+  // Some names in the lists are joined with "&" (brooks & dunn); match the whole field too.
+  const genreCache = new Map();
+  function genresOf(artist) {
+    const k = (artist || "").toLowerCase(); if (genreCache.has(k)) return genreCache.get(k);
+    const whole = nameKey(artist), parts = artistParts(artist).concat(whole, whole.replace(/\s*\([^)]*\)\s*$/, ""));
+    const out = GENRES.filter((g) => parts.some((x) => g.artists.has(x))).map((g) => g.id);
+    genreCache.set(k, out); return out;
+  }
+  const inGenre = (id) => (p) => p.title && genresOf(p.artist).includes(id);
+
+  // Favorite bands: artists credited by part ("Lady Gaga & Bruno Mars" counts for both), screen sources skipped.
+  // -> [{name, n, last}] most-sung first, ties to the most recent.
+  function favoriteBands(rows, limit) {
+    const by = new Map();
+    rows.forEach((p) => {
+      if (!p.artist || !p.title) return;
+      const a = p.artist.trim();
+      let names = [a.replace(/\s*\((?:band|live[^)]*)\)\s*$/i, "")];
+      const m = /^(.+?)\s*\(([^()]+)\)\s*$/.exec(names[0]);
+      if (m) {
+        // "Artist (Source)" or "Source (Artist)": drop the side that names a film/musical, else keep the side we know as an artist.
+        const film = (x) => /\b(film|musical|movie|soundtrack|saga)\b/i.test(x);
+        const inner = m[2], outer = m[1].replace(/\s*\([^)]*\)\s*$/, "");
+        names = film(inner) ? [] : film(m[1]) ? [inner] : genresOf(inner).length && !genresOf(outer).length ? [inner] : [outer];
+      }
+      names.flatMap((n) => n.split(/\s*(?:&|,|\bfeat\.?|\bft\.?)\s*/i)).map(clean).filter(Boolean).forEach((n) => {
+        const k = nameKey(n); const e = by.get(k) || { name: n, n: 0, last: 0 }; e.n++; e.last = Math.max(e.last, p.played_at); by.set(k, e);
+      });
+    });
+    return [...by.values()].sort((x, y) => y.n - x.n || y.last - x.last).slice(0, limit || 3);
+  }
+
   const COLOR = /\b(red|blue|black|white|green|pink|gold|golden|purple|yellow|silver|orange)\b/i;
 
   // ---------- badges ----------
@@ -41,6 +97,9 @@
     { id: "loyal", name: "Superfan", desc: "Same artist 3 times", test: (r, i) => r[i].artist && r.slice(0, i + 1).filter((p) => key(p.artist) === key(r[i].artist)).length >= 3 },
     { id: "brit", name: "Britpop Lifer", desc: "2 Britpop songs (Oasis, Pulp, Blur…)", test: (r, i) => r.slice(0, i + 1).filter(art(BRIT)).length >= 2 },
     { id: "punk", name: "Punk Points", desc: "2 punk songs", test: (r, i) => r.slice(0, i + 1).filter(art(PUNK)).length >= 2 },
+    // Genre badges: 2 songs in the genre. Genre Hopper: songs from 5 different genres.
+    ...GENRES.map((g) => ({ id: g.id, name: g.name, desc: "2 " + g.genre + " songs", genre: true, test: (r, i) => inGenre(g.id)(r[i]) && r.slice(0, i + 1).filter(inGenre(g.id)).length >= 2 })),
+    { id: "g-hopper", name: "Genre Hopper", desc: "Songs from 5 different genres", test: (r, i) => new Set(r.slice(0, i + 1).flatMap((p) => (p.title ? genresOf(p.artist) : []))).size >= 5 },
     { id: "owl", name: "Night Owl", desc: "Sang after 1:30am", test: (r, i) => lateNight(r[i]) },
     { id: "opener", name: "Opening Act", desc: "Sang the first song of a night", test: (r, i, ctx) => ctx.firstOf.get(r[i].night) === r[i] },
     { id: "closer", name: "Closer", desc: "Sang the last song of a night", test: (r, i, ctx) => ctx.lastOf.get(r[i].night) === r[i] && r[i].night !== ctx.liveNight },
@@ -213,11 +272,14 @@
       ["regular", nights, 3, "nights"], ["lifer", nights, 6, "nights"], ["hattrick", perNight, 3, "songs in a night"],
       ["hopper", decs, 4, "decades"], ["timelord", decs, 6, "decades"], ["loyal", artistMax, 3, "songs by one artist"],
       ["brit", r.filter(art(BRIT)).length, 2, "Britpop songs"], ["punk", r.filter(art(PUNK)).length, 2, "punk songs"],
+      // Genre badges show up as "next" only once you've sung one song in that genre.
+      ...GENRES.map((g) => [g.id, r.filter(inGenre(g.id)).length, 2, g.genre + " songs"]).filter((x) => x[1] >= 1),
+      ["g-hopper", new Set(r.flatMap((p) => (p.title ? genresOf(p.artist) : []))).size, 5, "genres"],
     ];
     return cand.filter(([id, have, need]) => !has.has(id) && have < need && !(id === "lifer" && !has.has("regular")) && !(id === "timelord" && !has.has("hopper")))
       .map(([id, have, need, unit]) => { const b = BADGES.find((x) => x.id === id); return { id, name: b.name, desc: b.desc, have, need, unit }; })
       .sort((a, b) => b.have / b.need - a.have / a.need);
   }
 
-  global.KaraokeFun = { BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, personKey: (s) => key(s) };
+  global.KaraokeFun = { GENRES, genresOf, favoriteBands, BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, personKey: (s) => key(s) };
 })(typeof window !== "undefined" ? window : globalThis);

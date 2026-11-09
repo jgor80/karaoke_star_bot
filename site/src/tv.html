@@ -152,7 +152,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
   const PIN = /^\d{4}-\d{2}-\d{2}$/.test(qs.get("night") || "") ? qs.get("night") : null;
   const SPEED = Math.max(0.2, Math.min(5, Number(qs.get("speed")) || 1)); // 1 = about 3.5% of the screen height per second
   const REFRESH_MS = 60000;
-  const LIVE_WINDOW_S = 45 * 60, TONIGHT_WINDOW_S = 10 * 3600;
+  const LIVE_WINDOW_S = 20 * 60, TONIGHT_WINDOW_S = 10 * 3600;
 
   const $ = (id) => document.getElementById(id);
   const key = (s) => (s || "").trim().toLowerCase();

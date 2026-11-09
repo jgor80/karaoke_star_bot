@@ -22,7 +22,7 @@ function wall(ts, tz) {
 }
 
 // Unix time (seconds) of a wall-clock time in tz. Two passes settle DST offsets.
-function fromWall(y, m, d, h, mi, tz) {
+export function fromWall(y, m, d, h, mi, tz) {
   const target = Date.UTC(y, m - 1, d, h, mi) / 1000;
   let ts = target;
   for (let i = 0; i < 2; i++) {
@@ -66,4 +66,10 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
     next_label: label(next, sch.tz, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(":00", ""),
     hours_label: "Sundays 9 PM – 1 AM Central",
   };
+}
+
+// The laptop writes sync times as Central wall clock "YYYY-MM-DDTHH:MM:SS" -> unix seconds.
+export function localStampToUnix(v, sch = SCHEDULE) {
+  const m = /^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d)(?::(\d\d))?/.exec(String(v || ""));
+  return m ? fromWall(+m[1], +m[2], +m[3], +m[4], +m[5], sch.tz) + Number(m[6] || 0) : null;
 }
