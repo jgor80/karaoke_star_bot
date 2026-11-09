@@ -74,6 +74,16 @@ main { padding-block: 16px 24px; }
 .hero.idle .who { font-size: clamp(24px, 7.5vw, 32px); }
 .offnote { font-size: 14px; color: var(--muted); margin-top: 10px; }
 
+/* the singer's awards and badges, on the live box */
+.wins { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin-top: 10px; }
+.win { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 10px 3px 7px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--line); background: rgba(0,0,0,.22); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win .i { font-size: 15px; line-height: 1; }
+.win.w-award { border-color: var(--gold); color: var(--gold); background: rgba(245,184,74,.10); }
+.win.w-new { border-color: var(--hot); color: #fff; background: rgba(255,92,157,.18); }
+.win.w-past { color: var(--muted); }
+.win.w-more { color: var(--muted); font-weight: 500; font-family: inherit; cursor: pointer; }
+
 /* live reactions on the "on the mic" box */
 .rx { margin-top: 14px; display: grid; gap: 8px; }
 .rx-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
@@ -336,6 +346,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <div class="who" id="hero-who">…</div>
       <div class="song" id="hero-song"></div>
       <div class="artist" id="hero-artist"></div>
+      <div class="wins" id="hero-wins" aria-label="Awards and badges" hidden></div>
       <div class="bar" id="hero-bar" hidden><i id="hero-fill"></i></div>
       <div class="hero-meta" id="hero-meta" hidden></div>
       <div class="offnote" id="hero-off" hidden></div>
@@ -593,6 +604,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("hero-meta").append(el("span", null, "Song #" + idx + " tonight"), el("span", null, mmss(Math.min(len, Math.floor(elapsed))) + " / " + mmss(len)));
     }
     renderRx(singing ? last : null);
+    renderHeroWins(last, tonight);
     const venue = schedule ? schedule.venue : "";
     const waiting = live && !tonight; // the session has started but no songs yet
     $("hero-off").hidden = !!tonight || !n;
@@ -907,6 +919,41 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       c.append(ic, el("span", "nm", b.name), el("span", "ds", b.desc), el("span", "pc", b.holders.length ? plural(b.holders.length, "singer") + " · " + b.pct + "%" : "Unclaimed: be the first"),
         el("span", "hd", b.holders.length ? b.holders.slice(0, 4).join(", ") + (b.holders.length > 4 ? " +" + (b.holders.length - 4) : "") : ""));
       box.append(c); });
+  }
+
+  // ---------- awards and badges on the live box ----------
+  // For the song in the box: badges unlocked by this very song, awards it's winning tonight (or won before),
+  // the singer's other awards tonight, then the badges they already hold.
+  let winsCache = { k: "", past: [] };
+  const sameName = (a, b) => key(a) === key(b) || key(a).split(/\s*\+\s*/).includes(key(b));
+  function pastSongAwards(last) {
+    const k = lastJson.length + "|" + last.uuid + "|" + reax.bySong.size;
+    if (winsCache.k === k) return winsCache.past;
+    const line = songLine(last), out = [];
+    nights.forEach((n) => { if (n.night === last.night || !n.rows.some((p) => key(p.title) === key(last.title))) return;
+      awardsFor(n.rows).forEach((a) => { if (a.what === line && sameName(a.who, clean(last.singer))) out.push({ a, night: n.night }); }); });
+    winsCache = { k, past: out }; return out;
+  }
+  function renderHeroWins(last, tonight) {
+    const box = $("hero-wins"); box.replaceChildren();
+    const n = last && nights.find((x) => x.night === last.night);
+    if (!n || !last.singer) { box.hidden = true; return; }
+    const chips = [], who = clean(last.singer), line = songLine(last), seen = new Set();
+    const labels = new Set();
+    const chip = (cls, ic, text, title, label) => { if (labels.has(label || text)) return; labels.add(label || text); const c = el("span", "win " + cls); const i = el("span", "i", ic); i.setAttribute("aria-hidden", "true"); c.append(i, document.createTextNode(text)); if (title) c.title = title; chips.push(c); };
+    const pk = window.KaraokeFun ? KaraokeFun.personKey(last.singer) : null, e = pk && people.get(pk);
+    if (e) e.badges.forEach((b) => { if (b.at === last && b.id !== "debut") { chip("w-new", icon(b.id), "New: " + b.name, b.desc, b.name); seen.add(b.id); } });
+    if (e && e.rows.length === 1 && e.rows[0] === last) chip("w-new", "🎤", "First song here!", "Welcome to Oke Night");
+    // "Last Call" is whoever sang last, so it means nothing while the night is still going.
+    const aw = awardsFor(n.rows).filter((a) => sameName(a.who, who) && !(tonight && a.id === "last"));
+    aw.filter((a) => a.what === line).forEach((a) => chip("w-award", icon(a.id), a.label, a.stat, a.label));
+    aw.filter((a) => a.what !== line).forEach((a) => chip("w-award", icon(a.id), a.label + (tonight ? " tonight" : ""), a.what + " · " + a.stat, a.label));
+    if (last.title) pastSongAwards(last).slice(-2).forEach((x) => chip("w-award w-past", icon(x.a.id), x.a.label + " · " + nightLabel(x.night), "Won with this song before", x.a.label + x.night));
+    if (e) e.badges.filter((b) => b.id !== "debut" && !seen.has(b.id) && b.at !== last).reverse().forEach((b) => chip("", icon(b.id), b.name, b.desc, b.name));
+    // Keep the box short: the 6 most interesting chips (new badges, then awards, then held badges), and a count for the rest.
+    const MAX = 6, extra = chips.length - MAX;
+    box.hidden = !chips.length; box.append(...chips.slice(0, extra > 1 ? MAX : MAX + 1));
+    if (extra > 1) { const m = el("button", "win w-more", "+" + extra + " more"); m.type = "button"; m.addEventListener("click", () => openSearch(who)); box.append(m); }
   }
 
   // ---------- live reactions ----------
