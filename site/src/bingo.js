@@ -5,6 +5,10 @@
  */
 (function (global) {
   const key = (s) => (s || "").trim().toLowerCase();
+  // Songs from a film, musical, show or game. KaraFun marks most as "Title Source (film)" / "(musical)",
+  // and some as "Artist (Source)" or "Source (Artist)", e.g. "The Beach Boys (Cocktail)", "Toy Story (Randy Newman)".
+  // A trailing "(band)" or "(live...)" is just a disambiguation, not a source.
+  const SCREEN = /\b(film|musical|movie|soundtrack)\b|\((?!band\)|live\b)[^)]+\)\s*$/i;
   const songs = (r) => r.filter((p) => p.title);
   const hit = (p, extra) => ({ who: (p.singer || "Someone").trim(), what: p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a song", extra });
   const isGroup = (s) => /^table\s*\d+/i.test((s || "").trim()) || /(,|&|\/|\band\b|\bn\b|\+)/i.test(s || "");
@@ -35,12 +39,12 @@
     { id: "oasis", text: "Somebody sings Oasis", test: nth(art(/\boasis\b/i), 1) },
     { id: "mambo", text: "Mambo No. 5", test: nth(ttl(/mambo no\.? ?5/i), 1) },
     { id: "eclipse", text: "Total Eclipse of the Heart", test: nth(ttl(/total eclipse of the heart/i), 1) },
-    { id: "screen", text: "Two songs from movies or musicals", test: nth(art(/\b(film|musical|movie)\b/i), 2) },
+    { id: "screen", text: "Two songs from movies or musicals", test: nth(art(SCREEN), 2) },
     { id: "number", text: "Two song titles with a number", test: nth(ttl(/\d/), 2) },
     { id: "love", text: "“Love” in two titles", test: nth(ttl(/\blove/i), 2) },
     { id: "night", text: "Night, moon or sun in a title", test: nth(ttl(/\b(night|moon|sun)\b/i), 1) },
     { id: "queen", text: "Queen, Bon Jovi or Def Leppard", test: nth(art(/^queen$|bon jovi|def leppard/i), 1) },
-    { id: "punk", text: "Two punk songs (Misfits, Green Day, Clash…)", test: nth(art(/misfits|green day|the clash|nofx|ramones|blink|sex pistols|^l7$|bad religion|dead kennedys/i), 2) },
+    { id: "punk", text: "Two punk songs", test: nth(art(/misfits|green day|the clash|nofx|ramones|blink|sex pistols|^l7$|bad religion|dead kennedys/i), 2) },
     { id: "diva", text: "Gaga, Britney or Beyoncé", test: nth(art(/lady gaga|britney|beyonc/i), 1) },
     { id: "country", text: "Dolly, Shania, Garth or the Chicks", test: nth(art(/dolly parton|shania|garth brooks|the chicks|carrie underwood|alan jackson|brooks & dunn/i), 1) },
     { id: "emo", text: "Paramore, Killers or Panic!", test: nth(art(/paramore|the killers|panic! at the disco|fall out boy|my chemical/i), 1) },
@@ -89,7 +93,7 @@
       if (!seed) { seed = Math.floor(Math.random() * 4294967295) + 1; store.set(k, String(seed)); }
       card = makeCard(seed);
     }
-    function newCard() { store.set("kb-card-" + night, String(Math.floor(Math.random() * 4294967295) + 1)); lastWon = 0; ensureCard(); draw(); }
+    function newCard() { if (evaluate(card, allRows, night).count > 0 && !confirm("Swap for a new card? Squares you've already got won't come with you.")) return; store.set("kb-card-" + night, String(Math.floor(Math.random() * 4294967295) + 1)); lastWon = 0; ensureCard(); draw(); }
 
     function draw() {
       const res = evaluate(card, allRows, night);
@@ -109,12 +113,12 @@
         if (id === "free") { sq.append(el("span", "kb-t", "FREE"), el("span", "kb-w", "on the house")); }
         else { const s = SQUARES.find((x) => x.id === id); sq.append(el("span", "kb-t", s.text)); if (m) sq.append(el("span", "kb-w", m.who)); }
         sq.setAttribute("aria-label", (id === "free" ? "Free square" : SQUARES.find((x) => x.id === id).text) + (m && !m.free ? ", done by " + m.who + " with " + m.what : m ? "" : ", not yet"));
-        sq.addEventListener("click", () => detail(id, m));
+        sq.addEventListener("click", () => { grid.querySelectorAll(".sel").forEach((x) => x.classList.remove("sel")); sq.classList.add("sel"); detail(id, m); });
         grid.append(sq);
       });
       root.append(grid);
       const info = el("div", "kb-info"); info.id = "kb-info";
-      info.textContent = res.won.length ? "BINGO! " + res.won.length + " line" + (res.won.length > 1 ? "s" : "") + ". Show this screen to the host." : "Squares fill in by themselves as songs get sung. Tap one to see who did it.";
+      info.textContent = res.won.length ? "BINGO! " + res.won.length + " line" + (res.won.length > 1 ? "s" : "") + ". Show this screen to the host." : "Squares mark themselves as songs get sung. Tap one to see who got it.";
       if (res.won.length) info.classList.add("bingo");
       root.append(info);
       const nb = el("button", "kb-new", "Get a new card"); nb.type = "button"; nb.addEventListener("click", newCard); root.append(nb);

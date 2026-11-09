@@ -4,6 +4,10 @@
  */
 (function (global) {
   const key = (s) => (s || "").trim().toLowerCase();
+  // Songs from a film, musical, show or game. KaraFun marks most as "Title Source (film)" / "(musical)",
+  // and some as "Artist (Source)" or "Source (Artist)", e.g. "The Beach Boys (Cocktail)", "Toy Story (Randy Newman)".
+  // A trailing "(band)" or "(live...)" is just a disambiguation, not a source.
+  const SCREEN = /\b(film|musical|movie|soundtrack)\b|\((?!band\)|live\b)[^)]+\)\s*$/i;
   const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
   const SPLIT = /\s*(?:,|&|\/|\band\b|\bn\b|\+)\s*/i;
   const isTable = (s) => /^table\s*\d+/i.test((s || "").trim());
@@ -87,7 +91,7 @@
     { id: "duet", text: "Grab a partner for a duet", test: (p) => isGroup(p.singer) },
     { id: "newartist", text: "Sing an artist nobody has sung here before", test: (p, ctx) => p.artist && !ctx.pastArtists.has(key(p.artist)) },
     { id: "long", text: "Go the distance: a song over 6 minutes", test: (p) => p.length_s > 360 },
-    { id: "screen", text: "Sing a song from a movie or musical", test: (p) => /\b(film|musical|movie)\b/i.test(p.artist || "") },
+    { id: "screen", text: "Sing a song from a movie or musical", test: (p) => SCREEN.test(p.artist || "") },
     { id: "return", text: "Bring back a song from a past night", test: (p, ctx) => p.title && ctx.pastTitles.has(key(p.title)) },
     { id: "color", text: "Sing a song with a color in the title", test: (p) => COLOR.test(p.title || "") },
     { id: "number", text: "Sing a song with a number in the title", test: (p) => /\d/.test(p.title || "") },
@@ -154,7 +158,10 @@
   // ---------- season awards (all nights) ----------
   function seasonAwards(plays, ppl) {
     const out = [], list = [...ppl.values()].filter((e) => e.rows.length);
-    const best = (score, min) => list.filter((e) => (min ? e.rows.length >= min : true)).map((e) => ({ e, v: score(e) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v || b.e.rows.length - a.e.rows.length)[0];
+    // Ties go to more songs, then more nights, then more mic time: the same order the site's leaderboards use.
+    const secsOf = (e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0);
+    const tie = (a, b) => b.rows.length - a.rows.length || new Set(b.rows.map((p) => p.night)).size - new Set(a.rows.map((p) => p.night)).size || secsOf(b) - secsOf(a);
+    const best = (score, min) => list.filter((e) => (min ? e.rows.length >= min : true)).map((e) => ({ e, v: score(e) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v || tie(a.e, b.e))[0];
     const nightsOf = (e) => new Set(e.rows.map((p) => p.night)).size;
     let w;
     if ((w = best((e) => e.rows.length))) out.push({ id: "s-mvp", label: "Season MVP", who: w.e.name, what: "Most songs of the season", stat: w.v + " songs" });
