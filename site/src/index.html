@@ -249,6 +249,12 @@ details.singer.song summary .main-t { font-weight: 600; }
 .kb-sq.win { background: var(--win); border-color: var(--gold); }
 .kb-sq.win .kb-w { color: var(--gold); }
 .kb-sq.sel { outline: 2px solid var(--gold); outline-offset: 1px; }
+.kb-tier { font-family: var(--f-mono); font-size: clamp(7px, 1.9vw, 9px); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); line-height: 1; }
+.kb-sq.song .kb-t { font-style: italic; }
+.kb-sq.t-deep { border-style: dashed; border-color: var(--gold); }
+.kb-sq.t-deep .kb-tier { color: var(--gold); }
+.kb-sq.t-guilty .kb-tier { color: var(--hot); }
+.kb-sq.on .kb-tier { color: #ffd1e3; }
 .kb-sq.free { background: var(--hot); border-color: var(--hot); color: #fff; }
 .kb-sq.free .kb-t { font-family: var(--f-display); font-weight: 400; text-decoration: none; }
 .kb-sq.free .kb-w { color: #fff; opacity: .85; }
@@ -375,7 +381,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <div class="sec">
       <h2>Karaoke bingo</h2>
       <div class="kb" id="bingo"></div>
-      <p class="muted small" style="margin:0">Every phone gets its own card. First full row, column or diagonal wins: show your screen to the host!</p>
+      <p class="muted small" style="margin:0">Every phone gets its own card. Song squares only count when that exact song gets sung, from karaoke standards to deep cuts, so bingo is hard. First full row, column or diagonal wins: show your screen to the host!</p>
     </div>
   </section>
 
