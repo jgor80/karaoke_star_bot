@@ -34,6 +34,7 @@ header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-i
 .title { font-size: calc(5.4 * var(--u)); font-weight: 800; line-height: 1.05; margin-top: calc(1 * var(--u)); overflow-wrap: anywhere; }
 .kicker { font-family: var(--f-mono); font-size: calc(2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: calc(.8 * var(--u)); }
 .kicker.live { color: var(--hot); }
+.host-tag { display: inline-block; margin-left: calc(1 * var(--u)); font-family: var(--f-mono); font-size: calc(1.6 * var(--u)); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); border: 2px solid var(--gold); border-radius: 999px; padding: 0 calc(.8 * var(--u)); vertical-align: middle; white-space: nowrap; }
 .kicker.live::before { content: ""; display: inline-block; width: calc(1.4 * var(--u)); height: calc(1.4 * var(--u)); border-radius: 50%;
   background: var(--hot); margin-right: calc(1 * var(--u)); vertical-align: calc(.1 * var(--u)); animation: blink 1.4s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
@@ -157,7 +158,8 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 (function () {
   // Options: ?night=YYYY-MM-DD shows that night instead of the latest one; ?speed=2 scrolls twice as fast (0.2 to 5).
   const qs = new URLSearchParams(location.search);
-  const PIN = /^\d{4}-\d{2}-\d{2}$/.test(qs.get("night") || "") ? qs.get("night") : null;
+  const PIN_ASKED = qs.get("night") || "";
+  const PIN = /^\d{4}-\d{2}-\d{2}$/.test(PIN_ASKED) ? PIN_ASKED : null;
   const SPEED = Math.max(0.2, Math.min(5, Number(qs.get("speed")) || 1)); // 1 = about 3.5% of the screen height per second
   const REFRESH_MS = 60000;
   const LIVE_WINDOW_S = 20 * 60, TONIGHT_WINDOW_S = 10 * 3600;
@@ -207,7 +209,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
     if (people) people.forEach((e) => { const d = e.badges.find((b) => b.id === "debut"); if (d && d.at.night === night) debut.push(e.name); });
     if (debut.length) badges.push({ id: "debut", name: "First time on the mic", desc: "Welcome to Oke Night!", who: debut });
     // Leaderboards for the night
-    const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60) }));
+    const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60), host: !!data.host && key(e.name.replace(/\s+/g, " ")) === key(data.host.replace(/\s+/g, " ")) }));
     const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
       return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
     const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "" })).filter((e) => e.n > 1).slice(0, 6);
@@ -215,11 +217,12 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
     // Decade mix and songs by hour (hours in the order the night ran, so 9pm comes before 1am)
     const dec = new Map(); rows.forEach((p) => { if (p.release_year) { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); } });
     const decades = [...dec.entries()].sort((a, b) => a[0] - b[0]).map(([d, n]) => ({ label: "’" + String(d).slice(2) + "s", n }));
-    const hrs = new Map(); rows.forEach((p) => { const h = new Date(p.played_at * 1000).getHours(); hrs.set(h, (hrs.get(h) || 0) + 1); });
+    const hrs = new Map(); rows.forEach((p) => { const h = OkeAwards.venueHM(p.played_at).h; hrs.set(h, (hrs.get(h) || 0) + 1); });
     const hours = [...hrs.entries()].map(([h, n]) => ({ label: (h % 12 || 12) + (h < 12 ? "am" : "pm"), n }));
     const dares = window.KaraokeFun ? KaraokeFun.daresStatus(plays, night).map((d) => ({ text: d.text, by: d.claimedBy ? (d.claimedBy.singer || "Someone").trim() : null,
       song: d.claimedBy ? OkeAwards.songLine(d.claimedBy) : null })) : [];
-    return { night, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
+    const missing = PIN_ASKED && night !== PIN ? PIN_ASKED : null; // ?night= asked for a night with no songs
+    return { night, missing, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
       singers, songs, artists, decades, hours, dares, reactions, topReacted, current: singing ? last.uuid : null, schedule: data.schedule || null };
   }
 
@@ -240,7 +243,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
   function heading(text, aside) { const h = el("h2", null, text); if (aside) h.append(el("small", null, aside)); return h; }
   function rankList(items, sub, val) {
     const ol = el("ol", "rank");
-    items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm", e.name); const s = sub(e); if (s) nm.append(el("small", null, s));
+    items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm", e.name); if (e.host) nm.append(el("span", "host-tag", "🎤 Host")); const s = sub(e); if (s) nm.append(el("small", null, s));
       li.append(el("span", "n", String(i + 1)), nm, el("span", "v", val(e))); ol.append(li); });
     return ol;
   }
@@ -364,7 +367,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
       if (sig !== lastView) { lastView = sig; render(v); }
       watchRx(v.current);
       secretMoment(data);
-      setStatus(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+      setStatus(v.missing ? "No songs on " + v.missing + ", so this shows the latest night instead." : new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), !!v.missing);
     } catch (e) {
       setStatus(lastView ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Retrying…", true);
     }
@@ -375,8 +378,9 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
   const secretShown = new Set(); let secretT = 0;
   function secretMoment(data) {
     const found = data.secrets_found || [];
-    const fresh = found.filter((s) => !secretShown.has(s.id));
-    fresh.forEach((s) => secretShown.add(s.id));
+    const k = (s) => s.id + "@" + s.found_at; // re-found after "Hide it again" shows again
+    const fresh = found.filter((s) => !secretShown.has(k(s)));
+    fresh.forEach((s) => secretShown.add(k(s)));
     const s = fresh.filter((x) => now() - x.found_at < 15 * 60).pop();
     if (!s) return;
     $("st-who").textContent = ((s.singer || "").trim() || "Someone") + " sang “" + s.title + "”";

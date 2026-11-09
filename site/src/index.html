@@ -75,6 +75,10 @@ main { padding-block: 16px 24px; }
 .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 .status { font-family: var(--f-mono); font-size: 14px; color: var(--muted); text-align: center; padding: 6px 0 0; }
 .status.bad { color: var(--hot); }
+.stale { background: var(--gold-soft); border: 1px solid var(--gold); color: var(--ink); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin-bottom: 12px; }
+.stale b { color: var(--gold); }
+.host-tag { display: inline-block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
+.hero .who .host-tag { font-size: 13px; vertical-align: 6px; }
 
 /* hero: who's on the mic */
 .hero { position: relative; overflow: hidden; border-radius: 18px; padding: 18px 18px 20px; border: 1px solid var(--hot);
@@ -377,6 +381,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <main class="wrap">
   <!-- TONIGHT -->
   <section class="panel on" id="p-tonight" role="tabpanel" aria-labelledby="t-tonight">
+    <div class="stale" id="stale" role="status" hidden></div>
     <div class="hero" id="hero">
       <div class="label" id="hero-label">On the mic</div>
       <div class="who" id="hero-who">…</div>
@@ -568,6 +573,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
+  let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
+  let lastSyncTs = 0; // when the laptop last synced, from /api/plays
+  const STALE_S = 15 * 60; // during the session, warn when the laptop hasn't synced for this long
 
   // ---------- helpers ----------
   const key = (s) => (s || "").trim().toLowerCase();
@@ -580,6 +588,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   // ICON, awards and tally live in /awards.js so the TV screen (/tv) shares them.
   const icon = OkeAwards.icon;
+  // Adds a "🎤 Host" tag after a name element when that name is the host's.
+  function tagHost(e, name) { if (hostKey && key(clean(name)) === hostKey) { const t = el("span", "host-tag", "🎤 Host"); t.title = "Tonight’s host"; e.append(t); } return e; }
   function isTonightNight(n) { const last = plays[plays.length - 1]; return !!(n && last && n === currentNight() && now() - last.played_at < TONIGHT_WINDOW_S); }
   function songLine(p) { return p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song"; }
   const localDate = (ts) => { const d = new Date(ts * 1000); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
@@ -636,6 +646,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     $("hero").classList.toggle("idle", !singing);
     $("hero-label").textContent = singing ? "On the mic now" : live ? "Last up" : tonight ? "Last song tonight" : "Last song, " + (last ? nightLabel(last.night) : "");
     $("hero-who").textContent = last ? (clean(last.as_typed || last.singer) || "Mystery singer") : "No songs yet";
+    if (last) tagHost($("hero-who"), last.singer);
+    // Stats paused: the session is on but the laptop hasn't synced in a while (wifi down, sync stopped).
+    const quiet = lastSyncTs ? Math.floor((now() - lastSyncTs) / 60) : 0;
+    const paused = (live || sched === "live" || sched === "overtime") && lastSyncTs && now() - lastSyncTs > STALE_S;
+    $("stale").hidden = !paused;
+    if (paused) { $("stale").replaceChildren(el("b", null, "Stats paused. "), document.createTextNode("The karaoke laptop last checked in " + (quiet < 120 ? quiet + " minutes" : Math.round(quiet / 60) + " hours") + " ago, so new songs may be missing. They’ll show up once it reconnects.")); }
     $("hero-who").dataset.who = last && last.singer ? clean(last.singer) : "";
     $("hero-song").textContent = last && last.title ? "“" + last.title + "”" : "";
     $("hero-artist").textContent = last ? [last.artist, last.release_year].filter(Boolean).join(" · ") + (singing || !tonight ? "" : (last.artist ? " · " : "") + ago(last.played_at)) : "";
@@ -670,7 +686,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const all = personTotals(rows);
     const ol = $("leaderboard"); ol.replaceChildren();
     if (!all.length) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
-    const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.dataset.who = e.name; li.append(el("span", "rank", String(i + 1)), el("span", "main-t", e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
+    const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.dataset.who = e.name; li.append(el("span", "rank", String(i + 1)), tagHost(el("span", "main-t", e.name), e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
       li.append(el("span", "sub-t", mmss(e.secs) + " on the mic")); return li; };
     all.slice(0, 8).forEach((e, i) => ol.append(lbRow(e, i)));
     const mi = all.findIndex((e) => e.k === me);
@@ -682,7 +698,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     if (!older.length) feed.append(el("li", "empty", "Nothing before this one yet."));
     shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null); if (p.singer) li.dataset.who = clean(p.singer);
       li.append(el("span", "time", clock(p.played_at)));
-      const d = el("div"); d.append(el("div", "main-t", clean(p.as_typed || p.singer) || "Mystery singer"), el("div", "sub-t", songLine(p)));
+      const d = el("div"); d.append(tagHost(el("div", "main-t", clean(p.as_typed || p.singer) || "Mystery singer"), p.singer), el("div", "sub-t", songLine(p)));
       const rs = rxSummary(p); if (rs) d.append(el("div", "sub-t rx-sum", rs)); li.append(d); feed.append(li); });
     if (older.length > 5) { const b = el("button", "toggle-more", feedOpen ? "Show less" : "Show " + (Math.min(20, older.length) - 5) + " more"); b.type = "button";
       b.addEventListener("click", () => { feedOpen = !feedOpen; renderTonight(); }); feed.append(b); }
@@ -1087,6 +1103,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   // ---------- secret songs ----------
   // Found ones show tonight with who sang it and the reward; a phone that sees a fresh find gets a pop-up once.
   const SECRET_SEEN = "okenight-secrets-seen";
+  const secretSeenMem = new Set(); // also kept in memory, so a phone that blocks storage doesn't pop up every refresh
+  const secretKey = (s) => s.id + "@" + s.found_at; // a secret hidden again and re-found pops up again
   function renderSecrets(n, tonight) {
     const box = $("secret");
     const mine = secrets.found.filter((s) => (n && s.night === n.night && tonight) || now() - s.found_at < 3 * 3600);
@@ -1100,11 +1118,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     }
     if (secrets.left) box.append(el("div", mine.length ? "sc-tease" : "sc-f", "🤫 " + (secrets.left === 1 ? "1 secret song is" : secrets.left + " secret songs are") + " hidden. Sing one to win a prize."));
     let seen; try { seen = new Set(JSON.parse(localStorage.getItem(SECRET_SEEN) || "[]")); } catch (e) { seen = new Set(); }
-    const fresh = secrets.found.filter((s) => !seen.has(s.id));
+    secretSeenMem.forEach((k) => seen.add(k));
+    const fresh = secrets.found.filter((s) => !seen.has(secretKey(s)));
     const pop = fresh.filter((s) => now() - s.found_at < 15 * 60).pop();
     if (pop) { $("sp-who").textContent = (clean(pop.singer) || "Someone") + " sang “" + pop.title + "”"; $("sp-rw").textContent = pop.reward ? "🎁 " + pop.reward : ""; $("secret-pop").hidden = false;
       try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
-    if (fresh.length) { fresh.forEach((s) => seen.add(s.id)); try { localStorage.setItem(SECRET_SEEN, JSON.stringify([...seen])); } catch (e) {} }
+    if (fresh.length) { fresh.forEach((s) => { seen.add(secretKey(s)); secretSeenMem.add(secretKey(s)); }); try { localStorage.setItem(SECRET_SEEN, JSON.stringify([...seen])); } catch (e) {} }
   }
   $("secret-pop").addEventListener("click", () => { $("secret-pop").hidden = true; });
 
@@ -1183,6 +1202,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
+      hostKey = key(clean(data.host || ""));
+      lastSyncTs = Number(data.last_sync_ts) || 0;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {

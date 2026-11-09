@@ -6,7 +6,17 @@
   const key = (s) => (s || "").trim().toLowerCase();
   const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
   const mmss = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-  const localHour = (ts) => new Date(ts * 1000).getHours();
+  // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
+  const VENUE_TZ = "America/Chicago";
+  let venueFmt = null;
+  const venueHM = (ts) => {
+    try {
+      venueFmt = venueFmt || new Intl.DateTimeFormat("en-US", { timeZone: VENUE_TZ, hour: "numeric", minute: "numeric", hourCycle: "h23" });
+      const parts = venueFmt.formatToParts(new Date(ts * 1000)), get = (t) => Number((parts.find((x) => x.type === t) || {}).value);
+      return { h: get("hour") % 24, m: get("minute") };
+    } catch (e) { const d = new Date(ts * 1000); return { h: d.getHours(), m: d.getMinutes() }; }
+  };
+  const localHour = (ts) => venueHM(ts).h;
   const songLine = (p) => (p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song");
 
   const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
@@ -132,7 +142,8 @@
     if (sq && sq.n > 1) out.push({ id: "squad", label: "Squad Goals", who: clean(sq.p.singer), what: songLine(sq.p), stat: /^table/i.test(sq.p.singer.trim()) ? "a whole table" : sq.n + " voices" });
     const first = rows[0], last = rows[rows.length - 1];
     if (first) out.push({ id: "open", label: "Opening Act", who: clean(first.singer) || "Someone", what: songLine(first), stat: "first brave soul" });
-    if (last && last !== first) out.push({ id: "last", label: "Last Call", who: clean(last.singer) || "Someone", what: songLine(last), stat: "closed the night" });
+    // Last Call only once the night is over (no song for 20 minutes); while it's live it's just whoever sang last.
+    if (last && last !== first && Date.now() / 1000 - last.played_at > 20 * 60) out.push({ id: "last", label: "Last Call", who: clean(last.singer) || "Someone", what: songLine(last), stat: "closed the night" });
     const art = new Map();
     songs.forEach((p) => { if (!p.artist) return; const k = key(p.artist); const e = art.get(k) || { name: p.artist, n: 0, who: new Set() }; e.n++; e.who.add(clean(p.singer)); art.set(k, e); });
     const top = [...art.values()].sort((a, b) => b.n - a.n)[0];
@@ -154,5 +165,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { ICON, icon, groupSize, personTotals, awardsFor, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
+  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
 })(typeof window !== "undefined" ? window : globalThis);

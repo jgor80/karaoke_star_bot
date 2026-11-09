@@ -12,7 +12,17 @@
   const songs = (r) => r.filter((p) => p.title);
   const hit = (p, extra) => ({ who: (p.singer || "Someone").trim(), what: p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a song", extra });
   const isGroup = (s) => /^table\s*\d+/i.test((s || "").trim()) || /(,|&|\/|\band\b|\bn\b|\+)/i.test(s || "");
-  const localHour = (ts) => new Date(ts * 1000).getHours();
+  // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
+  const VENUE_TZ = "America/Chicago";
+  let venueFmt = null;
+  const venueHM = (ts) => {
+    try {
+      venueFmt = venueFmt || new Intl.DateTimeFormat("en-US", { timeZone: VENUE_TZ, hour: "numeric", minute: "numeric", hourCycle: "h23" });
+      const parts = venueFmt.formatToParts(new Date(ts * 1000)), get = (t) => Number((parts.find((x) => x.type === t) || {}).value);
+      return { h: get("hour") % 24, m: get("minute") };
+    } catch (e) { const d = new Date(ts * 1000); return { h: d.getHours(), m: d.getMinutes() }; }
+  };
+  const localHour = (ts) => venueHM(ts).h;
 
   // Each square: id, text (what to watch for), test(rowsTonight, ctx) -> hit or falsy
   // nth(pred, n): the song that made pred true for the nth time tonight
@@ -51,7 +61,7 @@
     { id: "bartender", text: "The bartender takes the mic", test: nth((p) => /bartender/i.test(p.singer || "") && !/not the bartender/i.test(p.singer || ""), 1) },
     { id: "regular", text: "A regular returns (3+ past nights)", test: nth((p, ctx) => (ctx.pastNights.get(key(p.singer)) || 0) >= 3, 1) },
     { id: "nick", text: "A singer in costume or with a stage name", test: nth((p) => /\(|\d|^(dj|mc|lil|big)\b|hotty|vega|hag|wallace|joasis|bride|groom/i.test(p.singer || ""), 1) },
-    { id: "late", text: "Still singing after 1:45am", test: nth((p) => { const d = new Date(p.played_at * 1000), h = d.getHours(); return (h === 1 && d.getMinutes() >= 45) || (h >= 2 && h < 6); }, 1) },
+    { id: "late", text: "Still singing after 1:45am", test: nth((p) => { const { h, m } = venueHM(p.played_at); return (h === 1 && m >= 45) || (h >= 2 && h < 6); }, 1) },
     { id: "s40", text: "40 songs sung tonight", test: (r) => r.length >= 40 && hit(r[39], "song #40") },
     { id: "s60", text: "60 songs sung tonight", test: (r) => r.length >= 60 && hit(r[59], "song #60") },
   ];
@@ -130,8 +140,10 @@
   // 6am-6am "night" in the viewer's local time, as YYYY-MM-DD
   function tonight(now) { const d = new Date((now || Date.now()) - 6 * 3600 * 1000); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 
-  function evaluate(card, allRows, night) {
-    const rows = allRows.filter((p) => p.night === night).sort((a, b) => a.played_at - b.played_at);
+  // since (epoch s, optional): only songs sung from then on mark squares, so a card made late in the
+  // night (or swapped for a new one) can't win on songs that were sung before it existed.
+  function evaluate(card, allRows, night, since) {
+    const rows = allRows.filter((p) => p.night === night && (!since || p.played_at >= since)).sort((a, b) => a.played_at - b.played_at);
     const pastNights = new Map(), seen = new Map();
     allRows.forEach((p) => { if (p.night >= night) return; const k = key(p.singer); if (!k) return; const s = seen.get(k) || new Set(); s.add(p.night); seen.set(k, s); });
     seen.forEach((s, k) => pastNights.set(k, s.size));
@@ -146,23 +158,34 @@
 
   function mount(root, opts) {
     const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
-    let allRows = [], night = null, card = null, lastWon = 0;
+    let allRows = [], night = null, card = null, since = 0, lastWon = 0;
     const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 
+    // Saved per night as "seed:createdAt". Cards saved by older versions have no time and count the whole night.
+    const nowS = () => Math.floor(Date.now() / 1000);
+    function saveCard() { store.set("kb-card-" + night, (Math.floor(Math.random() * 4294967295) + 1) + ":" + nowS()); }
     function ensureCard() {
-      const k = "kb-card-" + night; let seed = Number(store.get(k));
-      if (!seed) { seed = Math.floor(Math.random() * 4294967295) + 1; store.set(k, String(seed)); }
+      const k = "kb-card-" + night; let [seed, made] = String(store.get(k) || "").split(":").map(Number);
+      if (!seed) { saveCard(); [seed, made] = String(store.get(k) || "").split(":").map(Number); }
+      if (!seed) { seed = Math.floor(Math.random() * 4294967295) + 1; made = nowS(); } // storage blocked: this visit only
       card = makeCard(seed);
+      // A card for tonight marks songs from when it was made. Replaying a past night marks the whole night.
+      since = night === tonight() && made ? made : 0;
     }
-    function newCard() { if (evaluate(card, allRows, night).count > 0 && !confirm("Swap for a new card? Squares you've already got won't come with you.")) return; store.set("kb-card-" + night, String(Math.floor(Math.random() * 4294967295) + 1)); lastWon = 0; ensureCard(); draw(); }
+    function newCard() {
+      const had = evaluate(card, allRows, night, since).count > 0, live = night === tonight();
+      const msg = live ? "Get a new card? It only marks songs sung from now on" + (had ? ", and the squares you have now won't come with you." : ".") : "Get a new card for this replay?";
+      if ((had || live) && !confirm(msg)) return;
+      saveCard(); lastWon = 0; ensureCard(); draw();
+    }
 
     function draw() {
-      const res = evaluate(card, allRows, night);
+      const res = evaluate(card, allRows, night, since);
       root.replaceChildren();
       const head = el("div", "kb-head");
       const live = night === tonight();
       head.append(el("div", "kb-night", live ? "Tonight" : "Replay: " + new Date(night + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })),
-        el("div", "kb-count", res.count + " of 24 · " + res.rows.length + " songs so far"));
+        el("div", "kb-count", res.count + " of 24 · " + res.rows.length + " songs " + (since ? "since your card" : "so far")));
       root.append(head);
       const winSet = new Set(res.won.flat());
       const grid = el("div", "kb-grid"); grid.setAttribute("role", "grid");
@@ -192,7 +215,8 @@
       [["std", "Standard"], ["guilty", "Guilty pleasure"], ["deep", "Deep cut"], ["done", "Done"]].forEach(([k, t]) => { const i = el("span"); i.append(el("i", "kb-sw k-" + k), document.createTextNode(t)); key.append(i); });
       root.append(key);
       const info = el("div", "kb-info"); info.id = "kb-info";
-      info.textContent = res.won.length ? "BINGO! " + res.won.length + " line" + (res.won.length > 1 ? "s" : "") + ". Show this screen to the host." : "Squares mark themselves as songs get sung. Tap one to see who got it.";
+      const madeAt = since ? " Card made at " + new Date(since * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) + "." : "";
+      info.textContent = res.won.length ? "BINGO! " + res.won.length + " line" + (res.won.length > 1 ? "s" : "") + ". Show this screen to the host." + madeAt : "Squares mark themselves as songs get sung from when you got the card. Tap one to see who got it." + madeAt;
       if (res.won.length) info.classList.add("bingo");
       root.append(info);
       const nb = el("button", "kb-new", "Get a new card"); nb.type = "button"; nb.addEventListener("click", newCard); root.append(nb);

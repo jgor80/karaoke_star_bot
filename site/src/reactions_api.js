@@ -71,27 +71,34 @@ export async function handleReact(req, env) {
   const now = Math.floor(Date.now() / 1000);
   const ip = req.headers.get("cf-connecting-ip") || "";
   const ipHash = ip ? (await sha("oke-night|" + ip + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24) : null;
-  const [pl, lim] = await env.DB.batch([
-    env.DB.prepare("SELECT uuid, night, singer, played_at, length_s FROM plays WHERE uuid = ?1").bind(play),
-    env.DB.prepare(`SELECT
-        (SELECT count(*) FROM reactions WHERE device_id = ?1 AND created_at > ?2) AS burst,
-        (SELECT count(*) FROM reactions WHERE device_id = ?1 AND play_uuid = ?3) AS song,
-        (SELECT count(*) FROM reactions WHERE ip_hash = ?4 AND created_at > ?5) AS ip`)
-      .bind(dev, now - LIMITS.burstWindowS, play, ipHash, now - 60),
-  ]);
+  const pl = await env.DB.prepare("SELECT uuid, night, singer, played_at, length_s FROM plays WHERE uuid = ?1").bind(play).all();
   const p = pl.results[0];
   if (!p) return json({ error: "Unknown song" }, 404);
   const age = now - Number(p.played_at), len = Number(p.length_s) || LIMITS.defaultLenS;
   if (age < -120 || age > len + LIMITS.graceS) return json({ error: "That song is over", closed: true }, 409);
-  const l = lim.results[0] || {};
-  if (l.burst >= LIMITS.burst) return json({ error: "Easy there! Give it a second.", slow: true }, 429, { "retry-after": String(LIMITS.burstWindowS) });
-  if (l.song >= LIMITS.perSong) return json({ error: "You’ve maxed out reactions for this song.", maxed: true }, 429);
-  if (ipHash && l.ip >= LIMITS.ipPerMin) return json({ error: "Too many reactions from this network. Try again in a minute.", slow: true }, 429, { "retry-after": "60" });
 
+  // The limit check and the insert are one statement, so taps sent at the same moment can't
+  // all read the same counts and slip past the limits together.
   const who = cleanName(body.name) || "Anon " + (await sha(dev)).slice(0, 4).toUpperCase();
-  await env.DB.prepare("INSERT INTO reactions (play_uuid, night, singer, reaction, who, device_id, ip_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
-    .bind(p.uuid, p.night, p.singer, r, who, dev, ipHash, now).run();
-  return json({ ok: true, who, counts: await countsFor(env, p.uuid), left: LIMITS.perSong - l.song - 1 });
+  const ins = await env.DB.prepare(`INSERT INTO reactions (play_uuid, night, singer, reaction, who, device_id, ip_hash, created_at)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+      WHERE (SELECT count(*) FROM reactions WHERE device_id = ?6 AND created_at > ?9) < ?10
+        AND (SELECT count(*) FROM reactions WHERE device_id = ?6 AND play_uuid = ?1) < ?11
+        AND (?7 IS NULL OR (SELECT count(*) FROM reactions WHERE ip_hash = ?7 AND created_at > ?12) < ?13)`)
+    .bind(p.uuid, p.night, p.singer, r, who, dev, ipHash, now,
+      now - LIMITS.burstWindowS, LIMITS.burst, LIMITS.perSong, now - 60, LIMITS.ipPerMin).run();
+  const lim = await env.DB.prepare(`SELECT
+      (SELECT count(*) FROM reactions WHERE device_id = ?1 AND created_at > ?2) AS burst,
+      (SELECT count(*) FROM reactions WHERE device_id = ?1 AND play_uuid = ?3) AS song,
+      (SELECT count(*) FROM reactions WHERE ip_hash = ?4 AND created_at > ?5) AS ip`)
+    .bind(dev, now - LIMITS.burstWindowS, p.uuid, ipHash, now - 60).all();
+  const l = lim.results[0] || {};
+  if (!ins.meta || !ins.meta.changes) {
+    if (l.song >= LIMITS.perSong) return json({ error: "You’ve maxed out reactions for this song.", maxed: true }, 429);
+    if (l.burst >= LIMITS.burst) return json({ error: "Easy there! Give it a second.", slow: true }, 429, { "retry-after": String(LIMITS.burstWindowS) });
+    return json({ error: "Too many reactions from this network. Try again in a minute.", slow: true }, 429, { "retry-after": "60" });
+  }
+  return json({ ok: true, who, counts: await countsFor(env, p.uuid), left: Math.max(0, LIMITS.perSong - l.song) });
 }
 
 export async function handleCounts(req, env, ctx) {
@@ -110,11 +117,13 @@ export async function handleCounts(req, env, ctx) {
   return res;
 }
 
-// For /api/plays: counts per song and emoji, and per reactor name and night (no device ids or IPs).
+// For /api/plays: counts per song and emoji (distinct phones), and per reactor name and night (no device ids or IPs).
 export async function reactionTotals(env) {
   try {
     const [bySong, byWho] = await env.DB.batch([
-      env.DB.prepare("SELECT play_uuid AS play, reaction AS r, count(*) AS n FROM reactions GROUP BY play_uuid, reaction"),
+      // n = how many different phones sent that emoji on that song, so one phone tapping
+      // ten times counts once toward crowd awards and badges. taps = the raw number of taps.
+      env.DB.prepare("SELECT play_uuid AS play, reaction AS r, count(DISTINCT device_id) AS n, count(*) AS taps FROM reactions GROUP BY play_uuid, reaction"),
       env.DB.prepare("SELECT night, who, reaction AS r, count(*) AS n FROM reactions GROUP BY night, who, reaction"),
     ]);
     return { reactions: bySong.results, reactors: byWho.results };
