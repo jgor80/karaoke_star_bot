@@ -64,7 +64,7 @@ main { padding-block: 16px 24px; }
 .hero { position: relative; overflow: hidden; border-radius: 18px; padding: 18px 18px 20px; border: 1px solid var(--hot);
   background: radial-gradient(120% 90% at 50% -20%, rgba(245,184,74,.22), transparent 60%), linear-gradient(180deg, #34163f, #1d0f24); }
 .hero .label { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
-.hero .who { font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; margin: 8px 0 6px; overflow-wrap: anywhere; color: #fff; }
+.hero .who { cursor: pointer; font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; margin: 8px 0 6px; overflow-wrap: anywhere; color: #fff; }
 .hero .song { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
 .hero .artist { color: var(--muted); overflow-wrap: anywhere; }
 .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin-top: 14px; overflow: hidden; }
@@ -155,6 +155,17 @@ details.singer summary .chev { grid-row: 1; grid-column: 3; color: var(--muted);
 details.singer[open] summary .chev { transform: rotate(90deg); }
 .also { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .me-btn { justify-self: start; }
+
+.search-wrap { position: relative; }
+#singers { display: grid; gap: 20px; }
+.search-wrap .search { padding-right: 44px; }
+.search-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 0; background: none; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; border-radius: 8px; }
+.who-link { background: none; border: 0; padding: 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.who-link:hover, .who-link:focus-visible { text-decoration-color: var(--hot); }
+.song-link { text-decoration-color: transparent; }
+.list li[data-who] { cursor: pointer; }
+.list li[data-who]:active { background: var(--panel-2); }
+details.singer.song summary .main-t { font-weight: 600; }
 
 /* "that's me" card */
 .me { border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); display: grid; gap: 8px; }
@@ -371,9 +382,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <!-- SINGERS -->
   <section class="panel" id="p-singers" role="tabpanel" aria-labelledby="t-singers">
     <div class="sec">
-      <h2>Find your name</h2>
-      <input class="search" id="search" type="search" placeholder="Search singers or songs" autocomplete="off" enterkeyhint="search" aria-label="Search singers or songs">
-      <p class="muted small" style="margin:0" id="singers-note">Tap your name, then “That’s me” to track your badges. Spelling variants and costume names are merged.</p>
+      <h2>Search</h2>
+      <div class="search-wrap">
+        <input class="search" id="search" type="text" inputmode="search" placeholder="A singer, song or artist" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search singers, songs and artists">
+        <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden>×</button>
+      </div>
+      <p class="muted small" style="margin:0" id="singers-note">Tap a name to see their songs and badges, or a song to see who sang it. Pick your name and tap “That’s me” to track your badges.</p>
     </div>
     <div id="singers"></div>
   </section>
@@ -430,7 +444,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <button type="button" role="tab" id="t-bingo" aria-controls="p-bingo" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>Bingo</button>
     <button type="button" role="tab" id="t-singers" aria-controls="p-singers" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Singers</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</button>
     <button type="button" role="tab" id="t-records" aria-controls="p-records" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>Records</button>
   </div>
@@ -457,7 +471,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
   const $ = (id) => document.getElementById(id);
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
-  let singerLimit = 40, feedOpen = false;
+  let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
 
   // ---------- helpers ----------
@@ -575,6 +589,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     $("hero").classList.toggle("idle", !singing);
     $("hero-label").textContent = singing ? "On the mic now" : live ? "Last up" : tonight ? "Last song tonight" : "Last song, " + (last ? nightLabel(last.night) : "");
     $("hero-who").textContent = last ? (clean(last.as_typed || last.singer) || "Mystery singer") : "No songs yet";
+    $("hero-who").dataset.who = last && last.singer ? clean(last.singer) : "";
     $("hero-song").textContent = last && last.title ? "“" + last.title + "”" : "";
     $("hero-artist").textContent = last ? [last.artist, last.release_year].filter(Boolean).join(" · ") + (singing || !tonight ? "" : (last.artist ? " · " : "") + ago(last.played_at)) : "";
     $("hero-bar").hidden = !singing; $("hero-meta").hidden = !singing;
@@ -602,7 +617,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const all = [...by.values()].sort((a, b) => b.n - a.n || b.secs - a.secs);
     const ol = $("leaderboard"); ol.replaceChildren();
     if (!all.length) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
-    const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
+    const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.dataset.who = e.name; li.append(el("span", "rank", String(i + 1)), el("span", "main-t", e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
       li.append(el("span", "sub-t", mmss(e.secs) + " on the mic")); return li; };
     all.slice(0, 8).forEach((e, i) => ol.append(lbRow(e, i)));
     const mi = all.findIndex((e) => e.k === me);
@@ -612,7 +627,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const feed = $("feed"); feed.replaceChildren();
     const older = rows.slice(0, -1).reverse(), shown = feedOpen ? older.slice(0, 20) : older.slice(0, 5);
     if (!older.length) feed.append(el("li", "empty", "Nothing before this one yet."));
-    shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null);
+    shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null); if (p.singer) li.dataset.who = clean(p.singer);
       li.append(el("span", "time", clock(p.played_at)));
       const d = el("div"); d.append(el("div", "main-t", clean(p.as_typed || p.singer) || "Mystery singer"), el("div", "sub-t", songLine(p))); li.append(d); feed.append(li); });
     if (older.length > 5) { const b = el("button", "toggle-more", feedOpen ? "Show less" : "Show " + (Math.min(20, older.length) - 5) + " more"); b.type = "button";
@@ -728,20 +743,78 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     list.forEach((e, i) => { e.rank = i + 1; });
     return list;
   }
+  // Search: one box for singers, songs and artists. Accents and punctuation are ignored; every word must match.
+  const fold = (x) => (x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const matches = (hay, words) => { const h = fold(hay); return words.every((w) => h.includes(w)); };
+  const openKeys = new Set();
+  function songIndex() {
+    const by = new Map();
+    plays.forEach((p) => { if (!p.title) return; const k = key(p.title) + "|" + key(p.artist);
+      const e = by.get(k) || { k, title: p.title, artist: p.artist, year: p.release_year, rows: [] }; e.rows.push(p); by.set(k, e); });
+    return [...by.values()].sort((a, b) => b.rows.length - a.rows.length || b.rows[b.rows.length - 1].played_at - a.rows[a.rows.length - 1].played_at);
+  }
   function renderSingers() {
-    const q = key($("search").value);
+    const raw = $("search").value, words = fold(raw).split(" ").filter(Boolean);
     const all = singerIndex();
-    let hits = q ? all.filter((e) => key(e.name).includes(q) || e.rows.some((p) => key(p.title).includes(q) || key(p.artist).includes(q))) : all;
-    const me = getMe(); if (!q && me) { const mine = all.find((e) => key(e.name) === me); if (mine) hits = [mine, ...all.filter((e) => e !== mine)]; }
     const box = $("singers"); box.replaceChildren();
-    if (!hits.length) { box.append(el("div", "card muted", "No one by that name yet. Sing something and check back in a minute!")); return; }
-    hits.slice(0, singerLimit).forEach((e) => box.append(singerCard(e, all.length)));
-    if (hits.length > singerLimit) {
-      const b = el("button", "act ghost more", "Show " + Math.min(40, hits.length - singerLimit) + " more"); b.type = "button";
-      b.addEventListener("click", () => { singerLimit += 40; renderSingers(); }); box.append(b);
+    $("search-clear").hidden = !raw;
+    if (!words.length) {
+      let list = all; const me = getMe();
+      if (me) { const mine = all.find((e) => key(e.name) === me); if (mine) list = [mine, ...all.filter((e) => e !== mine)]; }
+      const sec = el("div", "sec"); const h = el("h2"); h.append(document.createTextNode("Everyone who's sung"), el("span", "aside", plural(all.length, "singer"))); sec.append(h);
+      const wrap = el("div"); list.slice(0, singerLimit).forEach((e) => wrap.append(singerCard(e, all.length))); sec.append(wrap);
+      if (list.length > singerLimit) { const b = el("button", "act ghost more", "Show " + Math.min(40, list.length - singerLimit) + " more"); b.type = "button";
+        b.addEventListener("click", () => { singerLimit += 40; renderSingers(); }); sec.append(b); }
+      box.append(sec); return;
+    }
+    const sHits = all.filter((e) => matches(e.name, words) || e.rows.some((p) => matches(p.as_typed, words)));
+    const songs = songIndex().filter((e) => matches(e.title + " " + (e.artist || ""), words));
+    if (!sHits.length && !songs.length) { box.append(el("div", "card muted", "Nothing matches “" + raw.trim() + "” yet. Check the spelling, or sing it and check back in a minute!")); return; }
+    if (sHits.length) {
+      const sec = el("div", "sec"); const h = el("h2"); h.append(document.createTextNode("Singers"), el("span", "aside", String(sHits.length))); sec.append(h);
+      const wrap = el("div"); sHits.slice(0, singerLimit).forEach((e) => wrap.append(singerCard(e, all.length, fold(e.name) === fold(raw) || (sHits.length === 1 && !songs.length)))); sec.append(wrap); box.append(sec);
+    }
+    if (songs.length) {
+      const sec = el("div", "sec"); const h = el("h2"); h.append(document.createTextNode("Songs"), el("span", "aside", plural(songs.length, "song") + " · " + plural(songs.reduce((a, e) => a + e.rows.length, 0), "play"))); sec.append(h);
+      const wrap = el("div"); songs.slice(0, songLimit).forEach((e) => wrap.append(songCard(e, songs.length === 1 && !sHits.length))); sec.append(wrap);
+      if (songs.length > songLimit) { const b = el("button", "act ghost more", "Show " + Math.min(30, songs.length - songLimit) + " more songs"); b.type = "button";
+        b.addEventListener("click", () => { songLimit += 30; renderSingers(); }); sec.append(b); }
+      box.append(sec);
     }
   }
-  function singerCard(e, total) {
+  function keepOpen(d, k, startOpen) {
+    if (startOpen || openKeys.has(k)) d.open = true;
+    d.addEventListener("toggle", () => { d.open ? openKeys.add(k) : openKeys.delete(k); });
+  }
+  function nameButton(name) {
+    const b = el("button", "who-link", name); b.type = "button";
+    b.addEventListener("click", (ev) => { ev.preventDefault(); openSearch(name); }); return b;
+  }
+  function songCard(e, startOpen) {
+    const d = el("details", "singer song");
+    const s = el("summary");
+    const chev = el("span", "chev", "›"); chev.setAttribute("aria-hidden", "true");
+    const singers = new Set(e.rows.map((p) => key(p.singer)).filter(Boolean));
+    const last = e.rows[e.rows.length - 1];
+    s.append(el("span", "main-t", "“" + e.title + "”"), el("span", "val", plural(e.rows.length, "play")), chev,
+      el("span", "sub-t", [e.artist, e.year].filter(Boolean).join(" · ") + " · " + plural(singers.size, "singer") + " · last " + ago(last.played_at, last.night)));
+    d.append(s);
+    const b = el("div", "sbody"); const ol = el("ol");
+    e.rows.slice().reverse().forEach((p) => { const li = el("li");
+      li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()));
+      li.append(p.singer ? nameButton(clean(p.as_typed || p.singer)) : el("span", "muted", "Nobody signed up")); ol.append(li); });
+    const art = e.artist && songIndex().filter((x) => x.artist && key(x.artist) === key(e.artist) && x !== e);
+    b.append(ol);
+    if (art && art.length) { const more = el("button", "linkish", "More " + e.artist + " (" + art.length + ")"); more.type = "button";
+      more.addEventListener("click", () => openSearch(e.artist)); b.append(more); }
+    d.append(b); keepOpen(d, "song:" + e.k, startOpen);
+    return d;
+  }
+  function openSearch(q) {
+    $("search").value = q; singerLimit = 40; songLimit = 30; show("singers");
+    renderSingers();
+  }
+  function singerCard(e, total, startOpen) {
     const d = el("details", "singer" + (getMe() === key(e.name) ? " mine" : ""));
     const s = el("summary");
     const chev = el("span", "chev", "›"); chev.setAttribute("aria-hidden", "true");
@@ -775,9 +848,13 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
       e.rows.slice().reverse().forEach((p) => { const li = el("li");
-        li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()), el("span", null, songLine(p))); ol.append(li); });
+        li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()));
+        if (p.title) { const sb = el("button", "who-link song-link", songLine(p)); sb.type = "button"; sb.addEventListener("click", () => openSearch(p.title)); li.append(sb); }
+        else li.append(el("span", "muted", songLine(p)));
+        ol.append(li); });
       b.append(badges); if (earned.childNodes.length) b.append(earned); b.append(...extra, el("div", "me-kicker", "Songs"), ol); d.append(b);
     });
+    keepOpen(d, "singer:" + key(e.name), startOpen);
     return d;
   }
 
@@ -804,9 +881,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     rec.forEach(([l, w, st, wh]) => { const r = el("div", "rec"); r.append(el("div", "label", l), el("div", "who", w), el("div", "stat", st), el("div", "what", wh)); box.append(r); });
 
     const sc = new Map(); songs.forEach((p) => { const k = key(p.title) + "|" + key(p.artist); const e = sc.get(k) || { p, n: 0, who: new Set() }; e.n++; e.who.add(key(p.singer)); sc.set(k, e); });
-    fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"));
+    fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"), (e) => e.p.title);
     const ac = new Map(); songs.forEach((p) => { if (!p.artist) return; const k = key(p.artist); const e = ac.get(k) || { name: p.artist, n: 0, t: new Set() }; e.n++; e.t.add(key(p.title)); ac.set(k, e); });
-    fillTop($("top-artists"), [...ac.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => e.name, (e) => plural(e.t.size, "different song"), (e) => plural(e.n, "play"));
+    fillTop($("top-artists"), [...ac.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => e.name, (e) => plural(e.t.size, "different song"), (e) => plural(e.n, "play"), (e) => e.name);
 
     const dec = new Map(); dated.forEach((p) => { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); });
     const dl = [...dec.entries()].sort((a, b) => a[0] - b[0]); const mx = Math.max(1, ...dl.map((d) => d[1]));
@@ -817,7 +894,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   function renderBadgeBook() {
     if (!window.KaraokeFun) return;
     const bb = KaraokeFun.badgeBook(people);
-    fillTop($("collectors"), bb.collectors, (e) => e.name, () => "", (e) => plural(e.n, "badge"));
+    fillTop($("collectors"), bb.collectors, (e) => e.name, () => "", (e) => plural(e.n, "badge"), (e) => e.name);
     const meE = getMe() && people.get(getMe()), mine = new Set(meE ? meE.badges.map((x) => x.id) : []);
     $("collectors").querySelectorAll("li").forEach((li, i) => { if (meE && bb.collectors[i] && bb.collectors[i].name === meE.name) li.classList.add("mine"); });
     $("book-aside").textContent = meE ? "you have " + bb.book.filter((b) => mine.has(b.id)).length + " of " + bb.book.length : bb.book.length + " badges";
@@ -856,9 +933,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       r.append(el("span", null, icon(x.id) + " Next: " + x.name + " · " + x.desc), el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
   }
 
-  function fillTop(ol, items, main, sub, val) {
+  function fillTop(ol, items, main, sub, val, q) {
     ol.replaceChildren();
-    items.forEach((e, i) => { const li = el("li"); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", main(e)), el("span", "val", val(e)), el("span", "sub-t", sub(e))); ol.append(li); });
+    items.forEach((e, i) => { const li = el("li"); if (q) li.dataset.who = q(e); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", main(e)), el("span", "val", val(e)), el("span", "sub-t", sub(e))); ol.append(li); });
   }
 
   // ---------- data ----------
@@ -891,6 +968,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync ? " · synced " + String(data.last_sync).replace("T", " ").slice(5, 16) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);
+      const pill = $("live-pill"); pill.textContent = "Offline"; pill.classList.remove("live");
     }
   }
 
@@ -904,11 +982,15 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   tabs.forEach((t) => $("t-" + t).addEventListener("click", () => show(t)));
   if (tabs.includes(location.hash.slice(1))) show(location.hash.slice(1));
   window.addEventListener("hashchange", () => { const h = location.hash.slice(1); show(tabs.includes(h) ? h : "tonight"); });
+  ["leaderboard", "feed", "top-songs", "top-artists", "collectors"].forEach((id) => $(id).addEventListener("click", (ev) => {
+    const li = ev.target.closest("li[data-who]"); if (li) openSearch(li.dataset.who); }));
+  $("hero-who").addEventListener("click", () => { const t = $("hero-who").dataset.who; if (t) openSearch(t); });
+  $("search-clear").addEventListener("click", () => { $("search").value = ""; singerLimit = 40; renderSingers(); $("search").focus(); });
   document.querySelectorAll(".seg").forEach((seg) => seg.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     seg.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-selected", String(on)); $(x.dataset.sub).classList.toggle("on", on); });
   })));
   $("find-me").addEventListener("click", () => { show("singers"); $("search").focus(); });
-  let st; $("search").addEventListener("input", () => { clearTimeout(st); st = setTimeout(() => { singerLimit = 40; renderSingers(); }, 120); });
+  let st; $("search").addEventListener("input", () => { clearTimeout(st); st = setTimeout(() => { singerLimit = 40; songLimit = 30; renderSingers(); }, 120); });
 
   // ---------- share ----------
   const dlg = $("share-dlg"); let qrDone = false;
