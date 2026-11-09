@@ -74,12 +74,51 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .ub .hd { color: var(--hot); font-weight: 700; font-size: calc(2.7 * var(--u)); line-height: 1.2; overflow-wrap: anywhere; }
 .ub.debut { border-style: dashed; border-color: var(--hot); }
 
+/* leaderboards */
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(2 * var(--u)) calc(3 * var(--u)); align-items: start; }
+.cols > div { display: grid; gap: calc(1.6 * var(--u)); min-width: 0; }
+.rank { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(1 * var(--u)); }
+.rank li { display: grid; grid-template-columns: calc(5 * var(--u)) minmax(0, 1fr) auto; align-items: baseline; gap: calc(1.6 * var(--u));
+  background: var(--panel); border: 2px solid var(--line); border-radius: calc(1.4 * var(--u)); padding: calc(1.2 * var(--u)) calc(2.2 * var(--u)); }
+.rank:not(.cont) li:first-child { border-color: var(--gold); background: linear-gradient(90deg, var(--gold-soft), var(--panel) 70%); }
+.rank .n { font-family: var(--f-display); font-size: calc(3 * var(--u)); color: var(--gold); }
+.rank .nm { font-size: calc(3.2 * var(--u)); font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .nm small { display: block; font-size: calc(2.1 * var(--u)); font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.rank .v { font-family: var(--f-mono); font-size: calc(2.4 * var(--u)); color: var(--hot); white-space: nowrap; }
+h3 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: calc(2.2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+/* bar charts: decade mix and songs by hour */
+.chart { background: var(--panel); border: 2px solid var(--line); border-radius: calc(2 * var(--u)); padding: calc(2.4 * var(--u)) calc(2.6 * var(--u)) calc(1.6 * var(--u)); }
+.bars { display: flex; align-items: flex-end; gap: calc(1.2 * var(--u)); height: calc(26 * var(--u)); }
+.bars .b { flex: 1 1 0; display: grid; grid-template-rows: auto 1fr; justify-items: center; height: 100%; min-width: 0; }
+.bars .b span { font-family: var(--f-mono); font-size: calc(2.2 * var(--u)); color: var(--ink); align-self: end; margin-bottom: calc(.6 * var(--u)); }
+.bars .b i { display: block; width: 100%; align-self: end; border-radius: calc(.8 * var(--u)) calc(.8 * var(--u)) 0 0; background: var(--hot); min-height: 3px; }
+.bars .b.top i { background: var(--gold); }
+.axis { display: flex; gap: calc(1.2 * var(--u)); border-top: 2px solid var(--line); padding-top: calc(.8 * var(--u)); }
+.axis span { flex: 1 1 0; text-align: center; font-family: var(--f-mono); font-size: calc(2 * var(--u)); color: var(--muted); min-width: 0; white-space: nowrap; }
+
+/* dares */
+.dare { background: var(--panel); border: 2px dashed var(--gold); border-radius: calc(2 * var(--u)); padding: calc(2 * var(--u)) calc(2.6 * var(--u)); display: grid; gap: calc(.6 * var(--u)); }
+.dare .st { font-family: var(--f-mono); font-size: calc(2 * var(--u)); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.dare .tx { font-size: calc(3.2 * var(--u)); font-weight: 800; line-height: 1.15; }
+.dare .by { font-size: calc(2.4 * var(--u)); color: var(--muted); }
+.dare.done { border-style: solid; border-color: var(--hot); background: var(--hot-soft); }
+.dare.done .st { color: var(--hot); }
+.dare.done .by { color: var(--ink); }
+
+/* full screen button: shows when the mouse moves or the screen is tapped */
+.fs { position: fixed; left: calc(2 * var(--u)); bottom: calc(1.6 * var(--u)); z-index: 5; font: 700 calc(2.2 * var(--u)) var(--f-body); color: #1a0710;
+  background: var(--hot); border: 0; border-radius: calc(1.2 * var(--u)); padding: calc(1.2 * var(--u)) calc(2.2 * var(--u)); cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity .3s; }
+body.awake { cursor: default; }
+body.awake .fs { opacity: 1; pointer-events: auto; }
+
 .empty { font-size: calc(3.4 * var(--u)); color: var(--muted); text-align: center; padding: calc(20 * var(--u)) calc(6 * var(--u)); }
 .status { position: fixed; right: calc(2 * var(--u)); bottom: calc(1.4 * var(--u)); font-family: var(--f-mono); font-size: calc(1.5 * var(--u)); color: var(--muted); opacity: .7; }
 .status.bad { color: var(--hot); opacity: 1; }
 
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
-@media (max-aspect-ratio: 4/3) { :root { --u: .75vw; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { grid-template-columns: minmax(0, 1fr) auto; } .tally { display: none; } }
+@media (max-aspect-ratio: 4/3) { :root { --u: .75vw; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cols { grid-template-columns: minmax(0, 1fr); } header { grid-template-columns: minmax(0, 1fr) auto; } .tally { display: none; } }
 </style>
 </head>
 <body>
@@ -94,6 +133,7 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 </header>
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
 <div class="status" id="status"></div>
+<button class="fs" id="fs" type="button" hidden>⛶ Full screen</button>
 
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
@@ -140,7 +180,21 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
     const debut = [];
     if (people) people.forEach((e) => { const d = e.badges.find((b) => b.id === "debut"); if (d && d.at.night === night) debut.push(e.name); });
     if (debut.length) badges.push({ id: "debut", name: "First time on the mic", desc: "Welcome to Oke Night!", who: debut });
-    return { night, live, tonight, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0) };
+    // Leaderboards for the night
+    const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60) }));
+    const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
+      return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
+    const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "" })).filter((e) => e.n > 1).slice(0, 6);
+    const artists = count((p) => p.artist && key(p.artist), (p) => ({ name: p.artist })).filter((e) => e.n > 1).slice(0, 6);
+    // Decade mix and songs by hour (hours in the order the night ran, so 9pm comes before 1am)
+    const dec = new Map(); rows.forEach((p) => { if (p.release_year) { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); } });
+    const decades = [...dec.entries()].sort((a, b) => a[0] - b[0]).map(([d, n]) => ({ label: "’" + String(d).slice(2) + "s", n }));
+    const hrs = new Map(); rows.forEach((p) => { const h = new Date(p.played_at * 1000).getHours(); hrs.set(h, (hrs.get(h) || 0) + 1); });
+    const hours = [...hrs.entries()].map(([h, n]) => ({ label: (h % 12 || 12) + (h < 12 ? "am" : "pm"), n }));
+    const dares = window.KaraokeFun ? KaraokeFun.daresStatus(plays, night).map((d) => ({ text: d.text, by: d.claimedBy ? (d.claimedBy.singer || "Someone").trim() : null,
+      song: d.claimedBy ? OkeAwards.songLine(d.claimedBy) : null })) : [];
+    return { night, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
+      singers, songs, artists, decades, hours, dares, schedule: data.schedule || null };
   }
 
   // ---------- render ----------
@@ -157,22 +211,73 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
     c.append(ic, el("div", "nm", g.name), el("div", "ds", g.desc), el("div", "hd", names(g.who, 8)));
     return c;
   }
+  function heading(text, aside) { const h = el("h2", null, text); if (aside) h.append(el("small", null, aside)); return h; }
+  function rankList(items, sub, val) {
+    const ol = el("ol", "rank");
+    items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm", e.name); const s = sub(e); if (s) nm.append(el("small", null, s));
+      li.append(el("span", "n", String(i + 1)), nm, el("span", "v", val(e))); ol.append(li); });
+    return ol;
+  }
+  // One ranked list split across two columns, numbered straight through.
+  function twoCols(items, sub, val) {
+    const half = Math.ceil(items.length / 2), cols = el("div", "cols"), a = el("div"), b = el("div");
+    a.append(rankList(items.slice(0, half), sub, val));
+    const rest = rankList(items.slice(half), sub, val); rest.classList.add("cont");
+    [...rest.children].forEach((li, i) => { li.firstChild.textContent = String(half + i + 1); });
+    b.append(rest); cols.append(a, b); return cols;
+  }
+  function barChart(title, items) {
+    const box = el("div", "chart"), max = Math.max(1, ...items.map((x) => x.n)), bars = el("div", "bars"), axis = el("div", "axis");
+    items.forEach((x) => { const b = el("div", "b" + (x.n === max ? " top" : "")); const bar = el("i"); bar.style.height = Math.max(2, (100 * x.n) / max) + "%";
+      b.append(el("span", null, String(x.n)), bar); bars.append(b); axis.append(el("span", null, x.label)); });
+    const wrap = el("div"); wrap.append(el("h3", null, title), box); box.append(bars, axis); return wrap;
+  }
   function copyOf(v) {
     const box = el("div", "copy");
     const h1 = el("h2", null, v.tonight ? "Tonight's awards" : "The awards"); h1.append(el("small", null, plural(v.awards.length, "winner")));
     const g1 = el("div", "grid"); v.awards.forEach((a) => g1.append(awardCard(a)));
     box.append(h1, g1);
+    if (v.singers.length) {
+      box.append(heading(v.tonight ? "Tonight's top singers" : "Top singers", plural(v.tally.singers, "singer") + " in all"));
+      box.append(twoCols(v.singers, (e) => (e.mins ? e.mins + " min on the mic" : ""), (e) => plural(e.n, "song")));
+    }
     if (v.badges.length) {
       const h2 = el("h2", null, v.tonight ? "Badges unlocked tonight" : "Badges unlocked"); h2.append(el("small", null, plural(v.nBadges, "badge") + " earned"));
       const g2 = el("div", "grid"); v.badges.forEach((b) => g2.append(badgeCard(b)));
       box.append(h2, g2);
+    }
+    if (v.songs.length || v.artists.length) {
+      box.append(heading("Crowd favorites"));
+      const lists = [];
+      if (v.songs.length) lists.push(["Most-sung songs", v.songs, (e) => e.sub, (e) => e.n + "×"]);
+      if (v.artists.length) lists.push(["Top artists", v.artists, (e) => plural(e.who.size, "singer"), (e) => plural(e.n, "song")]);
+      if (lists.length === 1) { const [t, items, sub, val] = lists[0]; box.append(el("h3", null, t)); box.append(twoCols(items, sub, val)); }
+      else { const cols = el("div", "cols"); lists.forEach(([t, items, sub, val]) => { const c = el("div"); c.append(el("h3", null, t), rankList(items, sub, val)); cols.append(c); }); box.append(cols); }
+    }
+    if (v.decades.length > 1 || v.hours.length > 1) {
+      box.append(heading("The night in numbers"));
+      const cols = el("div", "cols");
+      if (v.decades.length > 1) cols.append(barChart("Songs by decade", v.decades));
+      if (v.hours.length > 1) cols.append(barChart("Songs by hour", v.hours));
+      box.append(cols);
+    }
+    if (v.dares.length) {
+      box.append(heading(v.tonight ? "Tonight's dares" : "The dares", v.dares.filter((d) => d.by).length + " of " + v.dares.length + " claimed"));
+      const g = el("div", "grid");
+      v.dares.forEach((d) => { const c = el("article", "dare" + (d.by ? " done" : ""));
+        c.append(el("div", "st", d.by ? "Claimed" : v.tonight ? "Still open" : "Nobody took it"), el("div", "tx", d.text),
+          el("div", "by", d.by ? d.by + " with " + d.song : v.tonight ? "First one to do it gets the glory." : "Maybe next time."));
+        g.append(c); });
+      box.append(g);
     }
     return box;
   }
   function render(v) {
     $("title").textContent = v.tonight ? "Tonight · " + nightLabel(v.night) : nightLabel(v.night);
     const k = $("kicker"); k.classList.toggle("live", v.live);
-    k.textContent = v.live ? "Live · updating as you sing" : v.tonight ? "Tonight so far" : "The latest karaoke night";
+    const sc = v.schedule, at = sc && sc.venue ? " at " + sc.venue : "";
+    k.textContent = v.live ? "Live" + at + " · updating as you sing" : v.tonight ? "Tonight so far" + at
+      : v.isLatest && sc && sc.status !== "off" ? "Starting soon" + at : !v.isLatest ? "Karaoke night" : sc && sc.next_label ? "Next karaoke: " + sc.next_label + at : "The latest karaoke night";
     const t = $("tally"); t.replaceChildren();
     [["Songs", v.tally.songs], ["Singers", v.tally.singers], ["Minutes", v.tally.minutes]].forEach(([l, n]) => {
       const d = el("div"); d.append(el("strong", null, String(n)), document.createTextNode(l)); t.append(d); });
@@ -232,6 +337,29 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
   $("host").textContent = location.host || "okenight.com";
   function qr() { if (window.QRCode) new QRCode($("qr"), { text: location.origin + "/", width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M }); else $("qr").hidden = true; }
   if (document.readyState === "complete") qr(); else window.addEventListener("load", qr);
+
+  // ---------- full screen ----------
+  // Browsers only allow full screen after a click or key press, so: move the mouse (or tap) to show the button,
+  // or press F, or double-click anywhere. The button hides again after a few seconds.
+  const root = document.documentElement, fsBtn = $("fs");
+  const canFs = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  function toggleFs() {
+    if (!canFs) return;
+    try {
+      if (isFs()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root); if (r && r.catch) r.catch(() => {}); }
+    } catch (e) {}
+  }
+  function fsLabel() { fsBtn.textContent = isFs() ? "✕ Exit full screen" : "⛶ Full screen"; }
+  fsBtn.hidden = !canFs;
+  fsBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleFs(); });
+  document.addEventListener("fullscreenchange", () => { fsLabel(); setTimeout(layout, 300); });
+  document.addEventListener("webkitfullscreenchange", () => { fsLabel(); setTimeout(layout, 300); });
+  document.addEventListener("dblclick", toggleFs);
+  document.addEventListener("keydown", (e) => { if (e.key === "f" || e.key === "F") toggleFs(); });
+  let idle; const wakeUi = () => { document.body.classList.add("awake"); clearTimeout(idle); idle = setTimeout(() => document.body.classList.remove("awake"), 3500); };
+  ["mousemove", "pointerdown", "touchstart"].forEach((t) => document.addEventListener(t, wakeUi, { passive: true }));
 
   // Keep the TV awake where the browser allows it.
   async function wake() { try { if (navigator.wakeLock && !document.hidden) await navigator.wakeLock.request("screen"); } catch (e) {} }
