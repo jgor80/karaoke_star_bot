@@ -178,6 +178,19 @@
         grid.append(sq);
       });
       root.append(grid);
+      // A word wider than its square ("Margaritaville") shrinks that square's text until it fits.
+      // The card can be drawn while its tab is hidden, so fit whenever the grid gets (or changes) a size.
+      const fit = () => { if (!grid.clientWidth) return; grid.querySelectorAll(".kb-t").forEach((t) => {
+        t.style.fontSize = ""; let size = parseFloat(getComputedStyle(t).fontSize), n = 0;
+        while (t.scrollWidth > t.clientWidth + 1 && size > 8 && n++ < 24) { size -= 0.5; t.style.fontSize = size + "px"; }
+      }); };
+      if (window.ResizeObserver) { let w = 0; new ResizeObserver(() => { if (grid.clientWidth !== w) { w = grid.clientWidth; fit(); } }).observe(grid); }
+      else requestAnimationFrame(fit);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+      // Key for the song square styles (the in-square tier labels are hidden on phones).
+      const key = el("div", "kb-key");
+      [["std", "Standard"], ["guilty", "Guilty pleasure"], ["deep", "Deep cut"], ["done", "Done"]].forEach(([k, t]) => { const i = el("span"); i.append(el("i", "kb-sw k-" + k), document.createTextNode(t)); key.append(i); });
+      root.append(key);
       const info = el("div", "kb-info"); info.id = "kb-info";
       info.textContent = res.won.length ? "BINGO! " + res.won.length + " line" + (res.won.length > 1 ? "s" : "") + ". Show this screen to the host." : "Squares mark themselves as songs get sung. Tap one to see who got it.";
       if (res.won.length) info.classList.add("bingo");
