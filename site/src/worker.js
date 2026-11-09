@@ -1,6 +1,7 @@
 // Serves the phone page, the TV screen (/tv), the read-only stats JSON and live emoji reactions.
 // All SQL is fixed statements with bound values: visitors can't send queries. The only thing they can
 // write is a reaction to the song on the mic, which is rate limited (see reactions_api.js).
+// The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
@@ -8,6 +9,8 @@ import { scheduleStatus, localStampToUnix } from "./schedule.js";
 import AWARDS from "./awards.js";
 import TV from "./tv.html";
 import { handleReact, handleCounts, reactionTotals } from "./reactions_api.js";
+import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
+import HOST from "./host.html";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
@@ -20,6 +23,7 @@ export default {
       if (req.method !== "POST") return new Response("POST only", { status: 405 });
       return handleReact(req, env);
     }
+    if (url.pathname === "/api/host") return handleHost(req, env);
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
 
@@ -32,9 +36,10 @@ export default {
       const key = new Request(url.origin + "/api/plays");
       let res = await cache.match(key);
       if (!res) {
-        const [[plays, sync], reax] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env)]);
+        await checkSecrets(env).catch(() => {}); // a new song may have found a secret: mark it before reading
+        const [[plays, sync], reax, secrets] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax }),
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets }),
           { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));
@@ -45,6 +50,11 @@ export default {
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(PAGE, {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" },
+      });
+    }
+    if (url.pathname === "/host" || url.pathname === "/host/") {
+      return new Response(HOST, {
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
       });
     }
     if (url.pathname === "/tv" || url.pathname === "/tv/") {
@@ -62,5 +72,9 @@ export default {
       return new Response(AWARDS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     return new Response("Not found", { status: 404 });
+  },
+  // Every minute: catch secret songs even when no phone or TV is open, so the host still gets the push.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(checkSecrets(env));
   },
 };

@@ -41,6 +41,19 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .bands { margin: 10px 0 4px; }
 .band-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .band { font: inherit; font-size: 17px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.secret { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 16px; padding: 12px 14px; display: grid; gap: 6px; }
+.secret .sc-h { font-family: var(--f-mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.secret .sc-f { font-size: 17px; overflow-wrap: anywhere; }
+.secret .sc-f b { color: #fff; }
+.secret .sc-rw { color: var(--gold); font-weight: 700; }
+.secret .sc-tease { font-size: 16px; color: var(--muted); }
+.secret-pop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: rgba(23, 13, 28, .88); cursor: pointer; }
+.secret-pop .sp-in { background: var(--gold); color: #1a0710; border-radius: 22px; padding: 26px 22px; text-align: center; display: grid; gap: 10px; max-width: 420px; box-shadow: 0 0 60px rgba(245, 184, 74, .55); }
+.secret-pop .sp-big { font-family: var(--f-display); font-size: clamp(30px, 9vw, 44px); line-height: 1.05; }
+.secret-pop .sp-who { font-size: 22px; font-weight: 800; overflow-wrap: anywhere; }
+.secret-pop .sp-rw { font-size: 19px; font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) { .secret-pop .sp-in { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); } }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .pill.live { border-color: var(--hot); color: var(--hot); }
 .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); margin-right: 6px; vertical-align: 1px; }
 @media (prefers-reduced-motion: no-preference) { .pill.live::before { animation: blink 1.4s infinite; } }
@@ -362,6 +375,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
         </form>
       </div>
     </div>
+    <div class="secret" id="secret" hidden></div>
     <div class="tally-wrap">
       <div class="tally-cap" id="tally-cap"></div>
       <div class="tally" id="tally"></div>
@@ -516,6 +530,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </div>
 </dialog>
 
+<div class="secret-pop" id="secret-pop" hidden role="alert"><div class="sp-in"><div class="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><small>Tap to close</small></div></div>
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
@@ -527,6 +542,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const TONIGHT_WINDOW_S = 10 * 3600;
 
   const $ = (id) => document.getElementById(id);
+  let secrets = { found: [], left: 0 }; // from /api/plays: secret songs found so far + how many are still hidden
   let liveNow = false; // set by renderTonight; polls faster while live
   let schedule = null; // {venue, status: live|overtime|off, next_label, ...} from the server
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
@@ -612,6 +628,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     }
     renderRx(singing ? last : null);
     renderHeroWins(last, tonight);
+    renderSecrets(n, tonight);
     const venue = schedule ? schedule.venue : "";
     const waiting = live && !tonight; // the session has started but no songs yet
     $("hero-off").hidden = !!tonight || !n;
@@ -1047,6 +1064,30 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && rx.play) pollRx(); });
 
+  // ---------- secret songs ----------
+  // Found ones show tonight with who sang it and the reward; a phone that sees a fresh find gets a pop-up once.
+  const SECRET_SEEN = "okenight-secrets-seen";
+  function renderSecrets(n, tonight) {
+    const box = $("secret");
+    const mine = secrets.found.filter((s) => (n && s.night === n.night && tonight) || now() - s.found_at < 3 * 3600);
+    box.hidden = !mine.length && !secrets.left;
+    if (box.hidden) return;
+    box.replaceChildren();
+    if (mine.length) {
+      box.append(el("div", "sc-h", "🤫 Secret song" + (mine.length > 1 ? "s" : "") + " found"));
+      mine.slice().reverse().forEach((s) => { const f = el("div", "sc-f"); f.append(el("b", null, clean(s.singer) || "Someone"), document.createTextNode(" sang “" + s.title + "”"));
+        if (s.reward) f.append(document.createTextNode(" · "), el("span", "sc-rw", "🎁 " + s.reward)); box.append(f); });
+    }
+    if (secrets.left) box.append(el("div", mine.length ? "sc-tease" : "sc-f", "🤫 " + (secrets.left === 1 ? "1 secret song is" : secrets.left + " secret songs are") + " hidden. Sing one to win a prize."));
+    let seen; try { seen = new Set(JSON.parse(localStorage.getItem(SECRET_SEEN) || "[]")); } catch (e) { seen = new Set(); }
+    const fresh = secrets.found.filter((s) => !seen.has(s.id));
+    const pop = fresh.filter((s) => now() - s.found_at < 15 * 60).pop();
+    if (pop) { $("sp-who").textContent = (clean(pop.singer) || "Someone") + " sang “" + pop.title + "”"; $("sp-rw").textContent = pop.reward ? "🎁 " + pop.reward : ""; $("secret-pop").hidden = false;
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
+    if (fresh.length) { fresh.forEach((s) => seen.add(s.id)); try { localStorage.setItem(SECRET_SEEN, JSON.stringify([...seen])); } catch (e) {} }
+  }
+  $("secret-pop").addEventListener("click", () => { $("secret-pop").hidden = true; });
+
   // ---------- "that's me" ----------
   const ME_KEY = "karaoke-me";
   function getMe() { try { return localStorage.getItem(ME_KEY); } catch (e) { return null; } }
@@ -1121,6 +1162,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       const text = await r.text(); const data = JSON.parse(text);
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (data.schedule) schedule = data.schedule;
+      secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {

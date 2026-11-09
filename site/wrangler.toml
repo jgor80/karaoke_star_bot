@@ -11,6 +11,10 @@ routes = [
   { pattern = "www.okenight.com", custom_domain = true },
 ]
 
+# Every minute: check for newly sung secret songs and push the host alert (see src/secrets_api.js).
+[triggers]
+crons = ["* * * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "karaoke-stats"

@@ -53,3 +53,16 @@ CREATE INDEX IF NOT EXISTS reactions_play on reactions(play_uuid);
 CREATE INDEX IF NOT EXISTS reactions_device on reactions(device_id, created_at);
 CREATE INDEX IF NOT EXISTS reactions_ip on reactions(ip_hash, created_at);
 CREATE INDEX IF NOT EXISTS reactions_night on reactions(night);
+
+-- Secret songs hidden by the host on okenight.com/host. The Worker creates these tables itself
+-- (site/src/secrets_api.js). Unfound titles and rewards are only returned with the host key.
+CREATE TABLE IF NOT EXISTS secret_songs (
+  id integer primary key autoincrement,
+  title text not null, artist text, reward text,
+  created_at integer not null,     -- unix seconds; only songs sung after this count
+  found_uuid text,                 -- plays.uuid of the first matching song
+  found_at integer,
+  notified_at integer              -- when the ntfy push went out (once per secret)
+);
+-- key_salt + key_hash (sha256 of the host key), ntfy_topic (random, for push alerts)
+CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null);
