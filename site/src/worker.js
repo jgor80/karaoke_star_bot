@@ -2,6 +2,7 @@
 // The only SQL here is fixed SELECTs: visitors can't send queries or write anything.
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
+import FUN from "./fun.js";
 
 const PLAYS_SQL =
   "SELECT night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
@@ -35,6 +36,9 @@ export default {
     }
     if (url.pathname === "/bingo.js") {
       return new Response(BINGO, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
+    }
+    if (url.pathname === "/fun.js") {
+      return new Response(FUN, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     return new Response("Not found", { status: 404 });
   },
