@@ -72,3 +72,13 @@ CREATE TABLE IF NOT EXISTS secret_songs (
 );
 -- key_salt + key_hash (sha256 of the host key), ntfy_topic (random, for push alerts)
 CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null);
+
+-- KaraFun's song catalog for the site's Songbook (GET /api/catalog, site/src/catalog_api.js).
+-- The Worker's cron downloads KaraFun's published CSV weekly and creates/updates these itself
+-- (site/src/catalog_import.js). rowid = KaraFun song id (= plays.song_id); pop = popularity rank
+-- (1 = top); h = hash of what was sent, so refreshes only rewrite changed songs.
+-- k = title + artist without apostrophes, dots and slashes, so "dont stop" finds "Don't Stop Believin'".
+CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED,
+  explicit UNINDEXED, styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, h UNINDEXED,
+  tokenize = 'unicode61 remove_diacritics 2');
+CREATE TABLE IF NOT EXISTS catalog_meta (k text primary key, v text);  -- count, updated, last_attempt, last_result, last_error
