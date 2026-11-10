@@ -1184,8 +1184,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const RX = OkeAwards.REACTIONS, RX_BY = new Map(RX.map((x) => [x.k, x]));
   function reactName() { const n = store.get(NAME_KEY); if (n) return n; const me = getMe(), e = me && people.get(me); return e ? e.name : ""; }
   function rxSummary(p) {
-    const c = p.uuid && reax.bySong.get(p.uuid); if (!c) return "";
-    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => (RX_BY.get(k) || { e: "" }).e + " " + n).join("  ");
+    const cr = OkeAwards.crowdOf(reax, p), clap = cr ? "👏 " + OkeAwards.crowdScore(cr.db) + "/10" : "";
+    const c = p.uuid && reax.bySong.get(p.uuid); if (!c) return clap;
+    return (clap ? clap + "  " : "") + Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => (RX_BY.get(k) || { e: "" }).e + " " + n).join("  ");
   }
   function rxMsg(t, ms) { $("rx-msg").textContent = t; clearTimeout(rx.msgT); if (t) rx.msgT = setTimeout(() => { $("rx-msg").textContent = ""; }, ms || 3500); }
   function buildRx() {

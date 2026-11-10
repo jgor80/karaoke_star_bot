@@ -50,6 +50,9 @@ button.small { font-size: 15px; padding: 7px 12px; }
 .tip-row .amt span { color: var(--muted); }
 .alerts-on { color: var(--ok); font-weight: 700; }
 code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; overflow-wrap: anywhere; }
+.meter { height: 18px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--gold), var(--hot)); transition: width .15s linear; }
+.db { font-family: var(--f-mono); font-size: 15px; color: var(--muted); }
 .alarm { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; text-align: center; gap: 14px; padding: 24px;
   background: var(--hot); color: #1a0710; animation: flash 0.6s steps(2, jump-none) infinite; cursor: pointer; }
 .alarm .big { font-family: var(--f-display); font-size: clamp(32px, 10vw, 64px); line-height: 1.05; }
@@ -83,6 +86,14 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <p class="hint" id="alert-state">Turn alerts on to get a flashing screen, a sound and a buzz on this phone when a secret song is sung. Keep this page open.</p>
       <div class="row"><button type="button" id="alerts-btn">Turn on alerts</button><button type="button" class="ghost small" id="test-btn">Send a test push</button></div>
       <p class="hint" id="ntfy">For alerts when this page is closed, install the free <b>ntfy</b> app, tap <b>+</b>, and subscribe to <code id="topic">…</code>. <a id="topic-link" href="#" target="_blank" rel="noopener" style="color:var(--hot)">Open it</a></p>
+    </section>
+
+    <section class="card">
+      <h2>Crowd meter mic</h2>
+      <p class="hint">Scores the applause after each song. The KaraFun laptop listens on its own when its sync is running. This phone can listen too, as a backup or a second spot: park it at the host table, away from the speakers, and leave this page open. Only loudness numbers are sent, never sound.</p>
+      <div class="row"><button type="button" id="mic-btn">Start listening</button><span class="db" id="mic-db"></span></div>
+      <div class="meter" aria-hidden="true"><i id="mic-bar"></i></div>
+      <p class="hint" id="mic-state"></p>
     </section>
 
     <section class="card">
@@ -276,6 +287,58 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     $("titles").replaceChildren(...[...t].sort().map((x) => { const o = document.createElement("option"); o.value = x; return o; }));
     $("artists").replaceChildren(...[...a].sort().map((x) => { const o = document.createElement("option"); o.value = x; return o; }));
   }).catch(() => {});
+
+  // ---------- crowd meter mic ----------
+  // One loudness reading a second (dBFS, the same scale as the laptop's), sent in batches every 10 seconds.
+  // Echo cancelling, noise suppression and auto gain are off so loud cheers stay loud.
+  let mic = null;
+  async function startMic() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume();
+      const an = ctx.createAnalyser(); an.fftSize = 2048; ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Float32Array(an.fftSize);
+      mic = { stream, ctx, an, buf, sum: 0, n: 0, sec: Math.floor(Date.now() / 1000), out: [], sent: 0, fails: 0 };
+      mic.readT = setInterval(readMic, 50); mic.sendT = setInterval(sendMic, 10000);
+      try { if (navigator.wakeLock) mic.lock = await navigator.wakeLock.request("screen"); } catch (e) {}
+      $("mic-btn").textContent = "Stop listening"; $("mic-state").textContent = "Listening. Keep this page open and the phone plugged in.";
+    } catch (e) { mic = null; $("mic-state").textContent = "Couldn’t use the mic: " + (e.message || e.name || "permission denied") + ". Allow the microphone for okenight.com in your browser settings."; }
+  }
+  function stopMic() {
+    if (!mic) return; sendMic();
+    clearInterval(mic.readT); clearInterval(mic.sendT); mic.stream.getTracks().forEach((t) => t.stop()); mic.ctx.close().catch(() => {});
+    mic = null; $("mic-btn").textContent = "Start listening"; $("mic-state").textContent = "Stopped."; $("mic-db").textContent = ""; $("mic-bar").style.width = "0";
+  }
+  const toDb = (ms) => (ms > 0 ? Math.max(-120, 10 * Math.log10(ms)) : -120);
+  function readMic() {
+    mic.an.getFloatTimeDomainData(mic.buf);
+    let s = 0; for (let i = 0; i < mic.buf.length; i++) s += mic.buf[i] * mic.buf[i];
+    const ms = s / mic.buf.length, db = toDb(ms);
+    mic.sum += ms; mic.n++;
+    $("mic-bar").style.width = Math.max(0, Math.min(100, (db + 70) * 100 / 70)) + "%";
+    const sec = Math.floor(Date.now() / 1000);
+    if (sec !== mic.sec) {
+      const avg = toDb(mic.sum / mic.n); mic.out.push([mic.sec, Math.round(avg * 10) / 10]);
+      if (mic.out.length > 600) mic.out.splice(0, mic.out.length - 600); // offline for 10 minutes: keep the newest
+      $("mic-db").textContent = avg.toFixed(0) + " dB";
+      mic.sec = sec; mic.sum = 0; mic.n = 0;
+    }
+  }
+  async function sendMic() {
+    if (!mic || !mic.out.length) return;
+    const batch = mic.out.splice(0, 120), m = mic;
+    try {
+      const r = await fetch("/api/crowd", { method: "POST", headers: { "content-type": "application/json", "x-host-key": key || "" }, body: JSON.stringify({ samples: batch }) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      m.sent += batch.length; m.fails = 0;
+      if (mic === m) $("mic-state").textContent = "Listening. " + Math.round(m.sent / 60) + " min sent. Keep this page open and the phone plugged in.";
+    } catch (e) {
+      m.out.unshift(...batch); m.fails++;
+      if (mic === m) $("mic-state").textContent = "Listening, but can’t reach the site right now (will retry).";
+    }
+  }
+  $("mic-btn").addEventListener("click", () => (mic ? stopMic() : startMic()));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && mic && navigator.wakeLock) navigator.wakeLock.request("screen").catch(() => {}); });
 
   // ---------- alerts ----------
   $("alerts-btn").addEventListener("click", async () => {

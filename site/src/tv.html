@@ -130,6 +130,17 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 .secret-tv .st-rw { font-size: calc(5 * var(--u)); font-weight: 700; }
 @media (prefers-reduced-motion: no-preference) { .secret-tv .st-in { animation: stpop .6s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes stpop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* crowd meter: a banner with the applause score after each song */
+.clap-tv { position: fixed; left: 50%; bottom: calc(4 * var(--u)); z-index: 20; transform: translateX(-50%); background: var(--panel); border: 3px solid var(--gold);
+  border-radius: calc(2.4 * var(--u)); padding: calc(1.8 * var(--u)) calc(3.4 * var(--u)); display: grid; gap: calc(1 * var(--u)); min-width: 44vw; max-width: 80vw;
+  box-shadow: 0 0 calc(6 * var(--u)) rgba(245, 184, 74, .35); }
+.clap-tv .ct-top { display: flex; justify-content: space-between; gap: calc(2 * var(--u)); align-items: baseline; }
+.clap-tv .ct-who { font-size: calc(3.6 * var(--u)); font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clap-tv .ct-n { font-family: var(--f-display); font-size: calc(5 * var(--u)); color: var(--gold); white-space: nowrap; }
+.clap-tv .ct-k { font-family: var(--f-mono); font-size: calc(1.8 * var(--u)); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.clap-tv .ct-bar { height: calc(2 * var(--u)); border-radius: 99px; background: var(--line); overflow: hidden; }
+.clap-tv .ct-bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--hot), var(--gold)); transition: width 1.6s cubic-bezier(.2, .9, .3, 1); }
+@media (prefers-reduced-motion: reduce) { .clap-tv .ct-bar i { transition: none; } }
 body.embed { cursor: auto; }
 /* In a phone-width frame, size everything from the width (vh would make the text tiny). */
 @media (max-aspect-ratio: 4/3) { html.embed { --u: 1.5vw; } html.embed .grid { grid-template-columns: minmax(0, 1fr); } }
@@ -155,6 +166,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 <div class="status" id="status"></div>
 <div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
 <div class="secret-tv" id="secret-tv" hidden role="alert"><div class="st-in"><div class="st-big">🤫 Secret song found!</div><div class="st-who" id="st-who"></div><div class="st-rw" id="st-rw"></div></div></div>
+<div class="clap-tv" id="clap-tv" hidden role="status"><div class="ct-k">👏 Crowd meter</div><div class="ct-top"><div class="ct-who" id="ct-who"></div><div class="ct-n" id="ct-n"></div></div><div class="ct-bar"><i id="ct-bar"></i></div></div>
 <button class="fs" id="fs" type="button" hidden>⛶ Full screen</button>
 
 <script src="/fun.js"></script>
@@ -374,6 +386,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       if (sig !== lastView) { lastView = sig; render(v); }
       watchRx(v.current);
       secretMoment(data);
+      crowdMoment(data);
       setStatus(v.missing ? "No songs on " + v.missing + ", so this shows the latest night instead." : new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), !!v.missing);
     } catch (e) {
       setStatus(lastView ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Retrying…", true);
@@ -394,6 +407,24 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     $("st-rw").textContent = s.reward ? "🎁 " + s.reward : "";
     $("secret-tv").hidden = false; clearTimeout(secretT);
     secretT = setTimeout(() => { $("secret-tv").hidden = true; }, 20000);
+  }
+
+  // ---------- crowd meter ----------
+  // When a song's applause gets scored (about a minute after it ends), show it for 12 seconds, once per TV.
+  // Scores from before this TV loaded aren't shown.
+  let clapSeen = null, clapT = 0;
+  function crowdMoment(data) {
+    const list = data.crowd || [];
+    if (!clapSeen) { clapSeen = new Set(list.map((c) => c.play)); return; }
+    const fresh = list.filter((c) => !clapSeen.has(c.play)); fresh.forEach((c) => clapSeen.add(c.play));
+    const c = fresh.filter((x) => now() - Number(x.at) < 5 * 60 && Number(x.db) >= OkeAwards.CROWD_MIN_DB).pop();
+    const p = c && (data.plays || []).find((x) => x.uuid === c.play);
+    if (!p || !$("secret-tv").hidden) return;
+    const n = OkeAwards.crowdScore(c.db);
+    $("ct-who").textContent = ((p.singer || "").trim() || "Someone") + (p.title ? " · “" + p.title + "”" : "");
+    $("ct-n").textContent = n + "/10"; $("ct-bar").style.width = "0";
+    $("clap-tv").hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => { $("ct-bar").style.width = n * 10 + "%"; }));
+    clearTimeout(clapT); clapT = setTimeout(() => { $("clap-tv").hidden = true; }, 12000);
   }
 
   // ---------- live reactions overlay ----------

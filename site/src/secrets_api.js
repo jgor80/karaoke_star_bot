@@ -138,6 +138,12 @@ export async function publicSecrets(env) {
   } catch (e) { return { secrets_found: [], secrets_left: 0, host: DEFAULT_HOST, tips: { venmo: DEFAULT_VENMO, menu: DEFAULT_TIPS } }; }
 }
 
+// True when `given` is the host key. Used by other host-only endpoints (the crowd meter's /api/crowd).
+export async function isHost(env, given) {
+  const cfg = await config(env);
+  return !!cfg.key_hash && same(await sha256(cfg.key_salt + ":" + String(given || "").trim()), cfg.key_hash);
+}
+
 export async function handleHost(req, env) {
   const cfg = await config(env);
   const given = req.headers.get("x-host-key") || "";

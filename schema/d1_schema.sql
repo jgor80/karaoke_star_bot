@@ -82,3 +82,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNI
   explicit UNINDEXED, styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, h UNINDEXED,
   tokenize = 'unicode61 remove_diacritics 2');
 CREATE TABLE IF NOT EXISTS catalog_meta (k text primary key, v text);  -- count, updated, last_attempt, last_result, last_error
+
+-- Crowd meter (site/src/crowd_api.js; the Worker and the laptop's sync create these themselves).
+-- crowd_levels: one loudness reading a second in dBFS (never audio), src = 'laptop' or 'phone'. Kept 45 days.
+CREATE TABLE IF NOT EXISTS crowd_levels (ts integer not null, src text not null, db real not null, PRIMARY KEY (ts, src)) WITHOUT ROWID;
+-- crowd_scores: per song, the applause peak, the room's chatter level (base) and how far above it the
+-- applause went (over, dB). over is NULL when nobody was listening.
+CREATE TABLE IF NOT EXISTS crowd_scores (uuid text primary key, src text, peak real, base real, over real, scored_at integer not null);
