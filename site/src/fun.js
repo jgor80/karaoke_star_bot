@@ -29,6 +29,16 @@
   const BRIT = /^oasis$|^pulp$|^blur$|^the verve$|^suede$|^radiohead$|^the smiths$/i;
   const HYPE_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
   const hypeOf = (c) => HYPE_KEYS.reduce((a, k) => a + (c[k] || 0), 0);
+  // ---------- weekly streaks ----------
+  // A karaoke week runs Monday to Sunday, so a Saturday party and the Sunday after it are the same week.
+  // Streaks count weeks that had karaoke at all, so a week the bar skips doesn't break anyone's streak.
+  const weekOf = (night) => { const t = Date.parse(night + "T12:00:00Z") / 86400000; return Math.floor((t + 3) / 7); }; // Mon-start week number
+  // Consecutive karaoke weeks ending at week w, counting only weeks in mine (a Set of week numbers).
+  function runEndingAt(w, mine, weeks) {
+    let i = weeks.indexOf(w), n = 0;
+    while (i >= 0 && mine.has(weeks[i])) { n++; i--; }
+    return n;
+  }
   // ---------- genres ----------
   // Artist names (lowercase, leading "the " dropped) per genre. An artist can sit in more than one.
   // Matched against each part of the artist field: "Lady Gaga & Bruno Mars", "Paramore (The Twilight Saga)",
@@ -94,6 +104,9 @@
     { id: "debut", name: "Debut", desc: "Sang a first song here", test: () => true },
     { id: "regular", name: "Regular", desc: "Sang on 3 different nights", test: (r, i) => new Set(r.slice(0, i + 1).map((p) => p.night)).size >= 3 },
     { id: "lifer", name: "Lifer", desc: "Sang on 6 different nights", test: (r, i) => new Set(r.slice(0, i + 1).map((p) => p.night)).size >= 6 },
+    { id: "streak3", name: "Three-Peat", desc: "Sang 3 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 3 },
+    { id: "streak5", name: "On a Roll", desc: "Sang 5 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 5 },
+    { id: "streak10", name: "Iron Lungs", desc: "Sang 10 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 10 },
     { id: "hattrick", name: "Hat Trick", desc: "3 songs in one night", test: (r, i) => r.slice(0, i + 1).filter((p) => p.night === r[i].night).length >= 3 },
     { id: "hopper", name: "Decade Hopper", desc: "Songs from 4 different decades", test: (r, i) => new Set(r.slice(0, i + 1).filter((p) => p.release_year).map((p) => decade(p.release_year))).size >= 4 },
     { id: "timelord", name: "Time Lord", desc: "Songs from 6 different decades", test: (r, i) => new Set(r.slice(0, i + 1).filter((p) => p.release_year).map((p) => decade(p.release_year))).size >= 6 },
@@ -150,7 +163,9 @@
     plays.forEach((p) => { if (!firstOf.has(p.night)) firstOf.set(p.night, p); lastOf.set(p.night, p);
       if (p.title) { const k = key(p.title); (byTitle.get(k) || byTitle.set(k, []).get(k)).push(p); } });
     const none = {};
-    return { firstOf, lastOf, byTitle, liveNight, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
+    const weeks = [...new Set(plays.map((p) => weekOf(p.night)))].sort((a, b) => a - b);
+    const runAt = (r, i) => runEndingAt(weekOf(r[i].night), new Set(r.slice(0, i + 1).map((p) => weekOf(p.night))), weeks);
+    return { firstOf, lastOf, byTitle, liveNight, weeks, runAt, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
   }
 
   // -> Map(personKey -> {name, rows, badges: [{id, name, desc, at: row}]})
@@ -280,8 +295,30 @@
     return { book, collectors, singers: list.length };
   }
 
+  // ---------- streaks ----------
+  // For one person: {current, best, alive, onTheLine}.
+  //  current: weeks in a row up to their latest week. alive: their latest week is the latest karaoke week
+  //  (or the one before it while the latest is still this week and they haven't sung yet: onTheLine).
+  function streakOf(e, plays) {
+    if (!e || !e.rows.length) return { current: 0, best: 0, alive: false, onTheLine: false };
+    const weeks = [...new Set(plays.map((p) => weekOf(p.night)))].sort((a, b) => a - b);
+    const mine = new Set(e.rows.map((p) => weekOf(p.night)));
+    let best = 0, run = 0;
+    weeks.forEach((w) => { run = mine.has(w) ? run + 1 : 0; best = Math.max(best, run); });
+    const lastW = weekOf(e.rows[e.rows.length - 1].night), latest = weeks[weeks.length - 1];
+    const current = runEndingAt(lastW, mine, weeks);
+    const thisWeek = weekOf(new Date(Date.now() - 6 * 3600000).toISOString().slice(0, 10)); // about Central, good enough for a week
+    const onTheLine = lastW !== latest && weeks.indexOf(lastW) === weeks.length - 2 && latest === thisWeek;
+    return { current, best, alive: lastW === latest || onTheLine, onTheLine };
+  }
+  // Everyone with a live streak of 2+ weeks, longest first.
+  function hotStreaks(ppl, plays) {
+    return [...ppl.values()].filter((e) => e.rows.length).map((e) => ({ name: e.name, key: e.key, ...streakOf(e, plays) }))
+      .filter((x) => x.alive && x.current >= 2).sort((a, b) => b.current - a.current || a.name.localeCompare(b.name));
+  }
+
   // ---------- progress toward badges not earned yet ----------
-  function progress(e) {
+  function progress(e, plays) {
     if (!e) return [];
     const r = e.rows, has = new Set(e.badges.map((b) => b.id));
     const nights = new Set(r.map((p) => p.night)).size;
@@ -296,10 +333,14 @@
       ...GENRES.map((g) => [g.id, r.filter(inGenre(g.id)).length, 2, g.genre + " songs"]).filter((x) => x[1] >= 1),
       ["g-hopper", new Set(r.flatMap((p) => (p.title ? genresOf(p.artist) : []))).size, 5, "genres"],
     ];
-    return cand.filter(([id, have, need]) => !has.has(id) && have < need && !(id === "lifer" && !has.has("regular")) && !(id === "timelord" && !has.has("hopper")))
+    // Streak badges: only while the streak is alive, since a broken one starts over.
+    if (plays) { const st = streakOf(e, plays), cur = st.alive ? st.current : 0;
+      [["streak3", 3], ["streak5", 5], ["streak10", 10]].forEach(([id, need]) => cand.push([id, cur, need, "weeks in a row"])); }
+    return cand.filter(([id, have, need]) => !has.has(id) && have < need && !(id === "lifer" && !has.has("regular")) && !(id === "timelord" && !has.has("hopper"))
+        && !(id === "streak5" && !has.has("streak3")) && !(id === "streak10" && !has.has("streak5")) && !(id.startsWith("streak") && have < 1))
       .map(([id, have, need, unit]) => { const b = BADGES.find((x) => x.id === id); return { id, name: b.name, desc: b.desc, have, need, unit }; })
       .sort((a, b) => b.have / b.need - a.have / a.need);
   }
 
-  global.KaraokeFun = { GENRES, genresOf, favoriteBands, BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, personKey: (s) => key(s) };
+  global.KaraokeFun = { GENRES, genresOf, favoriteBands, BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, streakOf, hotStreaks, weekOf, personKey: (s) => key(s) };
 })(typeof window !== "undefined" ? window : globalThis);
