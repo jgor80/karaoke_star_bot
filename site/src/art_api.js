@@ -1,8 +1,8 @@
 // Album covers for songs:
 //   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
-// KaraFun's catalog has no artwork, so covers come from free music search APIs: Deezer first, then
-// Apple's iTunes Search API, then MusicBrainz + the Cover Art Archive (catches songs Deezer lacks, like Kate Bush). Each song is looked up once, the first time a phone shows it, and the
+// KaraFun's catalog has no artwork, so covers come from free music search APIs: Apple's iTunes Search
+// API first, then Deezer, then MusicBrainz + the Cover Art Archive (catches songs Deezer lacks, like Kate Bush). Each song is looked up once, the first time a phone shows it, and the
 // answer (including "no cover") is saved in D1 table song_art. The image itself is fetched once and
 // served from okenight.com out of Cloudflare's cache (30 days, refetched if Cloudflare drops it), so
 // phones never talk to Deezer, Apple or the Cover Art Archive and a full bar costs them one download.
@@ -15,14 +15,18 @@
 
 const TABLE =
   "CREATE TABLE IF NOT EXISTS song_art (id integer not null, tk text not null, url text, src text," +
-  " checked integer not null, primary key (id, tk))";
+  " checked integer not null, link text, primary key (id, tk))";
+// link: the song's page at the source (Apple Music, Deezer or MusicBrainz). Added after the table existed.
+const ADD_LINK = "ALTER TABLE song_art ADD COLUMN link text";
 const NO_COVER_RETRY_S = 30 * 86400; // try songs without a cover again after a month
 // "No cover" answers saved before this time are retried right away (bump it after adding a source).
 const MISSES_BEFORE = Date.UTC(2026, 10, 10, 23) / 1000;
 
 let ready = null;
 function ensureTable(env) {
-  if (!ready) ready = env.DB.prepare(TABLE).run().catch((e) => { ready = null; throw e; });
+  if (!ready) ready = env.DB.prepare(TABLE).run()
+    .then(() => env.DB.prepare(ADD_LINK).run().catch(() => {})) // fails harmlessly once the column exists
+    .catch((e) => { ready = null; throw e; });
   return ready;
 }
 
@@ -43,13 +47,16 @@ function sameArtist(ours, theirs) {
   return !!a && !!b && (a.includes(b) || b.includes(a));
 }
 
+// Names the app to the services we call. MusicBrainz asks for this; requests without one are also the
+// usual reason Apple's search API turns a server away.
+const UA = "OkeNight/1.0 ( https://okenight.com )";
 async function getJson(url) {
-  const r = await fetch(url, { headers: { accept: "application/json" }, cf: { cacheTtl: 86400 } });
+  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, cf: { cacheTtl: 86400 } });
   if (!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }
 
-// -> cover URL (~250-300px), null when the service has no match. Throws when the service is down or rate limited.
+// -> {url: cover (~250-300px), link: the song's page there}, null when the service has no match. Throws when the service is down or rate limited.
 async function fromDeezer(artist, title) {
   const tries = [
     'artist:"' + searchArtist(artist).replace(/"/g, "") + '" track:"' + plainTitle(title).replace(/"/g, "") + '"',
@@ -59,7 +66,7 @@ async function fromDeezer(artist, title) {
     const d = await getJson("https://api.deezer.com/search?limit=10&q=" + encodeURIComponent(q));
     if (d && d.error) throw new Error("deezer " + (d.error.code || d.error.type));
     const hit = (d.data || []).find((x) => x.album && x.album.cover_medium && x.artist && sameArtist(artist, x.artist.name));
-    if (hit) return hit.album.cover_medium;
+    if (hit) return { url: hit.album.cover_medium, link: hit.link || null };
   }
   return null;
 }
@@ -67,12 +74,12 @@ async function fromItunes(artist, title) {
   const term = mainArtist(artist) + " " + plainTitle(title);
   const d = await getJson("https://itunes.apple.com/search?media=music&entity=song&limit=10&term=" + encodeURIComponent(term));
   const hit = (d.results || []).find((x) => x.artworkUrl100 && sameArtist(artist, x.artistName));
-  return hit ? hit.artworkUrl100.replace(/\/\d+x\d+bb\./, "/300x300bb.") : null;
+  return hit ? { url: hit.artworkUrl100.replace(/\/\d+x\d+bb\./, "/300x300bb."), link: hit.trackViewUrl || hit.collectionViewUrl || null } : null;
 }
 
 // MusicBrainz asks API users for a User-Agent naming the app, and for at most about one request a second.
 // It's the last resort, so it only sees songs Deezer and Apple don't have.
-const MB_UA = "OkeNight/1.0 ( https://okenight.com )";
+const MB_UA = UA;
 async function mbSearch(kind, query) {
   const r = await fetch("https://musicbrainz.org/ws/2/" + kind + "?fmt=json&limit=10&query=" + encodeURIComponent(query),
     { headers: { accept: "application/json", "user-agent": MB_UA }, cf: { cacheTtl: 86400 } });
@@ -97,7 +104,7 @@ async function fromCoverArtArchive(artist, title) {
   for (const g of groups.sort((x, y) => rank(x) - rank(y)).slice(0, 3)) {
     const url = "https://coverartarchive.org/release-group/" + g.id + "/front-250";
     const c = await fetch(url, { method: "HEAD", redirect: "manual", headers: { "user-agent": MB_UA } });
-    if (c.status >= 300 && c.status < 400) return url; // redirects to the image when there is one, 404 when not
+    if (c.status >= 300 && c.status < 400) return { url, link: "https://musicbrainz.org/release-group/" + g.id }; // redirects to the image when there is one, 404 when not
   }
   return null;
 }
@@ -114,6 +121,17 @@ async function findSong(env, id, tk) {
   if (cat && (!tk || norm(cat.title) === tk)) return cat;
   const { results } = await env.DB.prepare("SELECT title, artist FROM plays WHERE song_id = ? AND title IS NOT NULL LIMIT 20").bind(id).all();
   return results.find((p) => !tk || norm(p.title) === tk) || null;
+}
+
+// Where covers may come from, in order. Set ART_SOURCES in wrangler.toml [vars] (comma separated).
+// Apple's artwork may be shown to promote the music when it links back to Apple Music, which every
+// cover does (see handleListen). Deezer and the Cover Art Archive don't license their images for
+// commercial use, so keep them off before the site makes money. A licensed provider such as
+// Gracenote would be one more entry here.
+const SOURCES = { itunes: fromItunes, deezer: fromDeezer, coverart: fromCoverArtArchive };
+function artSources(env) {
+  const list = String((env && env.ART_SOURCES) || "itunes").split(",").map((x) => x.trim()).filter((x) => SOURCES[x]);
+  return list.length ? list : ["itunes"];
 }
 
 const IMAGE_TTL_S = 30 * 86400;
@@ -146,7 +164,8 @@ export async function handleArt(req, env, ctx) {
 
   const cache = caches.default;
   // v=2: images, not redirects (older cached redirects are simply left to expire)
-  const cacheKey = new Request(url.origin + "/api/art?v=2&id=" + id + "&t=" + encodeURIComponent(tk) + (big ? "&s=big" : ""));
+  const sources = artSources(env);
+  const cacheKey = new Request(url.origin + "/api/art?v=2&src=" + sources.join(",") + "&id=" + id + "&t=" + encodeURIComponent(tk) + (big ? "&s=big" : ""));
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
 
@@ -154,22 +173,24 @@ export async function handleArt(req, env, ctx) {
   try {
     await ensureTable(env);
     const now = Math.floor(Date.now() / 1000);
-    const row = await env.DB.prepare("SELECT url, checked FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
-    if (row && row.url) res = await image(sized(row.url, big));
-    else if (row && now - row.checked < NO_COVER_RETRY_S && row.checked >= MISSES_BEFORE) res = none(404, 86400);
+    const row = await env.DB.prepare("SELECT url, src, checked FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
+    // A saved cover from a source that has since been switched off is looked up again.
+    if (row && row.url && sources.includes(row.src)) res = await image(sized(row.url, big));
+    else if (row && !row.url && now - row.checked < NO_COVER_RETRY_S && row.checked >= MISSES_BEFORE) res = none(404, 86400);
     else {
       const song = await findSong(env, id, tk);
       if (!song || !song.title) return none(404, 3600); // not a song we know: nothing saved, nothing looked up
-      let cover = null, src = null; const failed = [];
-      for (const [name, fn] of [["deezer", fromDeezer], ["itunes", fromItunes], ["coverart", fromCoverArtArchive]]) {
-        try { cover = await fn(song.artist || "", song.title); } catch (e) { failed.push(name); continue; }
-        if (cover) { src = name; break; }
+      let cover = null, src = null, link = null; const failed = [];
+      for (const name of sources) {
+        const fn = SOURCES[name];
+        let got;
+        try { got = await fn(song.artist || "", song.title); } catch (e) { failed.push(name); console.log("album art: " + name + " failed: " + e.message); continue; }
+        if (got) { cover = got.url; link = got.link; src = name; break; }
       }
-      // Only remember "no cover" when Deezer and the Cover Art Archive both answered. If one was down or
-      // rate limited, the next view tries again. Apple is a bonus: it often turns Cloudflare away.
-      if (!cover && failed.length === 3) return none(503, 60);
-      if (!cover && (failed.includes("deezer") || failed.includes("coverart"))) return none(404, 3600);
-      await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked) VALUES (?, ?, ?, ?, ?)").bind(id, tk, cover, src, now).run();
+      // Only remember "no cover" when every source answered. If one was down or rate limited, the next view tries again.
+      if (!cover && failed.length === sources.length) return none(503, 60);
+      if (!cover && failed.length) return none(404, 3600);
+      await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked, link) VALUES (?, ?, ?, ?, ?, ?)").bind(id, tk, cover, src, now, link).run();
       res = cover ? await image(sized(cover, big)) : none(404, 86400);
     }
   } catch (e) {
@@ -177,4 +198,23 @@ export async function handleArt(req, env, ctx) {
   }
   ctx.waitUntil(cache.put(cacheKey, res.clone()).catch(() => {}));
   return res;
+}
+
+// Tapping a cover: GET /api/listen?id=<song id>&t=<title> -> the song's page where the cover came from
+// (Apple Music, Deezer or MusicBrainz), or an Apple Music search when we have no link.
+export async function handleListen(req, env) {
+  const url = new URL(req.url);
+  const id = Number(url.searchParams.get("id"));
+  const tk = norm(url.searchParams.get("t"));
+  if (!Number.isInteger(id) || id <= 0 || id > 2e9) return none(404, 86400);
+  try {
+    await ensureTable(env);
+    const row = await env.DB.prepare("SELECT link, src FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
+    if (row && row.link && artSources(env).includes(row.src) && /^https:\/\/[a-z0-9.-]*(apple\.com|deezer\.com|musicbrainz\.org)\//.test(row.link)) return redirect(row.link, 86400);
+    const song = await findSong(env, id, tk);
+    if (!song) return none(404, 3600);
+    return redirect("https://music.apple.com/us/search?term=" + encodeURIComponent(mainArtist(song.artist || "") + " " + plainTitle(song.title)), 3600);
+  } catch (e) {
+    return none(503, 60);
+  }
 }
