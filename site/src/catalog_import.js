@@ -14,6 +14,7 @@ const REFRESH_MS = 7 * 86400 * 1000;
 const RETRY_MS = 3600 * 1000;
 const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
 const MIN_SONGS = 10000;     // a broken download must never wipe the catalog
+const VERSION = "2";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
 
 const SCHEMA = [
   // rowid = KaraFun song id (same as plays.song_id). Only title, artist and k are searchable.
@@ -101,15 +102,37 @@ export function insertStatements(songs) {
 async function get(url) {
   const r = await fetch(url, { headers: { "user-agent": UA } });
   if (!r.ok) throw new Error("KaraFun said " + r.status + " for " + url);
-  return r.text();
+  return r;
 }
 
-async function csvUrl() {
+// The song list page links several downloads under /cl/ (PDF catalogs and the CSV), so try each
+// link, the one next to "CSV" first, and keep the first that really is the CSV.
+async function csvUrls() {
+  const urls = [];
   try {
-    const m = (await get(LIST_PAGE)).match(/href="(https:\/\/www\.karafun\.com\/cl\/[^"]+)"/);
-    if (m) return m[1];
+    const page = await (await get(LIST_PAGE)).text();
+    const re = /<a[^>]+href="(https:\/\/www\.karafun\.com\/cl\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let m; const csvFirst = [], rest = [];
+    while ((m = re.exec(page))) (/csv/i.test(m[2]) ? csvFirst : rest).push(m[1]);
+    urls.push(...csvFirst, ...rest);
   } catch (e) {}
-  return FALLBACK_CSV;
+  urls.push(FALLBACK_CSV);
+  return [...new Set(urls)].slice(0, 8);
+}
+
+async function downloadCsv() {
+  const tried = [];
+  for (const url of await csvUrls()) {
+    try {
+      const r = await get(url);
+      const type = r.headers.get("content-type") || "";
+      if (!/csv|text\/plain/i.test(type)) { tried.push(url + " (" + type + ")"); await r.body?.cancel(); continue; }
+      const text = await r.text();
+      if (/^\uFEFF?Id;Title;/.test(text)) return text;
+      tried.push(url + " (not the song CSV)");
+    } catch (e) { tried.push(url + " (" + e.message + ")"); }
+  }
+  throw new Error("no catalog CSV found; tried " + tried.join(", "));
 }
 
 async function setMeta(env, pairs) {
@@ -118,7 +141,7 @@ async function setMeta(env, pairs) {
 
 export async function importCatalog(env) {
   for (const s of SCHEMA) await env.DB.prepare(s).run();
-  const songs = songsFromCsv(await get(await csvUrl()));
+  const songs = songsFromCsv(await downloadCsv());
   if (songs.length < MIN_SONGS) throw new Error("catalog download looks wrong (" + songs.length + " songs)");
   // What's in D1 now, paged by rowid so no single result gets huge.
   const have = new Map();
@@ -144,9 +167,9 @@ export async function maybeImportCatalog(env, now = Date.now()) {
     meta = Object.fromEntries(results.map((r) => [r.k, r.v]));
   } catch (e) { /* first run: no table yet */ }
   const updated = Date.parse(meta.updated || "") || 0, tried = Number(meta.last_attempt) || 0;
-  if (now - updated < REFRESH_MS || now - tried < RETRY_MS) return null;
+  if (now - updated < REFRESH_MS || (now - tried < RETRY_MS && meta.version === VERSION)) return null;
   await env.DB.prepare(SCHEMA[1]).run();
-  await setMeta(env, { last_attempt: now });
+  await setMeta(env, { last_attempt: now, version: VERSION });
   try {
     const r = await importCatalog(env);
     await setMeta(env, { count: r.songs, updated: new Date(now).toISOString(), last_result: JSON.stringify(r), last_error: "" });
