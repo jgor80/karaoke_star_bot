@@ -238,7 +238,7 @@ details.singer[open] summary .chev { transform: rotate(90deg); }
 .list li[data-who]:active { background: var(--panel-2); }
 details.singer.song summary .main-t { font-weight: 600; }
 
-/* the line: how many are waiting in KaraFun's queue and about how long a new sign-up waits */
+/* the line: how many are waiting in the karaoke app's queue and about how long a new sign-up waits */
 .line { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
 .line-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .line-row div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 13px; color: var(--muted); }
@@ -610,7 +610,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <div class="sub on" id="sg-find"><div class="sec" id="cat-find"></div></div>
     <div class="sub" id="sg-mine"></div>
     <button class="act ghost sg-signup" type="button" data-signup>✍️ Found your song? Here’s how to sign up</button>
-    <p class="muted small" style="margin:0">Song list from <a href="https://www.karafun.com/karaoke-song-list.html" rel="noopener" target="_blank" style="color:inherit">KaraFun’s catalog</a>. Your list stays on this phone.</p>
+    <p class="muted small" style="margin:0">Your list stays on this phone.</p>
   </section>
 
   <!-- AWARDS -->
@@ -778,7 +778,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let tips = null; // {venmo, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
-  let queue = null; // KaraFun's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
+  let queue = null; // the karaoke app's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
   const QUEUE_DEFAULT_LEN = 240; // a queued song with no known length counts as 4 minutes
   const QUEUE_GAP_S = 25;       // changeover between singers (start-to-start runs ~25s past song length)
   const STALE_S = 15 * 60; // during the session, warn when the laptop hasn't synced for this long
@@ -920,7 +920,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)));
   }
 
-  // ---------- the line (KaraFun's queue) ----------
+  // ---------- the line (the karaoke app's queue) ----------
   // The first queue item is the song on the mic once it has started, so it's skipped while that song plays.
   // Waits add up the queued songs' lengths plus a short changeover each; they're estimates, and the host can reorder.
   function waitLabel(s) {
@@ -1503,7 +1503,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, liveNight, reax.bySong) : new Map();
     renderAll();
   }
-  // Songbook: KaraFun catalog search + "my list" (songs.js).
+  // Songbook: song catalog search + "my list" (songs.js).
   const songbook = window.OkeSongs ? OkeSongs.mount({
     find: $("cat-find"), mine: $("sg-mine"), count: $("my-count"),
     getPlays: () => plays,

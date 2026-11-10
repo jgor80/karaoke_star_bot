@@ -1,4 +1,4 @@
-// Songbook tab: search KaraFun's catalog (/api/catalog) and keep a list of songs you want to sing.
+// Songbook tab: search the karaoke app's catalog (/api/catalog) and keep a list of songs you want to sing.
 // The list is saved on this phone only (localStorage), so there are no accounts.
 //
 // OkeSongs.mount({ find, mine, count, getPlays, getMyRows, onPick })
@@ -11,7 +11,7 @@
   const MAX_LIST = 200;
   let memory = []; // used when the phone blocks storage
 
-  // KaraFun's style and language names, most common first (from the catalog, 2026-11). "Duet" has its own toggle.
+  // The karaoke app's style and language names, most common first (from the catalog, 2026-11). "Duet" has its own toggle.
   const GENRES = ["Pop", "Rock", "Country", "Latin Music", "Soundtrack", "Love", "Soul", "Alternative", "Jazz", "Dance", "Folk",
     "R&B", "Rap", "Hip-Hop", "Electro", "Soft rock", "Hard Rock", "Musical", "Synthpop", "Metal", "Rock 'n Roll", "Christmas",
     "Blues", "Spiritual Music", "Gospel", "Traditional", "Teen pop", "World/Folk", "Funk", "Humor", "Kids", "Disco", "Reggae",
@@ -23,7 +23,7 @@
   const GENRE_LABEL = { "Love": "Love songs", "Latin Music": "Latin", "Moyen Orient": "Middle Eastern", "Humor": "Comedy", "Spiritual Music": "Spiritual" };
   const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950, 1900];
   const LANGS = ["English", "Spanish", "French", "Portuguese", "German", "Italian", "Dutch", "Korean", "Japanese"];
-  const SORT_OPTS = [["pop", "Most popular", "most popular first"], ["new", "Newly added", "newest on KaraFun first"],
+  const SORT_OPTS = [["pop", "Most popular", "most popular first"], ["new", "Newly added", "newest additions first"],
     ["recent", "Newest songs", "newest songs first"], ["old", "Oldest songs", "oldest songs first"]];
 
   const VOICES = [["m", "🙋‍♂️ Male voice"], ["f", "🙋‍♀️ Female voice"], ["mix", "👫 Guy + girl duets"]];
@@ -83,7 +83,7 @@
     const sw = el("div", "search-wrap");
     const input = el("input", "search"); Object.assign(input, { type: "text", placeholder: "Song or artist", autocomplete: "off", spellcheck: false });
     input.setAttribute("inputmode", "search"); input.setAttribute("enterkeyhint", "search"); input.setAttribute("autocapitalize", "off");
-    input.setAttribute("aria-label", "Search the KaraFun song catalog");
+    input.setAttribute("aria-label", "Search the song catalog");
     const clear = el("button", "search-clear", "×"); clear.type = "button"; clear.hidden = true; clear.setAttribute("aria-label", "Clear search");
     sw.append(input, clear);
     // Filters, all sent to /api/catalog: a row of genre pills, a row of era pills, quick toggles,
@@ -248,7 +248,7 @@
     }
     // "Top 10 Country", "Top 10 ’90s duets", "Top 10 right now"
     function topTitle() {
-      if (f.sort === "new") return "Just added to KaraFun";
+      if (f.sort === "new") return "Just added";
       const bits = [];
       if (f.lang) bits.push(f.lang);
       if (f.genre) bits.push(genreName(f.genre));
@@ -319,12 +319,12 @@
         ready = d.ready; total = d.count;
         if (!d.ready) {
           results = localSearch(q).filter((s) => !f.duo || s.duo); more = false;
-          note.textContent = results.length ? "KaraFun’s full song list isn’t loaded yet, so these are songs sung here." :
-            (q ? "Nothing sung here matches “" + q + "” yet. The full KaraFun song list is coming soon." : "The full KaraFun song list is coming soon.");
+          note.textContent = results.length ? "The full song list isn’t loaded yet, so these are songs sung here." :
+            (q ? "Nothing sung here matches “" + q + "” yet. The full song list is coming soon." : "The full song list is coming soon.");
         } else {
           results = append ? results.concat(d.songs) : d.songs; more = d.more;
-          if (!results.length) note.textContent = "No KaraFun songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words." : "these filters. Try loosening one.");
-          else if (!q && !filtersOn()) note.textContent = "Most popular songs in KaraFun’s " + total.toLocaleString("en-US") + "-song catalog. Search or filter to find more.";
+          if (!results.length) note.textContent = "No songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words." : "these filters. Try loosening one.");
+          else if (!q && !filtersOn()) note.textContent = "Most popular of " + total.toLocaleString("en-US") + " songs. Search or filter to find more.";
           else note.textContent = describe() + "." + (f.voice && d.voice && d.voice.done < d.voice.total ?
             " Singer voices are still being looked up (" + Math.floor(100 * d.voice.done / d.voice.total) + "% of artists so far), so more songs will show up." : f.voice ? " Bands aren’t sorted by voice yet." : "");
         }

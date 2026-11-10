@@ -5,7 +5,7 @@
  */
 (function (global) {
   const key = (s) => (s || "").trim().toLowerCase();
-  // Songs from a film, musical, show or game. KaraFun marks most as "Title Source (film)" / "(musical)",
+  // Songs from a film, musical, show or game. the karaoke app marks most as "Title Source (film)" / "(musical)",
   // and some as "Artist (Source)" or "Source (Artist)", e.g. "The Beach Boys (Cocktail)", "Toy Story (Randy Newman)".
   // A trailing "(band)" or "(live...)" is just a disambiguation, not a source.
   const SCREEN = /\b(film|musical|movie|soundtrack)\b|\((?!band\)|live\b)[^)]+\)\s*$/i;
@@ -69,7 +69,7 @@
 
   // ---------- song squares ----------
   // Cards mix challenge squares with specific songs nobody may pick: karaoke standards that get sung at
-  // bars everywhere, guilty pleasures, and deep cuts that are in the KaraFun catalog but rarely sung.
+  // bars everywhere, guilty pleasures, and deep cuts that are in the song catalog but rarely sung.
   // A song square only marks when that exact title is sung, so a full line is rare.
   const STANDARDS = [
     ["Don't Stop Believin'", "Journey"], ["Bohemian Rhapsody", "Queen"], ["Sweet Caroline", "Neil Diamond"], ["Livin' on a Prayer", "Bon Jovi"],

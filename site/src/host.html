@@ -73,7 +73,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     <form class="card" id="login-form" style="padding:0;border:0;background:none">
       <label id="code-l" hidden>Setup code (the HOST_SETUP_CODE secret on the Worker)<input id="code" type="password" autocomplete="off" placeholder="Setup code"></label>
       <label id="key-l">Host key<input id="key" type="password" autocomplete="current-password" placeholder="Host key" required></label>
-      <label id="name-l" hidden>Your singer name in KaraFun (gets the host tag on the site)<input id="setup-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
+      <label id="name-l" hidden>Your singer name (gets the host tag on the site)<input id="setup-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
       <button type="submit" id="login-btn">Open</button>
     </form>
     <p class="err" id="login-err"></p>
@@ -90,7 +90,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 
     <section class="card">
       <h2>Crowd meter mic</h2>
-      <p class="hint">Scores the applause after each song. The KaraFun laptop listens on its own when its sync is running. This phone can listen too, as a backup or a second spot: park it at the host table, away from the speakers, and leave this page open. Only loudness numbers are sent, never sound.</p>
+      <p class="hint">Scores the applause after each song. The karaoke laptop listens on its own when its sync is running. This phone can listen too, as a backup or a second spot: park it at the host table, away from the speakers, and leave this page open. Only loudness numbers are sent, never sound.</p>
       <div class="row"><button type="button" id="mic-btn">Start listening</button><span class="db" id="mic-db"></span></div>
       <div class="meter" aria-hidden="true"><i id="mic-bar"></i></div>
       <p class="hint" id="mic-state"></p>
@@ -99,7 +99,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     <section class="card">
       <h2>You, the host</h2>
       <form class="card" id="host-form" style="padding:0;border:0;background:none">
-        <label>Your singer name in KaraFun. The site and TV show it with a 🎤 Host tag. Leave it empty for no tag.<input id="host-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
+        <label>Your singer name, as it shows on the site. The site and TV show it with a 🎤 Host tag. Leave it empty for no tag.<input id="host-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
         <div class="row"><button type="submit" class="small">Save</button><span class="hint" id="host-saved"></span></div>
       </form>
     </section>
@@ -125,7 +125,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
         <p class="err" id="add-err"></p>
       </form>
       <datalist id="titles"></datalist><datalist id="artists"></datalist>
-      <p class="hint">It counts when someone sings that title in KaraFun from now on. Capitals, punctuation and “(Live)” bits don’t matter.</p>
+      <p class="hint">It counts when someone sings that title from now on. Capitals, punctuation and “(Live)” bits don’t matter.</p>
     </section>
 
     <section>
