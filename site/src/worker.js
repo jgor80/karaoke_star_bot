@@ -14,6 +14,8 @@ import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
 import SONGS from "./songs.js";
 import { handleCatalog } from "./catalog_api.js";
+import { handleArt } from "./art_api.js";
+import ART from "./art.js";
 import { maybeImportCatalog } from "./catalog_import.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
 
@@ -50,6 +52,7 @@ export default {
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
     if (url.pathname === "/api/catalog") return handleCatalog(req, env, ctx);
+    if (url.pathname === "/api/art") return handleArt(req, env, ctx); // album covers, see art_api.js
 
     if (url.pathname === "/api/plays") {
       // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
@@ -99,6 +102,9 @@ export default {
     }
     if (url.pathname === "/songs.js") {
       return new Response(SONGS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
+    }
+    if (url.pathname === "/art.js") {
+      return new Response(ART, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     if (url.pathname === "/awards.js") {
       return new Response(AWARDS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });

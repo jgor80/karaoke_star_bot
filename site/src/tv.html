@@ -85,6 +85,8 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .rank .n { font-family: var(--f-display); font-size: calc(3 * var(--u)); color: var(--gold); }
 .rank .nm { font-size: calc(3.2 * var(--u)); font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank .nm small { display: block; font-size: calc(2.1 * var(--u)); font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.rank li.has-art { padding-left: calc(10.5 * var(--u)) !important; min-height: 0; align-items: center; }
+.rank li.has-art > .art { left: calc(2 * var(--u)); width: calc(7 * var(--u)); height: calc(7 * var(--u)); --art-note: calc(3 * var(--u)); }
 .rank .v { font-family: var(--f-mono); font-size: calc(2.4 * var(--u)); color: var(--hot); white-space: nowrap; }
 h3 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: calc(2.2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 
@@ -159,6 +161,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
+<script src="/art.js"></script>
 <script>
 (function () {
   // Options: ?night=YYYY-MM-DD shows that night instead of the latest one; ?speed=2 scrolls twice as fast (0.2 to 5).
@@ -219,7 +222,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60), host: !!data.host && key(e.name.replace(/\s+/g, " ")) === key(data.host.replace(/\s+/g, " ")) }));
     const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
       return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
-    const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "" })).filter((e) => e.n > 1).slice(0, 6);
+    const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "", song: { song_id: p.song_id, title: p.title } })).filter((e) => e.n > 1).slice(0, 6);
     const artists = count((p) => p.artist && key(p.artist), (p) => ({ name: p.artist })).filter((e) => e.n > 1).slice(0, 6);
     // Decade mix and songs by hour (hours in the order the night ran, so 9pm comes before 1am)
     const dec = new Map(); rows.forEach((p) => { if (p.release_year) { const d = Math.floor(p.release_year / 10) * 10; dec.set(d, (dec.get(d) || 0) + 1); } });
@@ -251,7 +254,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   function rankList(items, sub, val) {
     const ol = el("ol", "rank");
     items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm", e.name); if (e.host) nm.append(el("span", "host-tag", "🎤 Host")); const s = sub(e); if (s) nm.append(el("small", null, s));
-      li.append(el("span", "n", String(i + 1)), nm, el("span", "v", val(e))); ol.append(li); });
+      li.append(el("span", "n", String(i + 1)), nm, el("span", "v", val(e))); if (e.song && window.OkeArt) OkeArt.row(li, e.song); ol.append(li); });
     return ol;
   }
   // One ranked list split across two columns, numbered straight through.
@@ -259,7 +262,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const half = Math.ceil(items.length / 2), cols = el("div", "cols"), a = el("div"), b = el("div");
     a.append(rankList(items.slice(0, half), sub, val));
     const rest = rankList(items.slice(half), sub, val); rest.classList.add("cont");
-    [...rest.children].forEach((li, i) => { li.firstChild.textContent = String(half + i + 1); });
+    [...rest.children].forEach((li, i) => { li.querySelector(".n").textContent = String(half + i + 1); });
     b.append(rest); cols.append(a, b); return cols;
   }
   function barChart(title, items) {
