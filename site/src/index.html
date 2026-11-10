@@ -362,6 +362,17 @@ dialog::backdrop { background: rgba(8, 3, 12, .7); }
 dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); margin-bottom: 4px; }
 #qr { background: #fff; padding: 14px; border-radius: 12px; margin: 14px auto; width: max-content; }
 #qr img, #qr canvas { display: block; width: 220px; height: 220px; }
+/* tip menu */
+.icon-btn.tip { border-color: var(--gold); color: var(--gold); }
+#tip-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 440px) { .icon-btn.tip .lbl, .top:has(#tip-btn:not([hidden])) #share-btn .lbl { display: none; } }
+.tips { display: grid; gap: 8px; margin: 14px 0; }
+.tip-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-decoration: none; color: var(--ink); background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
+.tip-item:active { transform: scale(.98); }
+.tip-item .te { font-size: 24px; text-align: center; }
+.tip-item b { display: block; font-size: 17px; line-height: 1.25; }
+.tip-item small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
+.tip-item .ta { font-family: var(--f-mono); font-weight: 500; font-size: 17px; color: var(--gold); white-space: nowrap; }
 .url { font-family: var(--f-mono); font-size: 15px; text-align: center; overflow-wrap: anywhere; margin-bottom: 12px; }
 </style>
 </head>
@@ -371,6 +382,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <div class="logo">Oke <span>Night</span></div>
     <span class="pill" id="live-pill">Loading</span>
     <div class="spacer"></div>
+    <button class="icon-btn tip" id="tip-btn" type="button" aria-haspopup="dialog" hidden><span aria-hidden="true">💸</span><span class="lbl">Tip</span></button>
     <button class="icon-btn" id="share-btn" type="button" aria-haspopup="dialog">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
       <span class="lbl">Share</span>
@@ -555,6 +567,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </div>
 </dialog>
 
+<dialog id="tip-dlg" aria-labelledby="tip-h">
+  <h3 id="tip-h">Tip the host</h3>
+  <p class="muted small" style="margin:0" id="tip-sub"></p>
+  <div class="tips" id="tips"></div>
+  <p class="muted small" style="margin:0 0 12px">Opens Venmo with the amount filled in. Perks are up to the host.</p>
+  <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
+</dialog>
+
 <div class="secret-pop" id="secret-pop" hidden role="alert"><div class="sp-in"><div class="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><small>Tap to close</small></div></div>
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
@@ -573,6 +593,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
+  let tips = null; // {venmo, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
   const STALE_S = 15 * 60; // during the session, warn when the laptop hasn't synced for this long
@@ -1203,6 +1224,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       hostKey = key(clean(data.host || ""));
+      tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
@@ -1262,6 +1284,29 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     try { await navigator.clipboard.writeText(captionFor()); $("card-note").textContent = "Caption copied."; }
     catch (e) { $("card-note").textContent = "Couldn't copy on this phone."; }
   });
+
+  // ---------- tips ----------
+  const tipDlg = $("tip-dlg");
+  function tipName() { let n = null; try { n = localStorage.getItem("oke-react-name"); } catch (e) {} const m = getMe(); if (!n && m && window.KaraokeFun && people.get(m)) n = people.get(m).name; return clean(n || ""); }
+  function venmoLink(t) {
+    const from = tipName();
+    const q = new URLSearchParams({ txn: "pay", recipients: tips.venmo, note: (t.emoji ? t.emoji + " " : "") + t.label + " · Oke Night" + (from ? " · from " + from : "") });
+    if (t.amount) q.set("amount", String(t.amount));
+    return "https://venmo.com/?" + q.toString();
+  }
+  $("tip-btn").addEventListener("click", () => {
+    if (!tips || !tips.venmo) return;
+    $("tip-sub").textContent = "Venmo @" + tips.venmo;
+    $("tips").replaceChildren(...tips.menu.map((t) => {
+      const a = el("a", "tip-item"); a.href = venmoLink(t); a.target = "_blank"; a.rel = "noopener";
+      const mid = el("span"); mid.append(el("b", null, t.label)); if (t.note) mid.append(el("small", null, t.note));
+      a.append(el("span", "te", t.emoji || "💸"), mid, el("span", "ta", t.amount ? "$" + (Number.isInteger(t.amount) ? t.amount : t.amount.toFixed(2)) : "You pick"));
+      return a;
+    }));
+    tipDlg.showModal();
+  });
+  $("tip-close").addEventListener("click", () => tipDlg.close());
+  tipDlg.addEventListener("click", (e) => { if (e.target === tipDlg) tipDlg.close(); });
 
   // ---------- go ----------
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (nights.length) renderAwards(); });
