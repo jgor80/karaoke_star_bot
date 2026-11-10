@@ -11,6 +11,17 @@
   const MAX_LIST = 200;
   let memory = []; // used when the phone blocks storage
 
+  // KaraFun's style and language names, most common first (from the catalog, 2026-11). "Duet" has its own toggle.
+  const GENRES = ["Pop", "Rock", "Country", "Latin Music", "Soundtrack", "Love", "Soul", "Alternative", "Jazz", "Dance", "Folk",
+    "R&B", "Rap", "Hip-Hop", "Electro", "Soft rock", "Hard Rock", "Musical", "Synthpop", "Metal", "Rock 'n Roll", "Christmas",
+    "Blues", "Spiritual Music", "Gospel", "Traditional", "Teen pop", "World/Folk", "Funk", "Humor", "Kids", "Disco", "Reggae",
+    "Punk/Grunge", "French pop", "Schlager", "Zouk/Creole/Soca/Calypso", "Ska", "Classical", "Moyen Orient"];
+  const GENRE_LABEL = { "Love": "Love songs", "Latin Music": "Latin", "Moyen Orient": "Middle Eastern", "Humor": "Comedy", "Spiritual Music": "Spiritual" };
+  const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950, 1900];
+  const LANGS = ["English", "Spanish", "French", "Portuguese", "German", "Italian", "Dutch", "Korean", "Japanese"];
+  const SORT_OPTS = [["pop", "Most popular", "most popular first"], ["new", "Newly added", "newest on KaraFun first"],
+    ["recent", "Newest songs", "newest songs first"], ["old", "Oldest songs", "oldest songs first"]];
+
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const key = (s) => (s || "").trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const songKey = (title, artist) => key(title) + "|" + key(artist);
@@ -24,7 +35,7 @@
   function mount(opts) {
     const find = opts.find, mine = opts.mine;
     let list = readList();
-    let q = "", duo = false, page = 0, results = [], more = false, ready = null, total = 0, ctrl = null, timer = null;
+    let q = "", page = 0, results = [], more = false, ready = null, total = 0, ctrl = null, timer = null;
 
     // ---- find ----
     find.replaceChildren();
@@ -34,13 +45,40 @@
     input.setAttribute("aria-label", "Search the KaraFun song catalog");
     const clear = el("button", "search-clear", "×"); clear.type = "button"; clear.hidden = true; clear.setAttribute("aria-label", "Clear search");
     sw.append(input, clear);
+    // Filters: two toggles and four dropdowns, all sent to /api/catalog.
+    const f = { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" };
     const filters = el("div", "band-row");
-    const duoBtn = el("button", "band", "👯 Duets only"); duoBtn.type = "button"; duoBtn.setAttribute("aria-pressed", "false");
-    filters.append(duoBtn);
+    const filterToggle = (label, k) => {
+      const b = el("button", "band", label); b.type = "button"; b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => { f[k] = !f[k]; b.setAttribute("aria-pressed", String(f[k])); filtersChanged(); });
+      return b;
+    };
+    const duoBtn = filterToggle("👯 Duets", "duo"), hitsBtn = filterToggle("🔥 Top 1,000 hits", "hits");
+    const clearF = el("button", "linkish", "Clear filters"); clearF.type = "button"; clearF.hidden = true;
+    filters.append(duoBtn, hitsBtn, clearF);
+    const selects = el("div", "cat-selects");
+    const pick = (label, k, opts) => {
+      const w = el("label", "cat-sel"); w.append(el("span", null, label));
+      const sel = el("select"); opts.forEach(([v, t]) => { const o = el("option", null, t); o.value = v; sel.append(o); });
+      sel.addEventListener("change", () => { f[k] = sel.value; filtersChanged(); });
+      w.append(sel); selects.append(w); return sel;
+    };
+    const genreSel = pick("Genre", "genre", [["", "Any genre"]].concat(GENRES.map((g) => [g, GENRE_LABEL[g] || g])));
+    const decadeSel = pick("Decade", "decade", [["", "Any decade"]].concat(DECADES.map((d) => [String(d), d === 1900 ? "Before 1950" : d + "s"])));
+    const langSel = pick("Language", "lang", [["", "Any language"]].concat(LANGS.map((l) => [l, l])));
+    const sortSel = pick("Sort", "sort", SORT_OPTS);
+    function filtersOn() { return f.duo || f.hits || f.genre || f.decade || f.lang || f.sort !== "pop"; }
+    function filtersChanged() { clearF.hidden = !filtersOn(); search(false); }
+    clearF.addEventListener("click", () => {
+      Object.assign(f, { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" });
+      [duoBtn, hitsBtn].forEach((b) => b.setAttribute("aria-pressed", "false"));
+      genreSel.value = decadeSel.value = langSel.value = ""; sortSel.value = "pop";
+      filtersChanged();
+    });
     const note = el("p", "muted small cat-note"); note.setAttribute("role", "status");
     const ol = el("ol", "list songs");
     const moreBtn = el("button", "act ghost more", "Show more"); moreBtn.type = "button"; moreBtn.hidden = true;
-    find.append(sw, filters, note, ol, moreBtn);
+    find.append(sw, filters, selects, note, ol, moreBtn);
 
     // ---- my list ----
     mine.replaceChildren();
@@ -93,6 +131,7 @@
 
     function meta(s, count) {
       const bits = [s.artist || s.a, s.year || s.y].filter(Boolean);
+      if (s.styles) bits.push(s.styles.split(",").filter((x) => x !== "Duet").slice(0, 2).map((x) => GENRE_LABEL[x] || x).join("/"));
       if (s.duo) bits.push("Duet");
       if (s.explicit) bits.push("Explicit");
       if (count) bits.push("sung here " + count + "×");
@@ -167,21 +206,26 @@
       if (!append) page = 0;
       note.textContent = "Searching…";
       try {
-        const u = "/api/catalog?q=" + encodeURIComponent(q) + (duo ? "&duo=1" : "") + (page ? "&page=" + page : "");
+        const p = new URLSearchParams({ q });
+        if (f.duo) p.set("duo", "1"); if (f.hits) p.set("hits", "1");
+        ["genre", "decade", "lang"].forEach((k) => { if (f[k]) p.set(k, f[k]); });
+        if (f.sort !== "pop") p.set("sort", f.sort);
+        if (page) p.set("page", page);
+        const u = "/api/catalog?" + p;
         const r = await fetch(u, { signal: ctrl.signal });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const d = await r.json();
         if (mySeq !== ctrl) return;
         ready = d.ready; total = d.count;
         if (!d.ready) {
-          results = localSearch(q).filter((s) => !duo || s.duo); more = false;
+          results = localSearch(q).filter((s) => !f.duo || s.duo); more = false;
           note.textContent = results.length ? "KaraFun’s full song list isn’t loaded yet, so these are songs sung here." :
             (q ? "Nothing sung here matches “" + q + "” yet. The full KaraFun song list is coming soon." : "The full KaraFun song list is coming soon.");
         } else {
           results = append ? results.concat(d.songs) : d.songs; more = d.more;
-          if (!results.length) note.textContent = "No KaraFun songs match “" + q + "”. Try fewer words.";
-          else if (!q) note.textContent = (duo ? "Most popular duets" : "Most popular songs") + " in KaraFun’s " + total.toLocaleString("en-US") + "-song catalog. Search to find more.";
-          else note.textContent = "KaraFun songs matching “" + q + "”, most popular first.";
+          if (!results.length) note.textContent = "No KaraFun songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words." : "these filters. Try loosening one.");
+          else if (!q && !filtersOn()) note.textContent = "Most popular songs in KaraFun’s " + total.toLocaleString("en-US") + "-song catalog. Search or filter to find more.";
+          else note.textContent = describe() + ".";
         }
         renderResults();
       } catch (e) {
@@ -199,7 +243,14 @@
     });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { clearTimeout(timer); q = input.value.trim(); search(false); input.blur(); } });
     clear.addEventListener("click", () => { input.value = ""; clear.hidden = true; q = ""; search(false); input.focus(); });
-    duoBtn.addEventListener("click", () => { duo = !duo; duoBtn.setAttribute("aria-pressed", String(duo)); search(false); });
+    // "Country duets from the 1990s matching “love”, most popular first"
+    function describe() {
+      let what = (f.genre ? (GENRE_LABEL[f.genre] || f.genre) + " " : "") + (f.lang ? f.lang + "-language " : "") + (f.duo ? "duets" : "songs");
+      if (f.hits) what = "Top 1,000 " + what; else what = what[0].toUpperCase() + what.slice(1);
+      if (f.decade) what += f.decade === "1900" ? " from before 1950" : " from the " + f.decade + "s";
+      if (q) what += " matching “" + q + "”";
+      return what + ", " + (SORT_OPTS.find((o) => o[0] === f.sort) || SORT_OPTS[0])[2];
+    }
     moreBtn.addEventListener("click", () => { page++; search(true); });
     clearDone.addEventListener("click", () => { list = list.filter((x) => !sungAt(x)); writeList(list); renderMine(); renderResults(); });
     shareBtn.addEventListener("click", async () => {
@@ -216,7 +267,7 @@
     return {
       // Called when the Songbook tab opens, so phones that never open it don't search.
       start() { if (!started) { started = true; search(false); } },
-      refresh() { renderMine(); if (started && ready === false) results = localSearch(q).filter((s) => !duo || s.duo); renderResults(); },
+      refresh() { renderMine(); if (started && ready === false) results = localSearch(q).filter((s) => !f.duo || s.duo); renderResults(); },
     };
   }
 

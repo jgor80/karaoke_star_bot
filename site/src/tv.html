@@ -171,6 +171,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
+<script src="/drafts.js"></script>
 <script>
 (function () {
   // Options: ?night=YYYY-MM-DD shows that night instead of the latest one; ?speed=2 scrolls twice as fast (0.2 to 5).
@@ -205,6 +206,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const isLatest = night === nights[nights.length - 1];
     const live = isLatest && now() - last.played_at < LIVE_WINDOW_S;
     const tonight = isLatest && now() - last.played_at < TONIGHT_WINDOW_S;
+    OkeAwards.setHost(data.host || "");
     const reax = OkeAwards.reactionIndex(data);
     const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null, reax.bySong) : null;
     const totals = (r) => OkeAwards.personTotals(r, people, plays);
@@ -228,7 +230,8 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     if (people) people.forEach((e) => { const d = e.badges.find((b) => b.id === "debut"); if (d && d.at.night === night) debut.push(e.name); });
     if (debut.length) badges.push({ id: "debut", name: "First time on the mic", desc: "Welcome to Oke Night!", who: debut });
     // Leaderboards for the night
-    const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60), host: !!data.host && key(e.name.replace(/\s+/g, " ")) === key(data.host.replace(/\s+/g, " ")) }));
+    // The host isn't ranked with the singers (they're on the mic all night).
+    const singers = totals(rows).filter((e) => !OkeAwards.isHost(e.name)).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60) }));
     const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
       return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
     const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "" })).filter((e) => e.n > 1).slice(0, 6);
@@ -241,8 +244,16 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const dares = window.KaraokeFun ? KaraokeFun.daresStatus(plays, night).map((d) => ({ text: d.text, by: d.claimedBy ? (d.claimedBy.singer || "Someone").trim() : null,
       song: d.claimedBy ? OkeAwards.songLine(d.claimedBy) : null })) : [];
     const missing = PIN_ASKED && night !== PIN ? PIN_ASKED : null; // ?night= asked for a night with no songs
+    // Crowd draft board (picks made on phones), on the latest night only: delivered picks first, then most seconded.
+    let drafts = [];
+    if (isLatest && !PIN && window.OkeDraft && Array.isArray(data.drafts) && data.drafts.length) {
+      const done = OkeDraft.delivered(plays, data.drafts);
+      drafts = data.drafts.map((d) => ({ name: d.singer, sub: "“" + d.title + "”" + (d.artist ? " · " + d.artist : ""), votes: d.votes, done: done.has(d.id) }))
+        .sort((a, b) => b.done - a.done || b.votes - a.votes).slice(0, 8);
+    }
+    const draftLabel = data.draft_night && data.draft_night !== night ? "Drafted for next karaoke" : "Crowd draft";
     return { night, missing, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
-      singers, songs, artists, decades, hours, dares, reactions, topReacted, current: singing ? last.uuid : null, schedule: data.schedule || null };
+      singers, songs, artists, decades, hours, dares, reactions, topReacted, drafts, draftLabel, current: singing ? last.uuid : null, schedule: data.schedule || null };
   }
 
   // ---------- render ----------
@@ -284,7 +295,11 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const box = el("div", "copy");
     const h1 = el("h2", null, v.tonight ? "Tonight's awards" : "The awards"); h1.append(el("small", null, plural(v.awards.length, "winner")));
     const g1 = el("div", "grid"); v.awards.forEach((a) => g1.append(awardCard(a)));
-    box.append(h1, g1);
+    if (v.awards.length) box.append(h1, g1);
+    if (v.drafts.length) {
+      box.append(heading(v.draftLabel, "Draft someone at " + (location.host || "okenight.com")));
+      box.append(twoCols(v.drafts, (e) => e.sub, (e) => (e.done ? "✅ Sung!" : "👍 " + e.votes)));
+    }
     if (v.singers.length) {
       box.append(heading(v.tonight ? "Tonight's top singers" : "Top singers", plural(v.tally.singers, "singer") + " in all"));
       box.append(twoCols(v.singers, (e) => (e.mins ? e.mins + " min on the mic" : ""), (e) => plural(e.n, "song")));
@@ -339,7 +354,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     [["Songs", v.tally.songs], ["Singers", v.tally.singers], ["Minutes", v.tally.minutes]].forEach(([l, n]) => {
       const d = el("div"); d.append(el("strong", null, String(n)), document.createTextNode(l)); t.append(d); });
     const reel = $("reel"); reel.replaceChildren();
-    if (!v.awards.length) { reel.append(el("div", "empty", "Awards show up once a few songs are in. Grab the mic!")); }
+    if (!v.awards.length && !v.drafts.length) { reel.append(el("div", "empty", "Awards show up once a few songs are in. Grab the mic!")); }
     else reel.append(copyOf(v));
     layout();
   }
