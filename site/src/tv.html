@@ -130,6 +130,11 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 .secret-tv .st-rw { font-size: calc(5 * var(--u)); font-weight: 700; }
 @media (prefers-reduced-motion: no-preference) { .secret-tv .st-in { animation: stpop .6s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes stpop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+body.embed { cursor: auto; }
+/* In a phone-width frame, size everything from the width (vh would make the text tiny). */
+@media (max-aspect-ratio: 4/3) { html.embed { --u: 1.5vw; } html.embed .grid { grid-template-columns: minmax(0, 1fr); } }
+body.embed .qr, body.embed .fs { display: none !important; }
+body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 .status.bad { color: var(--hot); opacity: 1; }
 
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
@@ -158,6 +163,8 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 (function () {
   // Options: ?night=YYYY-MM-DD shows that night instead of the latest one; ?speed=2 scrolls twice as fast (0.2 to 5).
   const qs = new URLSearchParams(location.search);
+  // ?embed=1: shown inside the phone page's recap (no QR code or full-screen button, normal cursor).
+  if (qs.get("embed")) { document.body.classList.add("embed"); document.documentElement.classList.add("embed"); }
   const PIN_ASKED = qs.get("night") || "";
   const PIN = /^\d{4}-\d{2}-\d{2}$/.test(PIN_ASKED) ? PIN_ASKED : null;
   const SPEED = Math.max(0.2, Math.min(5, Number(qs.get("speed")) || 1)); // 1 = about 3.5% of the screen height per second
