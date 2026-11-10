@@ -19,6 +19,7 @@ import { handleCatalog } from "./catalog_api.js";
 import { handleArt } from "./art_api.js";
 import ART from "./art.js";
 import { maybeImportCatalog } from "./catalog_import.js";
+import { updateVoices } from "./voice_import.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
@@ -129,6 +130,8 @@ export default {
     ctx.waitUntil(checkSecrets(env));
     // Weekly: refresh KaraFun's song catalog for the Songbook (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
+    // Songbook voice filters: look up a few more singers on MusicBrainz (see voice_import.js).
+    ctx.waitUntil(updateVoices(env).catch(() => {}));
     ctx.waitUntil(scoreCrowd(env).catch(() => {})); // crowd meter: score the applause after songs that just ended
     ctx.waitUntil(sendCrowdReminder(env).catch(() => {})); // Sunday heads-up to the crowd's ntfy topic
   },

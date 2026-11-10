@@ -26,6 +26,43 @@
   const SORT_OPTS = [["pop", "Most popular", "most popular first"], ["new", "Newly added", "newest on KaraFun first"],
     ["recent", "Newest songs", "newest songs first"], ["old", "Oldest songs", "oldest songs first"]];
 
+  const VOICES = [["m", "🙋‍♂️ Male voice"], ["f", "🙋‍♀️ Female voice"], ["mix", "👫 Guy + girl duets"]];
+  const VOICE_WORDS = { m: "male singers", f: "female singers", mix: "guy + girl duets" };
+
+  // A sideways-scrolling pill row with ‹ › buttons that show while there's more to see, so it's
+  // obvious the row scrolls, and it works with a mouse too (wheel and drag).
+  function scroller(row) {
+    const wrap = el("div", "pill-scroll");
+    const prev = el("button", "ps-btn ps-prev", "‹"), next = el("button", "ps-btn ps-next", "›");
+    [prev, next].forEach((b, i) => {
+      b.type = "button"; b.tabIndex = -1; b.setAttribute("aria-hidden", "true");
+      b.addEventListener("click", () => row.scrollBy({ left: (i ? 1 : -1) * row.clientWidth * 0.7, behavior: "smooth" }));
+    });
+    const upd = () => {
+      const max = row.scrollWidth - row.clientWidth;
+      wrap.classList.toggle("at-start", row.scrollLeft <= 2);
+      wrap.classList.toggle("at-end", row.scrollLeft >= max - 2);
+    };
+    row.addEventListener("scroll", upd, { passive: true });
+    if (window.ResizeObserver) new ResizeObserver(upd).observe(row); else window.addEventListener("resize", upd);
+    // Mouse wheel scrolls the row sideways.
+    row.addEventListener("wheel", (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || row.scrollWidth <= row.clientWidth) return;
+      const max = row.scrollWidth - row.clientWidth;
+      if ((e.deltaY < 0 && row.scrollLeft <= 0) || (e.deltaY > 0 && row.scrollLeft >= max)) return;
+      row.scrollLeft += e.deltaY; e.preventDefault();
+    }, { passive: false });
+    // Mouse drag scrolls it too (touch already does). A drag doesn't count as a tap on a pill.
+    let down = null, moved = false;
+    row.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") { down = { x: e.clientX, l: row.scrollLeft }; moved = false; } });
+    window.addEventListener("pointermove", (e) => { if (!down) return; const dx = e.clientX - down.x; if (Math.abs(dx) > 5) moved = true; if (moved) row.scrollLeft = down.l - dx; });
+    window.addEventListener("pointerup", () => { down = null; });
+    row.addEventListener("click", (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+    wrap.append(row, prev, next);
+    setTimeout(upd, 0);
+    return wrap;
+  }
+
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const key = (s) => (s || "").trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const songKey = (title, artist) => key(title) + "|" + key(artist);
@@ -51,7 +88,7 @@
     sw.append(input, clear);
     // Filters, all sent to /api/catalog: a row of genre pills, a row of era pills, quick toggles,
     // and "More" (language, sort, every other genre). Tapping a lit pill turns it off.
-    const f = { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" };
+    const f = { duo: false, hits: false, voice: "", genre: "", decade: "", lang: "", sort: "pop" };
     const pills = (cls, items, k, label) => {
       const row = el("div", "pills " + cls); row.setAttribute("role", "group"); row.setAttribute("aria-label", label);
       const btns = items.map(([v, text, hue]) => {
@@ -73,7 +110,14 @@
       b.addEventListener("click", () => { f[k] = !f[k]; sync(); filtersChanged(); });
       quick.append(b); return b;
     };
-    const duoBtn = quickToggle("👯 Duets", "duo"), hitsBtn = quickToggle("🔥 Top 1,000", "hits");
+    const duoBtn = quickToggle("👯 Duets", "duo");
+    // Singer's voice, from MusicBrainz (see voice_import.js). One at a time; tapping the lit one turns it off.
+    const voiceBtns = VOICES.map(([v, text]) => {
+      const b = el("button", "sb-pill", text); b.type = "button"; b.dataset.v = v;
+      b.addEventListener("click", () => { f.voice = f.voice === v ? "" : v; sync(); filtersChanged(); });
+      quick.append(b); return b;
+    });
+    const hitsBtn = quickToggle("🔥 Top 1,000", "hits");
     const moreBtnF = el("button", "sb-pill", "⚙️ More"); moreBtnF.type = "button"; moreBtnF.setAttribute("aria-expanded", "false");
     const clearF = el("button", "sb-pill clear-pill", "✕ Clear"); clearF.type = "button"; clearF.hidden = true;
     quick.append(moreBtnF, clearF);
@@ -90,15 +134,15 @@
     function sync() {
       if (!f.sort) f.sort = "pop"; // tapping the lit sort pill goes back to the default
       groups.forEach((g) => g.btns.forEach((b) => b.setAttribute("aria-pressed", String(f[g.k] === b.dataset.v && !(g.k === "sort" && f.sort === "pop")))));
-      duoBtn.setAttribute("aria-pressed", String(f.duo)); hitsBtn.setAttribute("aria-pressed", String(f.hits));
+      duoBtn.setAttribute("aria-pressed", String(f.duo)); voiceBtns.forEach((b) => b.setAttribute("aria-pressed", String(f.voice === b.dataset.v))); hitsBtn.setAttribute("aria-pressed", String(f.hits));
       moreBtnF.classList.toggle("dot", !!(f.lang || f.sort !== "pop" || (f.genre && !FEATURED.some(([x]) => x === f.genre))));
       clearF.hidden = !filtersOn();
     }
-    function filtersOn() { return f.duo || f.hits || f.genre || f.decade || f.lang || f.sort !== "pop"; }
+    function filtersOn() { return f.duo || f.hits || f.voice || f.genre || f.decade || f.lang || f.sort !== "pop"; }
     function filtersChanged() { search(false); }
-    clearF.addEventListener("click", () => { Object.assign(f, { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" }); sync(); filtersChanged(); });
+    clearF.addEventListener("click", () => { Object.assign(f, { duo: false, hits: false, voice: "", genre: "", decade: "", lang: "", sort: "pop" }); sync(); filtersChanged(); });
     sync();
-    const filters = el("div", "cat-filters"); filters.append(genres.row, eras.row, quick, panel);
+    const filters = el("div", "cat-filters"); filters.append(scroller(genres.row), scroller(eras.row), scroller(quick), panel);
     const note = el("p", "muted small cat-note"); note.setAttribute("role", "status");
     // With no search words, the top 10 show as a swipeable row of album covers above the list.
     const topWrap = el("div", "cat-top-wrap"); topWrap.hidden = true;
@@ -208,10 +252,11 @@
       const bits = [];
       if (f.lang) bits.push(f.lang);
       if (f.genre) bits.push(genreName(f.genre));
-      if (f.duo) bits.push("duets");
+      if (f.duo && f.voice !== "mix") bits.push("duets");
       const era = f.decade ? (f.decade === "1900" ? "oldies" : f.decade >= "2000" ? f.decade + "s" : "’" + f.decade.slice(2) + "s") : "";
-      if (!bits.length && !era) return "Top 10 right now";
-      return "Top 10 " + (bits.length ? bits.join(" ") + (era ? " · " + era : "") : era);
+      const tail = [era, VOICE_WORDS[f.voice]].filter(Boolean);
+      if (!bits.length && !tail.length) return "Top 10 right now";
+      return "Top 10 " + [bits.join(" "), ...tail].filter(Boolean).join(" · ");
     }
 
     function renderMine() {
@@ -263,7 +308,7 @@
       try {
         const p = new URLSearchParams({ q });
         if (f.duo) p.set("duo", "1"); if (f.hits) p.set("hits", "1");
-        ["genre", "decade", "lang"].forEach((k) => { if (f[k]) p.set(k, f[k]); });
+        ["voice", "genre", "decade", "lang"].forEach((k) => { if (f[k]) p.set(k, f[k]); });
         if (f.sort !== "pop") p.set("sort", f.sort);
         if (page) p.set("page", page);
         const u = "/api/catalog?" + p;
@@ -280,7 +325,8 @@
           results = append ? results.concat(d.songs) : d.songs; more = d.more;
           if (!results.length) note.textContent = "No KaraFun songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words." : "these filters. Try loosening one.");
           else if (!q && !filtersOn()) note.textContent = "Most popular songs in KaraFun’s " + total.toLocaleString("en-US") + "-song catalog. Search or filter to find more.";
-          else note.textContent = describe() + ".";
+          else note.textContent = describe() + "." + (f.voice && d.voice && d.voice.done < d.voice.total ?
+            " Singer voices are still being looked up (" + Math.floor(100 * d.voice.done / d.voice.total) + "% of artists so far), so more songs will show up." : f.voice ? " Bands aren’t sorted by voice yet." : "");
         }
         renderResults();
       } catch (e) {
@@ -300,7 +346,8 @@
     clear.addEventListener("click", () => { input.value = ""; clear.hidden = true; q = ""; search(false); input.focus(); });
     // "Country duets from the 1990s matching “love”, most popular first"
     function describe() {
-      let what = (f.genre ? (GENRE_LABEL[f.genre] || f.genre) + " " : "") + (f.lang ? f.lang + "-language " : "") + (f.duo ? "duets" : "songs");
+      let what = (f.genre ? (GENRE_LABEL[f.genre] || f.genre) + " " : "") + (f.lang ? f.lang + "-language " : "") + (f.voice === "mix" ? "guy + girl duets" : f.duo ? "duets" : "songs");
+      if (f.voice === "m" || f.voice === "f") what += " by " + VOICE_WORDS[f.voice];
       if (f.hits) what = "Top 1,000 " + what; else what = what[0].toUpperCase() + what.slice(1);
       if (f.decade) what += f.decade === "1900" ? " from before 1950" : " from the " + f.decade + "s";
       if (q) what += " matching “" + q + "”";
