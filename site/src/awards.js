@@ -88,6 +88,13 @@
     return out;
   }
 
+  // The host runs the show and is on the mic all night, so they never win the volume awards
+  // (most songs, most mic time, most nights). Set from /api/plays "host"; empty means no host known.
+  let HOST = "";
+  const norm = (s) => key(String(s || "").replace(/\s+/g, " "));
+  function setHost(name) { HOST = norm(name); }
+  function isHost(name) { return !!HOST && norm(name) === HOST; }
+
   function groupSize(name) {
     const n = key(name);
     if (/^table\s*\d+/.test(n)) return 4;
@@ -115,7 +122,7 @@
     const songs = rows.filter((p) => p.title);
     const timed = songs.filter((p) => p.length_s);
     const dated = songs.filter((p) => p.release_year);
-    const mvp = (totals || ((r) => personTotals(r)))(rows)[0];
+    const mvp = (totals || ((r) => personTotals(r)))(rows).find((e) => !isHost(e.name));
     if (mvp && mvp.n > 1) out.push({ id: "mvp", headline: true, label: "Mic Hog", who: mvp.name, what: "Most songs of the night", stat: mvp.n + " songs · " + mmss(mvp.secs) + " on the mic" });
     const rep = new Map();
     songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); const e = rep.get(k) || { p, n: 0 }; e.n++; rep.set(k, e); });
@@ -165,5 +172,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
+  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
 })(typeof window !== "undefined" ? window : globalThis);
