@@ -386,6 +386,10 @@ details.singer.song summary .main-t { font-weight: 600; }
 .rm { border-color: transparent; color: var(--muted); font-size: 26px; }
 .band[aria-pressed="true"] { background: var(--hot-soft); border-color: var(--hot); color: var(--ink); }
 .cat-note { margin: 0; }
+.cat-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cat-sel { display: grid; gap: 2px; font-size: 13px; font-family: var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+.cat-sel select { font: inherit; font-family: var(--f-body); font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; width: 100%; min-width: 0; }
+.cat-sel select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .tab-n { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--hot); color: #1a0710; font: 700 11px/18px var(--f-body); }
 .tab-n:empty { display: none; }
 
