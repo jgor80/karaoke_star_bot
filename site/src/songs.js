@@ -16,6 +16,10 @@
     "R&B", "Rap", "Hip-Hop", "Electro", "Soft rock", "Hard Rock", "Musical", "Synthpop", "Metal", "Rock 'n Roll", "Christmas",
     "Blues", "Spiritual Music", "Gospel", "Traditional", "Teen pop", "World/Folk", "Funk", "Humor", "Kids", "Disco", "Reggae",
     "Punk/Grunge", "French pop", "Schlager", "Zouk/Creole/Soca/Calypso", "Ska", "Classical", "Moyen Orient"];
+  // Genre pills shown up front, with an emoji each. The rest are under "More".
+  const FEATURED = [["Pop", "🎤"], ["Rock", "🎸"], ["Country", "🤠"], ["Latin Music", "💃"], ["R&B", "🎷"], ["Hip-Hop", "🎧"],
+    ["Rap", "🔥"], ["Soul", "💜"], ["Love", "💘"], ["Dance", "🪩"], ["Alternative", "🖤"], ["Disco", "🕺"], ["Soundtrack", "🎬"],
+    ["Musical", "🎭"], ["Rock 'n Roll", "🕶️"], ["Metal", "🤘"], ["Punk/Grunge", "⚡"], ["Christmas", "🎄"], ["Kids", "🧸"]];
   const GENRE_LABEL = { "Love": "Love songs", "Latin Music": "Latin", "Moyen Orient": "Middle Eastern", "Humor": "Comedy", "Spiritual Music": "Spiritual" };
   const DECADES = [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950, 1900];
   const LANGS = ["English", "Spanish", "French", "Portuguese", "German", "Italian", "Dutch", "Korean", "Japanese"];
@@ -45,40 +49,64 @@
     input.setAttribute("aria-label", "Search the KaraFun song catalog");
     const clear = el("button", "search-clear", "×"); clear.type = "button"; clear.hidden = true; clear.setAttribute("aria-label", "Clear search");
     sw.append(input, clear);
-    // Filters: two toggles and four dropdowns, all sent to /api/catalog.
+    // Filters, all sent to /api/catalog: a row of genre pills, a row of era pills, quick toggles,
+    // and "More" (language, sort, every other genre). Tapping a lit pill turns it off.
     const f = { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" };
-    const filters = el("div", "band-row");
-    const filterToggle = (label, k) => {
-      const b = el("button", "band", label); b.type = "button"; b.setAttribute("aria-pressed", "false");
-      b.addEventListener("click", () => { f[k] = !f[k]; b.setAttribute("aria-pressed", String(f[k])); filtersChanged(); });
-      return b;
+    const pills = (cls, items, k, label) => {
+      const row = el("div", "pills " + cls); row.setAttribute("role", "group"); row.setAttribute("aria-label", label);
+      const btns = items.map(([v, text, hue]) => {
+        const b = el("button", "sb-pill", text); b.type = "button"; b.dataset.v = v;
+        if (hue != null) b.style.setProperty("--h", hue);
+        b.addEventListener("click", () => { f[k] = f[k] === v ? "" : v; sync(); filtersChanged(); });
+        row.append(b); return b;
+      });
+      return { row, btns, k };
     };
-    const duoBtn = filterToggle("👯 Duets", "duo"), hitsBtn = filterToggle("🔥 Top 1,000 hits", "hits");
-    const clearF = el("button", "linkish", "Clear filters"); clearF.type = "button"; clearF.hidden = true;
-    filters.append(duoBtn, hitsBtn, clearF);
-    const selects = el("div", "cat-selects");
-    const pick = (label, k, opts) => {
-      const w = el("label", "cat-sel"); w.append(el("span", null, label));
-      const sel = el("select"); opts.forEach(([v, t]) => { const o = el("option", null, t); o.value = v; sel.append(o); });
-      sel.addEventListener("change", () => { f[k] = sel.value; filtersChanged(); });
-      w.append(sel); selects.append(w); return sel;
+    const genreName = (g) => GENRE_LABEL[g] || g;
+    const genres = pills("genres", FEATURED.map(([g, e], i) => [g, e + " " + genreName(g), (i * 37) % 360]), "genre", "Genre");
+    const moreG = el("button", "sb-pill more-pill", "＋ More genres"); moreG.type = "button"; moreG.setAttribute("aria-expanded", "false");
+    genres.row.append(moreG);
+    const eras = pills("eras", DECADES.map((d) => [String(d), d === 1900 ? "Oldies" : d >= 2000 ? d + "s" : "’" + String(d).slice(2) + "s", null]), "decade", "Era");
+    const quick = el("div", "pills quick");
+    const quickToggle = (text, k) => {
+      const b = el("button", "sb-pill", text); b.type = "button";
+      b.addEventListener("click", () => { f[k] = !f[k]; sync(); filtersChanged(); });
+      quick.append(b); return b;
     };
-    const genreSel = pick("Genre", "genre", [["", "Any genre"]].concat(GENRES.map((g) => [g, GENRE_LABEL[g] || g])));
-    const decadeSel = pick("Decade", "decade", [["", "Any decade"]].concat(DECADES.map((d) => [String(d), d === 1900 ? "Before 1950" : d + "s"])));
-    const langSel = pick("Language", "lang", [["", "Any language"]].concat(LANGS.map((l) => [l, l])));
-    const sortSel = pick("Sort", "sort", SORT_OPTS);
+    const duoBtn = quickToggle("👯 Duets", "duo"), hitsBtn = quickToggle("🔥 Top 1,000", "hits");
+    const moreBtnF = el("button", "sb-pill", "⚙️ More"); moreBtnF.type = "button"; moreBtnF.setAttribute("aria-expanded", "false");
+    const clearF = el("button", "sb-pill clear-pill", "✕ Clear"); clearF.type = "button"; clearF.hidden = true;
+    quick.append(moreBtnF, clearF);
+    // "More": every other genre, language and sort, as wrapping pills.
+    const panel = el("div", "cat-more"); panel.hidden = true;
+    const otherG = pills("wrap", GENRES.filter((g) => !FEATURED.some(([x]) => x === g)).map((g) => [g, genreName(g), null]), "genre", "More genres");
+    const langs = pills("wrap", LANGS.map((l) => [l, l, null]), "lang", "Language");
+    const sorts = pills("wrap", SORT_OPTS.map(([v, t]) => [v, t, null]), "sort", "Sort");
+    panel.append(el("div", "me-kicker", "More genres"), otherG.row, el("div", "me-kicker", "Language"), langs.row, el("div", "me-kicker", "Sort"), sorts.row);
+    const showPanel = (on) => { panel.hidden = !on; moreBtnF.setAttribute("aria-expanded", String(on)); moreG.setAttribute("aria-expanded", String(on)); };
+    moreBtnF.addEventListener("click", () => showPanel(panel.hidden));
+    moreG.addEventListener("click", () => showPanel(true));
+    const groups = [genres, eras, otherG, langs, sorts];
+    function sync() {
+      if (!f.sort) f.sort = "pop"; // tapping the lit sort pill goes back to the default
+      groups.forEach((g) => g.btns.forEach((b) => b.setAttribute("aria-pressed", String(f[g.k] === b.dataset.v && !(g.k === "sort" && f.sort === "pop")))));
+      duoBtn.setAttribute("aria-pressed", String(f.duo)); hitsBtn.setAttribute("aria-pressed", String(f.hits));
+      moreBtnF.classList.toggle("dot", !!(f.lang || f.sort !== "pop" || (f.genre && !FEATURED.some(([x]) => x === f.genre))));
+      clearF.hidden = !filtersOn();
+    }
     function filtersOn() { return f.duo || f.hits || f.genre || f.decade || f.lang || f.sort !== "pop"; }
-    function filtersChanged() { clearF.hidden = !filtersOn(); search(false); }
-    clearF.addEventListener("click", () => {
-      Object.assign(f, { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" });
-      [duoBtn, hitsBtn].forEach((b) => b.setAttribute("aria-pressed", "false"));
-      genreSel.value = decadeSel.value = langSel.value = ""; sortSel.value = "pop";
-      filtersChanged();
-    });
+    function filtersChanged() { search(false); }
+    clearF.addEventListener("click", () => { Object.assign(f, { duo: false, hits: false, genre: "", decade: "", lang: "", sort: "pop" }); sync(); filtersChanged(); });
+    sync();
+    const filters = el("div", "cat-filters"); filters.append(genres.row, eras.row, quick, panel);
     const note = el("p", "muted small cat-note"); note.setAttribute("role", "status");
+    // With no search words, the top 10 show as a swipeable row of album covers above the list.
+    const topWrap = el("div", "cat-top-wrap"); topWrap.hidden = true;
+    const topH = el("h2", "cat-top-h"), top = el("ol", "cat-top");
+    topWrap.append(topH, top);
     const ol = el("ol", "list songs");
     const moreBtn = el("button", "act ghost more", "Show more"); moreBtn.type = "button"; moreBtn.hidden = true;
-    find.append(sw, filters, selects, note, ol, moreBtn);
+    find.append(sw, filters, note, topWrap, ol, moreBtn);
 
     // ---- my list ----
     mine.replaceChildren();
@@ -148,17 +176,42 @@
     }
 
     function renderResults() {
-      ol.replaceChildren();
+      ol.replaceChildren(); top.replaceChildren();
       const sung = sungIndex();
-      results.forEach((s) => {
+      const carousel = !q && ready && results.length >= 6;
+      topWrap.hidden = !carousel;
+      if (carousel) {
+        topH.textContent = topTitle();
+        results.slice(0, 10).forEach((s, i) => {
+          const li = el("li", "top-card");
+          const cover = window.OkeArt ? OkeArt.el(s, { big: true, cls: "top-art" }) : el("span", "art top-art");
+          const rank = el("span", "top-rank", String(i + 1)); rank.setAttribute("aria-hidden", "true");
+          const add = addButton(s); add.classList.add("top-add");
+          const fig = el("div", "top-fig"); fig.append(cover, rank, add);
+          li.append(fig, el("span", "top-t", s.title), el("span", "top-a", s.artist || ""));
+          top.append(li);
+        });
+      }
+      (carousel ? results.slice(10) : results).forEach((s) => {
         const li = el("li");
         const m = el("span", "sub-t", meta(s, sung(s)));
         li.append(el("span", "main-t", s.title), addButton(s), m);
         if (window.OkeArt) OkeArt.row(li, s);
         ol.append(li);
       });
-      ol.hidden = !results.length;
+      ol.hidden = !ol.children.length;
       moreBtn.hidden = !more;
+    }
+    // "Top 10 Country", "Top 10 ’90s duets", "Top 10 right now"
+    function topTitle() {
+      if (f.sort === "new") return "Just added to KaraFun";
+      const bits = [];
+      if (f.lang) bits.push(f.lang);
+      if (f.genre) bits.push(genreName(f.genre));
+      if (f.duo) bits.push("duets");
+      const era = f.decade ? (f.decade === "1900" ? "oldies" : f.decade >= "2000" ? f.decade + "s" : "’" + f.decade.slice(2) + "s") : "";
+      if (!bits.length && !era) return "Top 10 right now";
+      return "Top 10 " + (bits.length ? bits.join(" ") + (era ? " · " + era : "") : era);
     }
 
     function renderMine() {
