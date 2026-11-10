@@ -390,6 +390,14 @@ details.singer.song summary .main-t { font-weight: 600; }
 .cat-filters { display: grid; gap: 8px; min-width: 0; }
 .pills { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding: 2px 16px; scroll-snap-type: x proximity; scroll-padding-inline: 16px; }
 .pills::-webkit-scrollbar { display: none; }
+/* ‹ › buttons and edge fades on scrolling pill rows, so it's clear there's more to swipe to */
+.pill-scroll { position: relative; margin-inline: -16px; min-width: 0; }
+.pill-scroll > .pills { margin-inline: 0; touch-action: pan-x pan-y; }
+.ps-btn { position: absolute; top: 0; bottom: 0; width: 52px; border: 0; padding: 0; cursor: pointer; color: var(--ink); font: 700 28px/1 var(--f-body);
+  display: flex; align-items: center; transition: opacity .15s; z-index: 1; }
+.ps-prev { left: 0; justify-content: flex-start; padding-left: 8px; background: linear-gradient(90deg, var(--bg) 35%, transparent); }
+.ps-next { right: 0; justify-content: flex-end; padding-right: 8px; background: linear-gradient(270deg, var(--bg) 35%, transparent); }
+.pill-scroll.at-start .ps-prev, .pill-scroll.at-end .ps-next { opacity: 0; pointer-events: none; }
 .pills.wrap { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
 .sb-pill { flex: none; scroll-snap-align: start; font: 600 15px var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
   border-radius: 999px; padding: 8px 14px; cursor: pointer; white-space: nowrap; position: relative; }

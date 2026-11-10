@@ -83,6 +83,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNI
   tokenize = 'unicode61 remove_diacritics 2');
 CREATE TABLE IF NOT EXISTS catalog_meta (k text primary key, v text);  -- count, updated, last_attempt, last_result, last_error
 
+-- Singer voice for the Songbook voice filters, looked up on MusicBrainz a few artists a minute by the
+-- Worker cron (site/src/voice_import.js). voice: m, f, mix (man + woman duet credit), band, ? (unknown), NULL (not yet).
+CREATE TABLE IF NOT EXISTS artist_voice (artist text primary key, pop integer, voice text, checked integer);
+CREATE INDEX IF NOT EXISTS artist_voice_todo ON artist_voice (voice, pop);
+CREATE INDEX IF NOT EXISTS artist_voice_v ON artist_voice (voice, artist);
+CREATE TABLE IF NOT EXISTS mb_person (nk text primary key, kind text, gender text, checked integer);  -- MusicBrainz answer by normalized name
+
 -- Crowd draft (POST /api/draft): the crowd drafts someone who has sung here to sing a KaraFun song,
 -- and seconds the picks they like. The Worker creates these tables itself (site/src/drafts_api.js).
 -- night is the karaoke night the pick is for; device_id/ip_hash are only for rate limits and never returned.
