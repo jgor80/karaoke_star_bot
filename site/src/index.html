@@ -422,6 +422,18 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 .tip-item b { display: block; font-size: 17px; line-height: 1.25; }
 .tip-item small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
 .tip-item .ta { font-family: var(--f-mono); font-weight: 500; font-size: 17px; color: var(--gold); white-space: nowrap; }
+/* how to sign up */
+@media (max-width: 350px) { .top { gap: 8px; } .icon-btn { padding: 0 9px; } }
+.sg-signup { width: 100%; margin: 0 0 4px; }
+#signup-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.steps { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; counter-reset: st; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; font-size: 17px; line-height: 1.35; }
+.steps li::before { content: counter(st); display: grid; place-content: center; width: 34px; height: 34px; border-radius: 999px; background: var(--hot-soft); color: var(--hot); font-family: var(--f-display); font-size: 18px; }
+.steps b { display: block; }
+.steps small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; margin-top: 2px; }
+.signup-card { border: 1px solid var(--hot); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
+.signup-card .steps { margin: 8px 0 4px; }
+.signup-card .linkish { font-size: 15px; }
 .url { font-family: var(--f-mono); font-size: 15px; text-align: center; overflow-wrap: anywhere; margin-bottom: 12px; }
 </style>
 </head>
@@ -478,6 +490,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       </div>
     </div>
     <div class="line" id="line" hidden aria-live="polite"></div>
+    <section class="signup-card" id="signup-card" hidden aria-labelledby="signup-card-h">
+      <div class="me-kicker" id="signup-card-h">Want to sing? Here’s how</div>
+      <ol class="steps" data-steps></ol>
+      <button class="linkish" type="button" data-find-song>Need a song? Browse the songbook</button>
+    </section>
     <div class="secret" id="secret" hidden></div>
     <div class="tally-wrap">
       <div class="tally-cap" id="tally-cap"></div>
@@ -529,6 +546,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     </div>
     <div class="sub on" id="sg-find"><div class="sec" id="cat-find"></div></div>
     <div class="sub" id="sg-mine"></div>
+    <button class="act ghost sg-signup" type="button" data-signup>✍️ Found your song? Here’s how to sign up</button>
     <p class="muted small" style="margin:0">Song list from <a href="https://www.karafun.com/karaoke-song-list.html" rel="noopener" target="_blank" style="color:inherit">KaraFun’s catalog</a>. Your list stays on this phone.</p>
   </section>
 
@@ -645,8 +663,17 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </div>
 </nav>
 
+<dialog id="signup-dlg" aria-labelledby="signup-h">
+  <h3 id="signup-h">How to sign up to sing</h3>
+  <ol class="steps" data-steps></ol>
+  <div class="btns" style="justify-content:center">
+    <button class="act" type="button" data-find-song>Find a song</button>
+    <button class="act ghost" id="signup-close" type="button">Got it</button>
+  </div>
+</dialog>
+
 <dialog id="share-dlg" aria-labelledby="share-h">
-  <h3 id="share-h">Get on the list</h3>
+  <h3 id="share-h">Open Oke Night on your phone</h3>
   <p class="muted small" style="margin:0">Point a phone camera here to open this page.</p>
   <div id="qr" role="img" aria-label="QR code for this page"></div>
   <div class="url" id="share-url"></div>
@@ -1268,6 +1295,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const recap = !live && !!last && last.night === nightOf(now());
     const promo = !live && !recap && !!schedule;
     $("hero").hidden = recap || promo;
+    $("signup-card").hidden = !live; // the paper slips only matter while karaoke is on
     $("recap").hidden = !recap;
     $("promo").hidden = !promo;
     if (recap && recapFor !== last.night) {
@@ -1509,6 +1537,18 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     tipDlg.showModal();
   });
   $("tip-close").addEventListener("click", () => tipDlg.close());
+
+  // ---------- how to sign up (paper slips at the KJ booth) ----------
+  const SIGNUP_STEPS = [
+    ["Go to the KJ booth", "That’s where the host runs the music."],
+    ["Write it on a slip of paper", "Your name and the song. Add the artist if there’s more than one song with that title."],
+    ["Hand it to the KJ", "Then listen for your name. Watch “The line” on this page for your spot."]];
+  document.querySelectorAll("[data-steps]").forEach((ol) => ol.replaceChildren(...SIGNUP_STEPS.map(([b, s]) => { const li = el("li"); const d = el("div"); d.append(el("b", null, b), el("small", null, s)); li.append(d); return li; })));
+  const signupDlg = $("signup-dlg");
+  document.querySelectorAll("[data-signup]").forEach((b) => b.addEventListener("click", () => signupDlg.showModal()));
+  $("signup-close").addEventListener("click", () => signupDlg.close());
+  signupDlg.addEventListener("click", (e) => { if (e.target === signupDlg) signupDlg.close(); });
+  document.querySelectorAll("[data-find-song]").forEach((b) => b.addEventListener("click", () => { if (signupDlg.open) signupDlg.close(); $("t-songs").click(); window.scrollTo(0, 0); }));
   tipDlg.addEventListener("click", (e) => { if (e.target === tipDlg) tipDlg.close(); });
 
   // ---------- go ----------
