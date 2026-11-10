@@ -21,10 +21,21 @@ The site scores the applause after each song from it (site/src/crowd_api.js).
 Turn audio enhancements off for the mic in Windows so cheers aren't flattened (see README).
 Config keys (optional): "crowd_mic": false turns it off; "crowd_mic_device": "part of the mic's name".
 
+Song requests: with --watch it also files karaoke tracks you download. Every 30 seconds it looks
+in your Downloads folder for new karaoke files (.cdg/.kfn, an .mp3 with a matching .cdg, a zip of
+those, or a video or audio file with "karaoke" in its name), moves them into your karaoke songs folder,
+and marks any open song request (from the site's "Request a song") whose title is in the file name
+as added, so the person who asked sees it on their phone.
+Config keys (optional): "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
+"karaoke_dir" (default ~/Music/Karaoke Songs), the folder your karaoke player reads local songs from.
+
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
 """
 import argparse
 import json
+import re
+import unicodedata
+import zipfile
 import math
 import datetime as dt
 import os
@@ -484,6 +495,158 @@ def crowd_meter(a, log):
                     write_log(log, f"crowd meter: upload failed ({e}), keeping {len(out)} seconds to retry")
 
 
+# ---------- song requests: file downloaded karaoke tracks ----------
+FILE_EVERY_S = 30
+REQUESTS_EVERY_S = 120
+FILE_RECENT_S = 3 * 86400       # only files downloaded in the last 3 days
+VIDEO_AUDIO = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".mp3", ".m4a", ".wav", ".ogg"}
+PARTIAL = {".crdownload", ".part", ".tmp", ".download", ".opdownload"}
+
+
+def norm_text(s):
+    s = unicodedata.normalize("NFKD", str(s or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "", s)
+
+
+def norm_title(s):
+    # "Wonderwall (Acoustic)" -> "wonderwall": brackets and "feat." bits rarely match file names.
+    s = re.sub(r"\s*[(\[].*?[)\]]", " ", str(s or ""))
+    s = re.sub(r"\s+(feat\.?|ft\.?|featuring)\s+.*$", "", s, flags=re.I)
+    return norm_text(re.sub(r"^\s*the\s+", "", s, flags=re.I))
+
+
+def karaoke_files(folder, now):
+    """Finished, recent karaoke-looking files in the downloads folder: [(path, kind)]."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    lower = {n.lower() for n in names}
+    out = []
+    for n in names:
+        path = os.path.join(folder, n)
+        stem, ext = os.path.splitext(n)
+        ext = ext.lower()
+        if ext in PARTIAL or n.startswith(".") or not os.path.isfile(path):
+            continue
+        try:
+            if now - os.path.getmtime(path) > FILE_RECENT_S:
+                continue
+        except OSError:
+            continue
+        has_k = "karaoke" in n.lower()
+        if ext in (".cdg", ".kfn"):
+            out.append((path, "track"))
+        elif ext == ".mp3" and (stem + ".cdg").lower() in lower:
+            out.append((path, "track"))
+        elif ext == ".zip":
+            try:
+                with zipfile.ZipFile(path) as z:
+                    inner = [m for m in z.namelist() if os.path.splitext(m)[1].lower() in (".cdg", ".kfn", ".mp3", ".mp4")]
+                if has_k or any(m.lower().endswith((".cdg", ".kfn")) for m in inner):
+                    out.append((path, "zip"))
+            except (OSError, zipfile.BadZipFile):
+                pass  # still downloading or not a zip
+        elif ext in VIDEO_AUDIO and has_k:
+            out.append((path, "track"))
+    return out
+
+
+def free_name(folder, name):
+    stem, ext = os.path.splitext(name)
+    dest, i = os.path.join(folder, name), 2
+    while os.path.exists(dest):
+        dest, i = os.path.join(folder, f"{stem} ({i}){ext}"), i + 1
+    return dest
+
+
+def file_one(path, kind, dest_dir):
+    """Move (or unzip) one download into the karaoke folder. Returns the file names that landed there."""
+    os.makedirs(dest_dir, exist_ok=True)
+    if kind == "zip":
+        landed = []
+        with zipfile.ZipFile(path) as z:
+            for m in z.infolist():
+                base = os.path.basename(m.filename)
+                if not base or os.path.splitext(base)[1].lower() not in (".cdg", ".kfn", ".mp3", ".mp4"):
+                    continue
+                dest = free_name(dest_dir, base)
+                with z.open(m) as src, open(dest, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                landed.append(os.path.basename(dest))
+        done = os.path.join(dest_dir, "_zips")
+        os.makedirs(done, exist_ok=True)
+        shutil.move(path, free_name(done, os.path.basename(path)))
+        return landed
+    dest = free_name(dest_dir, os.path.basename(path))
+    shutil.move(path, dest)
+    return [os.path.basename(dest)]
+
+
+def match_requests(names, requests):
+    """Open requests whose title (and artist, when given) appear in one of the file names."""
+    hits = []
+    for r in requests:
+        t, ar = norm_title(r.get("title")), norm_text(re.sub(r"^\s*the\s+", "", str(r.get("artist") or ""), flags=re.I))
+        if len(t) < 3:
+            continue
+        for n in names:
+            k = norm_text(os.path.splitext(n)[0])
+            if t in k and (not ar or ar in k):
+                hits.append(r)
+                break
+    return hits
+
+
+def request_filer(a, log):
+    """Background thread: move downloaded karaoke tracks into the karaoke folder and mark requests added."""
+    try:
+        with open(a.config, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        cfg = {}
+    if cfg.get("auto_file") is False:
+        write_log(log, "auto-file: off (auto_file is false in the config)")
+        return
+    downloads = os.path.expanduser(cfg.get("downloads_dir") or os.path.join("~", "Downloads"))
+    dest_dir = os.path.expanduser(cfg.get("karaoke_dir") or os.path.join("~", "Music", "Karaoke Songs"))
+    write_log(log, f"auto-file: watching {downloads} -> {dest_dir}")
+    sizes, requests, last_req = {}, [], 0.0
+    while True:
+        try:
+            now = time.time()
+            if cfg.get("api_token") and time.monotonic() - last_req >= REQUESTS_EVERY_S:
+                try:
+                    body = d1_query(cfg, "SELECT id, title, artist FROM song_requests WHERE status = 'open'", [])
+                    requests = body["result"][0]["results"]
+                except Exception:
+                    pass  # offline, or nobody has requested anything yet (no table)
+                last_req = time.monotonic()
+            for path, kind in karaoke_files(downloads, now):
+                # Wait until the size stops changing, so a download in progress isn't moved.
+                size = os.path.getsize(path)
+                if sizes.get(path) != size:
+                    sizes[path] = size
+                    continue
+                sizes.pop(path, None)
+                landed = file_one(path, kind, dest_dir)
+                msg = f"auto-file: {os.path.basename(path)} -> {dest_dir}"
+                hits = match_requests(landed + [os.path.basename(path)], requests)
+                for r in hits:
+                    try:
+                        d1_query(cfg, "UPDATE song_requests SET status = 'added', updated_at = ? WHERE id = ? AND status = 'open'",
+                                 [int(now), r["id"]])
+                        requests = [x for x in requests if x["id"] != r["id"]]
+                        msg += f" (request “{r['title']}” marked added)"
+                    except Exception as e:
+                        msg += f" (couldn't mark “{r['title']}” added: {e})"
+                write_log(log, msg)
+        except Exception as e:  # never let a bad file stop the sync
+            write_log(log, f"auto-file: {e}")
+        time.sleep(FILE_EVERY_S)
+
+
 def watch(a, log):
     """Sync whenever KaraFun's database changes. Runs until the computer logs off."""
     lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -494,6 +657,7 @@ def watch(a, log):
         return 0
     write_log(log, "watch: started")
     threading.Thread(target=crowd_meter, args=(a, log), daemon=True).start()
+    threading.Thread(target=request_filer, args=(a, log), daemon=True).start()
     last_stamp, last_sync, failures = None, 0.0, 0
     while True:
         stamp = source_stamp(a.source)

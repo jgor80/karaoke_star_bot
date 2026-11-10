@@ -105,6 +105,19 @@ Two mics can feed it. Only loudness numbers (one per second) are sent, never sou
   **Start listening** under "Crowd meter mic" and leave the page open and the phone plugged
   in. The browser's auto gain, noise suppression and echo cancelling are turned off.
 
+### Song requests and auto-filing
+
+People can tap **Request a song** in the Songbook for songs that aren't in the list. Requests show
+on `/host` (with search links for Karaoke Version and YouTube) and push to the host's ntfy topic.
+
+While `karaoke_sync.py --watch` runs on the karaoke laptop, it checks the Downloads folder every
+30 seconds. It moves karaoke tracks you bought (`.cdg`/`.kfn`, an `.mp3` with a matching `.cdg`,
+a zip of those, or a video/audio file with "karaoke" in the name) into your karaoke songs folder.
+If the file name contains an open request's title (and artist, when given), it marks that request
+added. Add that folder to the karaoke player's local library once. Config keys in
+`karaoke_sync_config.json`: `"karaoke_dir"` (default `~/Music/Karaoke Songs`), `"downloads_dir"`
+(default `~/Downloads`), and `"auto_file": false` to turn it off. Each move is logged in `sync_log.txt`.
+
 When both are listening, the laptop's readings are used. The Worker's every-minute cron
 scores each song once its applause window has closed (`site/src/crowd_api.js`), and the
 raw levels are kept 45 days.

@@ -32,6 +32,8 @@ input:focus { outline: 2px solid var(--hot); outline-offset: 1px; }
 button { font: inherit; font-weight: 700; font-size: 17px; border-radius: 12px; padding: 12px 16px; cursor: pointer; border: 1px solid var(--hot); background: var(--hot); color: #1a0710; }
 button.ghost { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 600; }
 button.small { font-size: 15px; padding: 7px 12px; }
+a.btn-link { font-size: 15px; font-weight: 600; padding: 7px 12px; border-radius: 12px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.req-buy { margin-top: 6px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .hint { font-size: 15px; color: var(--muted); margin: 0; }
 .err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
@@ -90,7 +92,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 
     <section>
       <h2 id="req-h">Song requests</h2>
-      <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below.</p>
+      <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below. Bought a track? Download it on the karaoke laptop and the sync files it into your karaoke songs folder and marks the request added by itself.</p>
       <ul class="list" id="req-list"></ul>
       <details id="req-done-box" hidden><summary class="hint">Recently handled</summary><ul class="list" id="req-done"></ul></details>
     </section>
@@ -278,7 +280,13 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       const row = el("div", "row");
       [["✅ Added", "added"], ["❌ Not available", "unavailable"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: st }); row.append(b); });
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => { if (confirm("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
-      row.append(rm); li.append(row); rl.append(li); });
+      row.append(rm);
+      // Where to get it: a licensed karaoke store, and official karaoke channels on YouTube.
+      const q = (x.title + " " + (x.artist || "")).trim(), links = el("div", "row req-buy");
+      [["🛒 Karaoke Version", "https://www.google.com/search?q=" + encodeURIComponent("site:karaoke-version.com " + q)],
+       ["▶️ YouTube", "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " karaoke")]].forEach(([t, href]) => {
+        const l = el("a", "ghost small btn-link", t); l.href = href; l.target = "_blank"; l.rel = "noopener"; links.append(l); });
+      li.append(row, links); rl.append(li); });
     const rd = d.requests_done || [], rdl = $("req-done"); rdl.replaceChildren(); $("req-done-box").hidden = !rd.length;
     rd.forEach((x) => { const li = el("li");
       li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", (x.status === "added" ? "✅ Added" : "❌ Not available") + " · " + when(x.updated_at)));
