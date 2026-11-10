@@ -1,10 +1,13 @@
 // Album covers for songs:
-//   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> 302 to a cover image, or 404 when there's none
+//   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
 // KaraFun's catalog has no artwork, so covers come from free music search APIs: Deezer first, then
 // Apple's iTunes Search API, then MusicBrainz + the Cover Art Archive (catches songs Deezer lacks, like Kate Bush). Each song is looked up once, the first time a phone shows it, and the
-// answer (including "no cover") is saved in D1 table song_art. Repeat requests are answered from the
-// edge cache or D1, so a bar full of phones never hits Deezer or Apple for the same song twice.
+// answer (including "no cover") is saved in D1 table song_art. The image itself is fetched once and
+// served from okenight.com out of Cloudflare's cache (30 days, refetched if Cloudflare drops it), so
+// phones never talk to Deezer, Apple or the Cover Art Archive and a full bar costs them one download.
+// Only the cover's address is stored permanently, not the image: a cache is the low-risk way to reuse
+// cover art we don't own a license for.
 //
 // Visitors only send a song id and a title; the artist and title we search for come from our own
 // catalog/plays tables, so the endpoint can't be used to make arbitrary lookups. t is there because
@@ -113,8 +116,26 @@ async function findSong(env, id, tk) {
   return results.find((p) => !tk || norm(p.title) === tk) || null;
 }
 
+const IMAGE_TTL_S = 30 * 86400;
+const MAX_IMAGE_BYTES = 1024 * 1024;
 const redirect = (to, maxAge) => new Response(null, { status: 302, headers: { location: to, "cache-control": "public, max-age=" + maxAge } });
 const none = (status, maxAge) => new Response(null, { status, headers: { "cache-control": "public, max-age=" + maxAge } });
+
+// Fetch the cover once and hand it out from our own domain. If the image host is down or sends
+// something that isn't an image, fall back to pointing the phone at it for an hour.
+async function image(to) {
+  try {
+    const r = await fetch(to, { headers: { accept: "image/*" }, cf: { cacheTtl: IMAGE_TTL_S, cacheEverything: true } });
+    const type = r.headers.get("content-type") || "";
+    if (r.ok && /^image\//.test(type)) {
+      const body = await r.arrayBuffer();
+      if (body.byteLength > 0 && body.byteLength <= MAX_IMAGE_BYTES) {
+        return new Response(body, { headers: { "content-type": type, "cache-control": "public, max-age=" + IMAGE_TTL_S + ", immutable", "x-content-type-options": "nosniff" } });
+      }
+    }
+  } catch (e) {}
+  return redirect(to, 3600);
+}
 
 export async function handleArt(req, env, ctx) {
   const url = new URL(req.url);
@@ -124,7 +145,8 @@ export async function handleArt(req, env, ctx) {
   if (!Number.isInteger(id) || id <= 0 || id > 2e9) return none(404, 86400);
 
   const cache = caches.default;
-  const cacheKey = new Request(url.origin + "/api/art?id=" + id + "&t=" + encodeURIComponent(tk) + (big ? "&s=big" : ""));
+  // v=2: images, not redirects (older cached redirects are simply left to expire)
+  const cacheKey = new Request(url.origin + "/api/art?v=2&id=" + id + "&t=" + encodeURIComponent(tk) + (big ? "&s=big" : ""));
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
 
@@ -133,7 +155,7 @@ export async function handleArt(req, env, ctx) {
     await ensureTable(env);
     const now = Math.floor(Date.now() / 1000);
     const row = await env.DB.prepare("SELECT url, checked FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
-    if (row && row.url) res = redirect(sized(row.url, big), 7 * 86400);
+    if (row && row.url) res = await image(sized(row.url, big));
     else if (row && now - row.checked < NO_COVER_RETRY_S && row.checked >= MISSES_BEFORE) res = none(404, 86400);
     else {
       const song = await findSong(env, id, tk);
@@ -148,7 +170,7 @@ export async function handleArt(req, env, ctx) {
       if (!cover && failed.length === 3) return none(503, 60);
       if (!cover && (failed.includes("deezer") || failed.includes("coverart"))) return none(404, 3600);
       await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked) VALUES (?, ?, ?, ?, ?)").bind(id, tk, cover, src, now).run();
-      res = cover ? redirect(sized(cover, big), 7 * 86400) : none(404, 86400);
+      res = cover ? await image(sized(cover, big)) : none(404, 86400);
     }
   } catch (e) {
     return none(503, 60);
