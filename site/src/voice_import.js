@@ -79,10 +79,14 @@ export async function updateVoices(env, now = Date.now()) {
   await ensureVoiceTables(env);
   // New artists from the latest weekly catalog import join the queue (once per import).
   const meta = Object.fromEntries((await env.DB.prepare("SELECT k, v FROM catalog_meta WHERE k IN ('updated', 'voice_seeded')").all()).results.map((r) => [r.k, r.v]));
-  if (!meta.updated) return null;
-  if (meta.voice_seeded !== meta.updated) {
-    await env.DB.prepare("INSERT OR IGNORE INTO artist_voice (artist, pop) SELECT artist, min(pop) FROM catalog GROUP BY artist").run();
-    await env.DB.prepare("INSERT OR REPLACE INTO catalog_meta (k, v) VALUES ('voice_seeded', ?)").bind(meta.updated).run();
+  const own = await env.DB.prepare("SELECT v FROM host_config WHERE k = 'songbook_updated'").first().catch(() => null);
+  const stamp = (meta.updated || "") + "|" + ((own && own.v) || "");
+  if (stamp === "|") return null;
+  if (meta.voice_seeded !== stamp) {
+    if (meta.updated) await env.DB.prepare("INSERT OR IGNORE INTO artist_voice (artist, pop) SELECT artist, min(pop) FROM catalog GROUP BY artist").run();
+    // The host's own songbook too (see songbook_api.js).
+    if (own && own.v) await env.DB.prepare("INSERT OR IGNORE INTO artist_voice (artist, pop) SELECT artist, min(pop) FROM songbook WHERE artist != '' GROUP BY artist").run().catch(() => {});
+    await env.DB.prepare("INSERT OR REPLACE INTO catalog_meta (k, v) VALUES ('voice_seeded', ?)").bind(stamp).run();
   }
   const { results: todo } = await env.DB.prepare("SELECT artist FROM artist_voice WHERE voice IS NULL ORDER BY pop LIMIT ?").bind(PER_RUN).all();
   if (!todo.length) return 0;

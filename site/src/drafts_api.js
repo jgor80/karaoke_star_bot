@@ -14,6 +14,7 @@
 // - Limits per phone, per network and per singer (see LIMITS). Device ids and IP hashes are only used for limits.
 import { scheduleStatus, SCHEDULE } from "./schedule.js";
 import { cleanName } from "./reactions_api.js";
+import { listSongById } from "./songbook_api.js";
 
 export const LIMITS = {
   picksPerPhone: 3,     // drafts one phone can make per night
@@ -92,10 +93,8 @@ export async function draftBoard(env) {
 
 async function lookupSong(env, id) {
   // KaraFun's catalog first (rowid = KaraFun song id), then songs sung here in case the catalog isn't loaded.
-  try {
-    const c = await env.DB.prepare("SELECT rowid AS id, title, artist FROM catalog WHERE rowid = ?1").bind(id).first();
-    if (c && c.title) return c;
-  } catch (e) { /* no catalog table yet */ }
+  const c = await listSongById(env, id); // the full song list, or the host's own songbook
+  if (c) return c;
   const p = await env.DB.prepare("SELECT song_id AS id, title, artist FROM plays WHERE song_id = ?1 AND title IS NOT NULL LIMIT 1").bind(id).first();
   return p && p.title ? p : null;
 }

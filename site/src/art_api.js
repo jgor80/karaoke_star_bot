@@ -1,3 +1,4 @@
+import { listSongById } from "./songbook_api.js";
 // Album covers for songs:
 //   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> 302 to a cover image, or 404 when there's none
 //
@@ -107,7 +108,7 @@ function sized(url, big) {
 
 // The song's real title and artist from our tables, matching the title the page showed.
 async function findSong(env, id, tk) {
-  const cat = await env.DB.prepare("SELECT title, artist FROM catalog WHERE rowid = ?").bind(id).first().catch(() => null);
+  const cat = await listSongById(env, id); // the full song list, or the host's own songbook
   if (cat && (!tk || norm(cat.title) === tk)) return cat;
   const { results } = await env.DB.prepare("SELECT title, artist FROM plays WHERE song_id = ? AND title IS NOT NULL LIMIT 20").bind(id).all();
   return results.find((p) => !tk || norm(p.title) === tk) || null;
