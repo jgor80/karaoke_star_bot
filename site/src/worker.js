@@ -3,6 +3,7 @@
 // All SQL is fixed statements with bound values: visitors can't send queries. The only thing they can
 // write is a reaction to the song on the mic, which is rate limited (see reactions_api.js), and crowd
 // draft picks and seconds, also rate limited (see drafts_api.js).
+// The host's phone can also send crowd noise levels for the applause meter (crowd_api.js, host key only).
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
@@ -16,6 +17,7 @@ import HOST from "./host.html";
 import SONGS from "./songs.js";
 import { handleCatalog } from "./catalog_api.js";
 import { maybeImportCatalog } from "./catalog_import.js";
+import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
@@ -54,6 +56,7 @@ export default {
       return handleDraft(req, env);
     }
     if (url.pathname === "/api/host") return handleHost(req, env);
+    if (url.pathname === "/api/crowd") return handleCrowd(req, env); // the /host phone's crowd meter (host key only)
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
     if (url.pathname === "/api/catalog") return handleCatalog(req, env, ctx);
@@ -68,9 +71,9 @@ export default {
       let res = await cache.match(key);
       if (!res) {
         await checkSecrets(env).catch(() => {}); // a new song may have found a secret: mark it before reading
-        const [[plays, sync], reax, secrets, queue, drafts] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env), liveQueue(env), draftBoard(env)]);
+        const [[plays, sync], reax, secrets, queue, drafts, crowd] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env), liveQueue(env), draftBoard(env), publicCrowd(env)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets, ...queue, ...drafts }),
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd }),
           { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));
@@ -120,6 +123,7 @@ export default {
     ctx.waitUntil(checkSecrets(env));
     // Weekly: refresh KaraFun's song catalog for the Songbook (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
+    ctx.waitUntil(scoreCrowd(env).catch(() => {})); // crowd meter: score the applause after songs that just ended
     ctx.waitUntil(sendCrowdReminder(env).catch(() => {})); // Sunday heads-up to the crowd's ntfy topic
   },
 };

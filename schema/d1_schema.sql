@@ -96,3 +96,10 @@ CREATE TABLE IF NOT EXISTS drafts (
 CREATE TABLE IF NOT EXISTS draft_votes (
   draft_id integer not null, device_id text not null, ip_hash text, night text not null, created_at integer not null,
   primary key (draft_id, device_id));
+
+-- Crowd meter (site/src/crowd_api.js; the Worker and the laptop's sync create these themselves).
+-- crowd_levels: one loudness reading a second in dBFS (never audio), src = 'laptop' or 'phone'. Kept 45 days.
+CREATE TABLE IF NOT EXISTS crowd_levels (ts integer not null, src text not null, db real not null, PRIMARY KEY (ts, src)) WITHOUT ROWID;
+-- crowd_scores: per song, the applause peak, the room's chatter level (base) and how far above it the
+-- applause went (over, dB). over is NULL when nobody was listening.
+CREATE TABLE IF NOT EXISTS crowd_scores (uuid text primary key, src text, peak real, base real, over real, scored_at integer not null);

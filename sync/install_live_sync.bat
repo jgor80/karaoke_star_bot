@@ -26,6 +26,10 @@ if not defined PYW (
   pause & exit /b 1
 )
 
+echo Installing the crowd meter's mic reader (sounddevice)...
+"%PYW:pythonw=python%" -m pip install --user --quiet --disable-pip-version-check sounddevice
+if errorlevel 1 echo Couldn't install sounddevice, so the crowd meter stays off. Everything else still works.
+
 echo Testing one sync...
 "%PYW:pythonw=python%" "%SCRIPT%"
 if errorlevel 1 (
@@ -48,6 +52,9 @@ if errorlevel 1 (
 echo.
 echo Done. The live sync is running now and starts by itself every time you sign in.
 echo New songs reach the website within about 10 seconds while KaraFun is open.
+echo The crowd meter listens to this laptop's mic during karaoke (loudness numbers only).
+echo For honest readings, turn off audio enhancements for the mic: Settings, System, Sound,
+echo your microphone, Audio enhancements: Off. See the README for more.
 echo The daily noon sync stays as a backup. Activity is logged to
 echo %USERPROFILE%\Documents\KaraokeStats\sync_log.txt
 pause

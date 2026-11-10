@@ -22,7 +22,7 @@
   const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", streak3: "🔥", streak5: "🔥", streak10: "🫁", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
     duet: "👯", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
     mvp: "🎤", dejavu: "🔁", speed: "⚡", time: "🕰️", squad: "👯", open: "🚪", last: "🌙", artist: "🎸", decade: "📼",
-    crowd: "👑", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
+    crowd: "👑", loud: "👏", "s-loud": "📢", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
     "b-crowd": "🔥", "b-drop": "🎤", "b-encore": "🔁", "b-tomato": "🍅", "s-crowd": "👑", "s-hype": "📣",
     "s-mvp": "🏆", "s-loyal": "📅", "s-mic": "⏱️", "s-badges": "🎖️", "s-range": "🌈", "s-duet": "👯", "s-onesong": "🔁", "s-crate": "📦", "s-trend": "📈" };
   // Genre badge icons come from KaraokeFun.GENRES (fun.js) when it's loaded.
@@ -45,15 +45,31 @@
   const HYPE = new Set(REACTIONS.filter((x) => x.hype).map((x) => x.k));
   const ROAST = new Set(["cringe", "offkey", "tomato", "snooze"]);
   const sumOf = (c, set) => Object.entries(c || {}).reduce((a, [k, n]) => a + (!set || set.has(k) ? n : 0), 0);
-  // /api/plays {reactions: [{play, r, n}], reactors: [{night, who, r, n}]} -> {bySong: Map(uuid -> {r: n}), reactors}
+  // /api/plays {reactions: [{play, r, n}], reactors: [{night, who, r, n}], crowd: [{play, db, at}]}
+  //   -> {bySong: Map(uuid -> {r: n}), reactors, crowd: Map(uuid -> {db, at})}
   function reactionIndex(data) {
-    const bySong = new Map();
+    const bySong = new Map(), crowd = new Map();
     ((data && data.reactions) || []).forEach((x) => { const c = bySong.get(x.play) || {}; c[x.r] = (c[x.r] || 0) + Number(x.n); bySong.set(x.play, c); });
-    return { bySong, reactors: ((data && data.reactors) || []).map((x) => ({ ...x, n: Number(x.n) })) };
+    ((data && data.crowd) || []).forEach((x) => crowd.set(x.play, { db: Number(x.db), at: Number(x.at) }));
+    return { bySong, reactors: ((data && data.reactors) || []).map((x) => ({ ...x, n: Number(x.n) })), crowd };
   }
+
+  // ---------- crowd meter (applause loudness after each song, see crowd_api.js) ----------
+  // A song's score is how many dB the applause rose over the room's chatter. Shown as 0-10: 25 dB over = 10.
+  const CROWD_DB_PER_POINT = 2.5, CROWD_MIN_DB = 6; // below 6 dB over chatter nobody really clapped
+  const crowdScore = (db) => Math.max(0, Math.min(10, Math.round(Number(db) / CROWD_DB_PER_POINT)));
+  const crowdOf = (reax, p) => (reax && reax.crowd && p && p.uuid && reax.crowd.get(p.uuid)) || null;
+  function crowdAwards(rows, reax, season) {
+    const scored = rows.map((p) => ({ p, c: crowdOf(reax, p) })).filter((x) => x.c && x.c.db >= CROWD_MIN_DB);
+    if (!scored.length) return [];
+    const top = scored.reduce((a, b) => (b.c.db > a.c.db ? b : a));
+    return [{ id: season ? "s-loud" : "loud", headline: !season, label: season ? "Biggest Ovation of the Season" : "Loudest Crowd",
+      who: clean(top.p.singer) || "Someone", what: songLine(top.p), stat: "👏 " + crowdScore(top.c.db) + "/10 on the crowd meter" }];
+  }
+
   // Crowd awards for a set of plays. Songs and singers come from the plays, reactors from who tapped.
   function reactionAwards(rows, reax, season) {
-    const out = [];
+    const out = crowdAwards(rows, reax, season);
     if (!reax || !reax.bySong.size) return out;
     const songs = rows.filter((p) => p.uuid && reax.bySong.has(p.uuid)).map((p) => ({ p, c: reax.bySong.get(p.uuid) }));
     if (!songs.length) return out;
@@ -172,5 +188,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf };
+  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf, crowdScore, crowdOf, CROWD_MIN_DB };
 })(typeof window !== "undefined" ? window : globalThis);

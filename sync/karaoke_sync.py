@@ -14,10 +14,18 @@ writes a new song, so the public stats site stays live during a session.
 It also uploads KaraFun's song queue (singer and song length only), so the
 site can show how many people are waiting and roughly how long the wait is.
 
+Crowd meter: with --watch and the sounddevice package installed (pip install sounddevice),
+it also reads the laptop's mic once a second while karaoke is on (a song in the last
+45 minutes, or people in the queue) and uploads the loudness level only, never audio.
+The site scores the applause after each song from it (site/src/crowd_api.js).
+Turn audio enhancements off for the mic in Windows so cheers aren't flattened (see README).
+Config keys (optional): "crowd_mic": false turns it off; "crowd_mic_device": "part of the mic's name".
+
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
 """
 import argparse
 import json
+import math
 import datetime as dt
 import os
 import shutil
@@ -25,6 +33,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -37,6 +46,13 @@ NIGHT_CUTOFF_HOURS = 6  # songs before 6am count toward the previous night
 WATCH_POLL_S = 5          # how often --watch looks at KaraFun's database files
 WATCH_HEARTBEAT_S = 600   # with no changes, still sync this often so the site knows we're alive
 WATCH_LOCK_PORT = 47913   # a local port held while --watch runs, so only one copy runs
+
+# Crowd meter (see crowd_meter below). Keep CROWD_TABLE in sync with site/src/crowd_api.js.
+CROWD_TABLE = ("create table if not exists crowd_levels (ts integer not null, src text not null,"
+               " db real not null, primary key (ts, src)) without rowid")
+CROWD_ACTIVE_S = 45 * 60  # listen while a song was sung in the last 45 minutes, or the queue has people
+CROWD_UPLOAD_S = 10       # send the levels every 10 seconds
+CROWD_KEEP = 1800         # keep up to 30 minutes of levels while offline
 
 SCHEMA = """
 create table if not exists sessions (
@@ -306,10 +322,21 @@ def upload_queue(cfg, queue):
     return True
 
 
+# What the crowd meter needs to know from the sync: is karaoke happening right now?
+karaoke_state = {"newest_play": 0, "queue_len": 0}
+
+
 def run_once(a):
     """One sync (and upload, when configured). Returns (ok, message)."""
     try:
         rows, new, total, gap, queue = sync(a.source, a.target)
+        try:
+            db = sqlite3.connect(a.target)
+            karaoke_state["newest_play"] = db.execute("select max(played_at) from plays").fetchone()[0] or 0
+            db.close()
+        except sqlite3.Error:
+            pass
+        karaoke_state["queue_len"] = len(queue or [])
         msg = f"ok: read {rows} plays from KaraFun, {new} new, {total} total"
         if gap:
             msg += (" WARNING: KaraFun's oldest saved song is newer than our newest, so some songs"
@@ -350,6 +377,113 @@ def source_stamp(source):
     return tuple(out)
 
 
+def crowd_active():
+    return (time.time() - karaoke_state["newest_play"] < CROWD_ACTIVE_S) or karaoke_state["queue_len"] > 0
+
+
+def crowd_meter(a, log):
+    """Background thread: read the mic's loudness once a second during karaoke and upload it to D1.
+
+    Only one number per second (the average level in dBFS) leaves the laptop, never sound.
+    The mic is only open while karaoke is on, so Windows' mic-in-use icon goes away afterwards.
+    """
+    try:
+        with open(a.config, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return  # no Cloudflare config, nowhere to send it
+    if cfg.get("crowd_mic") is False:
+        write_log(log, "crowd meter: off (crowd_mic is false in the config)")
+        return
+    try:
+        import sounddevice as sd
+    except Exception:
+        write_log(log, "crowd meter: off. To turn it on run:  python -m pip install sounddevice  then sign out and back in")
+        return
+    from array import array
+
+    lock = threading.Lock()
+    acc = {"sum": 0.0, "n": 0}
+
+    def callback(indata, frames, t, status):
+        x = array("h", bytes(indata))
+        s = 0
+        for v in x:
+            s += v * v
+        with lock:
+            acc["sum"] += s
+            acc["n"] += len(x)
+
+    def pick_device():
+        want = (cfg.get("crowd_mic_device") or "").lower()
+        if not want:
+            return None
+        for i, d in enumerate(sd.query_devices()):
+            if d.get("max_input_channels", 0) > 0 and want in d.get("name", "").lower():
+                return i
+        write_log(log, f"crowd meter: no mic matching \"{want}\", using the default mic")
+        return None
+
+    stream, out, last_up, fails, created = None, [], time.monotonic(), 0, False
+    sec = int(time.time())
+    while True:
+        try:
+            active = crowd_active()
+            if active and stream is None:
+                dev = pick_device()
+                info = sd.query_devices(dev, "input")
+                rate = int(info.get("default_samplerate") or 48000)
+                stream = sd.RawInputStream(device=dev, samplerate=rate, channels=1, dtype="int16",
+                                           blocksize=rate // 10, callback=callback)
+                stream.start()
+                with lock:
+                    acc["sum"], acc["n"] = 0.0, 0
+                sec = int(time.time())
+                write_log(log, f"crowd meter: listening on {info.get('name')}")
+            elif not active and stream is not None:
+                stream.stop()
+                stream.close()
+                stream = None
+                write_log(log, "crowd meter: karaoke's over, mic closed")
+        except Exception as e:
+            stream = None
+            write_log(log, f"crowd meter: can't open the mic ({e}); trying again in a minute."
+                           " Check Settings > Privacy > Microphone > Let desktop apps access your microphone")
+            time.sleep(60)
+            continue
+
+        time.sleep(0.25)
+        now = int(time.time())
+        if stream is not None and now != sec:
+            with lock:
+                s, n = acc["sum"], acc["n"]
+                acc["sum"], acc["n"] = 0.0, 0
+            if n:
+                ms = s / n / (32768.0 * 32768.0)
+                db = max(-120.0, 10 * math.log10(ms)) if ms > 0 else -120.0
+                out.append((sec, round(db, 1)))
+                del out[:-CROWD_KEEP]
+            sec = now
+
+        if out and time.monotonic() - last_up >= CROWD_UPLOAD_S:
+            last_up = time.monotonic()
+            try:
+                if not created:
+                    d1_query(cfg, CROWD_TABLE, [])
+                    created = True
+                while out:
+                    chunk = out[:30]
+                    sql = ("insert or ignore into crowd_levels (ts, src, db) values "
+                           + ",".join(["(?,'laptop',?)"] * len(chunk)))
+                    d1_query(cfg, sql, [v for row in chunk for v in row])
+                    del out[:len(chunk)]
+                fails = 0
+            except Exception as e:
+                fails += 1
+                if fails in (1, 10) or fails % 100 == 0:
+                    write_log(log, f"crowd meter: upload failed ({e}), keeping {len(out)} seconds to retry")
+
+
 def watch(a, log):
     """Sync whenever KaraFun's database changes. Runs until the computer logs off."""
     lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -359,6 +493,7 @@ def watch(a, log):
         write_log(log, "watch: already running, exiting")
         return 0
     write_log(log, "watch: started")
+    threading.Thread(target=crowd_meter, args=(a, log), daemon=True).start()
     last_stamp, last_sync, failures = None, 0.0, 0
     while True:
         stamp = source_stamp(a.source)

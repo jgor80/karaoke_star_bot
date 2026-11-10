@@ -77,6 +77,38 @@ npx wrangler secret put HOST_SETUP_CODE
 Then open `/host`, tap "Forgot the key? Reset it with the setup code", and enter the setup
 code and a new host key. Without the secret, nobody can set or reset the key.
 
+## Crowd meter
+
+The crowd meter scores the applause after each song (the PA drowns out the crowd during
+the song, so only the cheering right after it counts). Each song gets 0-10: how far the
+loudest 3 seconds of applause rose above the room's normal chatter, 2.5 dB per point.
+The scores show next to songs on the phone site, as a banner on `/tv` about a minute after
+each song, and as the "Loudest Crowd" award (and "Biggest Ovation of the Season").
+Mics aren't calibrated, so it's a relative score: keep the mic in the same spot each week.
+
+Two mics can feed it. Only loudness numbers (one per second) are sent, never sound.
+
+- **The KaraFun laptop** (main one). `karaoke_sync.py --watch` reads the laptop's mic while
+  karaoke is on (a song in the last 45 minutes, or people in the queue) and closes it after.
+  It needs `python -m pip install sounddevice` (`install_live_sync.bat` does this).
+  Turn off anything that evens out loudness, or loud cheers get squashed:
+  - Windows 11: Settings > System > Sound > your mic > **Audio enhancements: Off**, and keep the
+    input volume fixed (around 70-80%). Windows 10: Control Panel > Sound > Recording > mic >
+    Properties > Enhancements/Advanced > disable all enhancements.
+  - Any mic app from the laptop maker (Realtek Audio Console, Dolby, MaxxAudio, Teams/Zoom
+    "automatically adjust mic"): turn off noise suppression, echo cancellation and auto gain.
+  - Settings > Privacy > Microphone > "Let desktop apps access your microphone" must be on.
+  - To use a USB mic instead of the built-in one, add `"crowd_mic_device": "part of its name"`
+    to `karaoke_sync_config.json`. `"crowd_mic": false` turns the meter off.
+  - `sync_log.txt` says "crowd meter: listening on ..." when it starts.
+- **A phone at the host table** (backup or second spot). Open `/host`, tap
+  **Start listening** under "Crowd meter mic" and leave the page open and the phone plugged
+  in. The browser's auto gain, noise suppression and echo cancelling are turned off.
+
+When both are listening, the laptop's readings are used. The Worker's every-minute cron
+scores each song once its applause window has closed (`site/src/crowd_api.js`), and the
+raw levels are kept 45 days.
+
 ## Not in this repo
 
 - Play history data (CSV and database files) stays out, since this repo is public
