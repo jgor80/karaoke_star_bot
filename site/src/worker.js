@@ -11,6 +11,7 @@ import TV from "./tv.html";
 import { handleReact, handleCounts, reactionTotals } from "./reactions_api.js";
 import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
+import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
@@ -30,7 +31,7 @@ export default {
     if (url.pathname === "/api/plays") {
       // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
       // During the scheduled session the cache is shorter so new songs show up fast.
-      const schedule = scheduleStatus(Math.floor(Date.now() / 1000));
+      const schedule = { ...scheduleStatus(Math.floor(Date.now() / 1000)), reminder: reminderLinks(Math.floor(Date.now() / 1000)) };
       const maxAge = schedule.status === "off" ? 15 : 5;
       const cache = caches.default;
       const key = new Request(url.origin + "/api/plays");
@@ -50,6 +51,11 @@ export default {
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(PAGE, {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" },
+      });
+    }
+    if (url.pathname === "/sunday.ics") {
+      return new Response(sundayIcs(Math.floor(Date.now() / 1000)), {
+        headers: { "content-type": "text/calendar; charset=utf-8", "content-disposition": 'inline; filename="oke-night-sundays.ics"', "cache-control": "public, max-age=3600" },
       });
     }
     if (url.pathname === "/host" || url.pathname === "/host/") {
@@ -76,5 +82,6 @@ export default {
   // Every minute: catch secret songs even when no phone or TV is open, so the host still gets the push.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(checkSecrets(env));
+    ctx.waitUntil(sendCrowdReminder(env).catch(() => {})); // Sunday heads-up to the crowd's ntfy topic
   },
 };

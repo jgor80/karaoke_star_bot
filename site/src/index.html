@@ -244,6 +244,14 @@ details.singer.song summary .main-t { font-weight: 600; }
 .prog .n { font-family: var(--f-mono); font-size: 14px; color: var(--muted); }
 .linkish { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 15px; text-decoration: underline; cursor: pointer; justify-self: start; }
 
+/* Sunday reminder + hot streaks */
+.remind { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
+.remind b { display: block; font-size: 17px; }
+.remind .rm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.remind .rm-acts a { text-decoration: none; font-size: 15px; padding: 9px 12px; }
+.remind .streaks { font-size: 15px; color: var(--muted); }
+.remind .streaks strong { color: var(--ink); font-weight: 600; }
+
 /* badge book */
 .book { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bk { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
@@ -406,6 +414,16 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <div class="tally" id="tally"></div>
     </div>
     <div class="me" id="me" hidden></div>
+    <div class="remind" id="remind" hidden>
+      <div><b id="rm-h">🗓️ Karaoke every Sunday</b><span class="muted small" id="rm-sub"></span></div>
+      <div class="rm-acts">
+        <a class="act" id="rm-ics" href="/sunday.ics">Add to my calendar</a>
+        <a class="act ghost" id="rm-gcal" target="_blank" rel="noopener">Google Calendar</a>
+        <a class="act ghost" id="rm-push" target="_blank" rel="noopener">Phone alert</a>
+      </div>
+      <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app: open the link, tap Subscribe, and you’ll get a heads-up 2 hours before each Sunday starts.</div>
+      <div class="streaks" id="rm-streaks" hidden></div>
+    </div>
     <button class="find-me" id="find-me" type="button" hidden>
       <span class="fm-ic" aria-hidden="true">🎟️</span>
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
@@ -705,6 +723,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
     renderFun(n, tonight);
     renderMe(n, tonight);
+    renderRemind(live);
     renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)));
   }
 
@@ -910,6 +929,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (yrs.length) fact("Oldest pick", String(Math.min(...yrs)));
       if (signature && signature[1] > 1) fact("Signature song", "×" + signature[1]);
       const person = people.get(key(e.name));
+      if (person && window.KaraokeFun) { const st = KaraokeFun.streakOf(person, plays); if (st.alive && st.current >= 2) fact("Streak", "🔥 " + st.current + " wks"); else if (st.best >= 2) fact("Best streak", st.best + " wks"); }
       const extra = [];
       const typed = [...new Set(e.rows.filter((p) => key(p.singer) === e.k).map((p) => clean(p.as_typed || p.singer)))].filter((x) => x !== e.name);
       if (typed.length) extra.push(el("div", "also", "Also typed as: " + typed.join(", ")));
@@ -944,6 +964,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const att = new Map(personTotals(plays).map((e) => [e.k, e]));
     const reg = [...att.values()].sort((a, b) => b.nights.size - a.nights.size || b.n - a.n).slice(0, 3);
     if (reg.length) rec.push(["Most loyal regulars", reg.map((r) => r.name).join(", "), plural(reg[0].nights.size, "night"), reg.map((r) => r.name + ": " + r.nights.size + " nights, " + r.n + " songs").join(" · ")]);
+    if (window.KaraokeFun) {
+      const sk = [...people.values()].filter((e) => e.rows.length).map((e) => ({ e, s: KaraokeFun.streakOf(e, plays) })).sort((a, b) => b.s.best - a.s.best || b.e.rows.length - a.e.rows.length);
+      const top = sk.filter((x) => x.s.best === (sk[0] && sk[0].s.best));
+      if (sk.length && sk[0].s.best >= 2) rec.push(["Longest streak", top.slice(0, 3).map((x) => x.e.name).join(", "), sk[0].s.best + " weeks", "Sang every karaoke week in a row" + (top.some((x) => x.s.alive && x.s.current === x.s.best) ? ", and still going" : "")]);
+    }
     const top1 = [...att.values()].sort((a, b) => b.n - a.n)[0];
     if (top1) rec.push(["Most songs all-time", top1.name, plural(top1.n, "song"), "across " + plural(top1.nights.size, "night")]);
     const sig = new Map(); songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); if (!key(p.singer)) return; const e = sig.get(k) || { p, n: 0 }; e.n++; sig.set(k, e); });
@@ -1147,11 +1172,35 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
      ["Rank", rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
+    const st = KaraokeFun.streakOf(e, plays);
+    if (st.alive && st.current >= 1) box.append(el("div", "me-stats", "🔥 " + plural(st.current, "week") + " in a row" + (st.onTheLine ? ". Sing tonight to keep it!" : st.best > st.current ? " (best: " + st.best + ")" : "")));
+    else if (st.best >= 2) box.append(el("div", "me-stats", "Best streak: " + st.best + " weeks in a row. Start a new one Sunday."));
     const myBands = KaraokeFun.favoriteBands(e.rows, 3);
     if (myBands.length) box.append(bandList(myBands, "Your favorite bands"));
-    const prog = KaraokeFun.progress(e).slice(0, 2);
+    const prog = KaraokeFun.progress(e, plays).slice(0, 2);
     prog.forEach((x) => { const r = el("div", "prog"); const bar = el("span", "pb"); const i = el("i"); i.style.width = Math.round(100 * x.have / x.need) + "%"; bar.append(i);
       r.append(el("span", null, icon(x.id) + " Next: " + x.name + " · " + x.desc), el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
+  }
+
+  // ---------- Sunday reminder + hot streaks ----------
+  // Shown when karaoke isn't on, so people leaving (or checking on a Tuesday) can sign up for next week.
+  function renderRemind(live) {
+    const box = $("remind");
+    box.hidden = !!live;
+    if (live) return;
+    const R = (schedule && schedule.reminder) || {};
+    $("rm-sub").textContent = (schedule ? schedule.hours_label + " at " + schedule.venue + ". Next: " + schedule.next_label + "." : "");
+    if (R.gcal) $("rm-gcal").href = R.gcal; else $("rm-gcal").hidden = true;
+    if (R.ntfy) $("rm-push").href = R.ntfy; else { $("rm-push").hidden = true; $("rm-push-note").hidden = true; }
+    const sb = $("rm-streaks");
+    const hot = window.KaraokeFun ? KaraokeFun.hotStreaks(people, plays) : [];
+    sb.hidden = !hot.length;
+    if (!hot.length) return;
+    const me = getMe(), mine = hot.find((x) => x.key === me);
+    sb.replaceChildren(document.createTextNode("🔥 On a streak: "));
+    hot.slice(0, 6).forEach((x, i) => { if (i) sb.append(document.createTextNode(", ")); sb.append(el("strong", null, x.name), document.createTextNode(" " + x.current + " wks")); });
+    if (hot.length > 6) sb.append(document.createTextNode(" and " + (hot.length - 6) + " more"));
+    sb.append(document.createTextNode(mine ? ". Yours is " + mine.current + " weeks, so don’t break it Sunday!" : ". Sing Sunday to keep yours going."));
   }
 
   // "Favorite bands" chips: tap one to see everything sung by that artist.
