@@ -154,6 +154,7 @@
         const li = el("li");
         const m = el("span", "sub-t", meta(s, sung(s)));
         li.append(el("span", "main-t", s.title), addButton(s), m);
+        if (window.OkeArt) OkeArt.row(li, s);
         ol.append(li);
       });
       ol.hidden = !results.length;
@@ -174,6 +175,7 @@
         rm.addEventListener("click", () => { list = list.filter((y) => y !== x); writeList(list); renderMine(); renderResults(); });
         const acts = el("span", "acts"); acts.append(tick, rm);
         li.append(el("span", "main-t", x.t), acts, el("span", "sub-t", meta(x, sung(x))));
+        if (window.OkeArt) OkeArt.row(li, x);
         return li;
       };
       mineTodo.replaceChildren(...todo.map((i) => row(i, false)));

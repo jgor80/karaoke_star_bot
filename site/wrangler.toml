@@ -23,5 +23,5 @@ database_id = "61453b2b-22e8-480d-a1ac-a6db72aa29a9"
 # Serve bingo.js, fun.js, awards.js, songs.js and drafts.js to browsers as a file instead of bundling it into the Worker.
 [[rules]]
 type = "Text"
-globs = ["**/bingo.js", "**/fun.js", "**/awards.js", "**/songs.js", "**/drafts.js"]
+globs = ["**/bingo.js", "**/fun.js", "**/awards.js", "**/songs.js", "**/drafts.js", "**/art.js"]
 fallthrough = true

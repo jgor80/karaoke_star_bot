@@ -65,6 +65,7 @@
         vb.addEventListener("click", () => vote(d, !mine));
         const sub = el("span", "sub-t", [d.artist, got ? "Delivered! 🎉" : "drafted by " + d.by].filter(Boolean).join(" · "));
         li.append(main, vb, sub);
+        if (window.OkeArt) OkeArt.row(li, d); // album cover, see art.js
         ol.append(li);
       });
       if (!rows.length) msg.textContent = "No picks yet. Who do you want to hear, and what should they sing?";

@@ -499,6 +499,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       </div>
     </section>
     <div class="hero" id="hero">
+      <div class="hero-art" id="hero-art"></div>
       <div class="label" id="hero-label">On the mic</div>
       <div class="who" id="hero-who">…</div>
       <div class="song" id="hero-song"></div>
@@ -725,6 +726,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script src="/awards.js"></script>
 <script src="/songs.js"></script>
 <script src="/drafts.js"></script>
+<script src="/art.js"></script>
 <script>
 (function () {
   const REFRESH_MS = 30000;
@@ -824,6 +826,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     if (paused) { $("stale").replaceChildren(el("b", null, "Stats paused. "), document.createTextNode("The karaoke laptop last checked in " + (quiet < 120 ? quiet + " minutes" : Math.round(quiet / 60) + " hours") + " ago, so new songs may be missing. They’ll show up once it reconnects.")); }
     $("hero-who").dataset.who = last && last.singer ? clean(last.singer) : "";
     $("hero-song").textContent = last && last.title ? "“" + last.title + "”" : "";
+    $("hero").classList.toggle("has-cover", !!window.OkeArt && OkeArt.put($("hero-art"), last, { big: true }));
     $("hero-artist").textContent = last ? [last.artist, last.release_year].filter(Boolean).join(" · ") + (singing || !tonight ? "" : (last.artist ? " · " : "") + ago(last.played_at)) : "";
     $("hero-bar").hidden = !singing; $("hero-meta").hidden = !singing;
     if (singing) {
@@ -873,7 +876,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null); if (p.singer) li.dataset.who = clean(p.singer);
       li.append(el("span", "time", clock(p.played_at)));
       const d = el("div"); d.append(tagHost(el("div", "main-t", clean(p.as_typed || p.singer) || "Mystery singer"), p.singer), el("div", "sub-t", songLine(p)));
-      const rs = rxSummary(p); if (rs) d.append(el("div", "sub-t rx-sum", rs)); li.append(d); feed.append(li); });
+      const rs = rxSummary(p); if (rs) d.append(el("div", "sub-t rx-sum", rs)); li.append(d); if (window.OkeArt && p.title) OkeArt.row(li, p); feed.append(li); });
     if (older.length > 5) { const b = el("button", "toggle-more", feedOpen ? "Show less" : "Show " + (Math.min(20, older.length) - 5) + " more"); b.type = "button";
       b.addEventListener("click", () => { feedOpen = !feedOpen; renderTonight(); }); feed.append(b); }
 
@@ -1081,6 +1084,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const last = e.rows[e.rows.length - 1];
     s.append(el("span", "main-t", "“" + e.title + "”"), el("span", "val", plural(e.rows.length, "play")), chev,
       el("span", "sub-t", [e.artist, e.year].filter(Boolean).join(" · ") + " · " + plural(singers.size, "singer") + " · last " + ago(last.played_at, last.night)));
+    if (window.OkeArt) OkeArt.row(s, last);
     d.append(s);
     const b = el("div", "sbody"); const ol = el("ol");
     e.rows.slice().reverse().forEach((p) => { const li = el("li");
@@ -1172,7 +1176,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     rec.forEach(([l, w, st, wh]) => { const r = el("div", "rec"); r.append(el("div", "label", l), el("div", "who", w), el("div", "stat", st), el("div", "what", wh)); box.append(r); });
 
     const sc = new Map(); songs.forEach((p) => { const k = key(p.title) + "|" + key(p.artist); const e = sc.get(k) || { p, n: 0, who: new Set() }; e.n++; e.who.add(key(p.singer)); sc.set(k, e); });
-    fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"), (e) => e.p.title);
+    fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"), (e) => e.p.title, (e) => e.p);
     // Ranked by how many different people sang them, then plays. Group names credit each part ("Lady Gaga & Bruno Mars").
     const ac = new Map();
     songs.forEach((p) => { (window.KaraokeFun ? KaraokeFun.favoriteBands([p], 9) : p.artist ? [{ name: p.artist }] : []).forEach((b) => {
@@ -1438,9 +1442,10 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     bands.forEach((x) => { const b = el("button", "band", x.name + (x.n > 1 ? " ×" + x.n : "")); b.type = "button"; b.addEventListener("click", () => openSearch(x.name)); row.append(b); });
     w.append(row); return w;
   }
-  function fillTop(ol, items, main, sub, val, q) {
+  function fillTop(ol, items, main, sub, val, q, song) {
     ol.replaceChildren();
-    items.forEach((e, i) => { const li = el("li"); if (q) li.dataset.who = q(e); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", main(e)), el("span", "val", val(e)), el("span", "sub-t", sub(e))); ol.append(li); });
+    items.forEach((e, i) => { const li = el("li"); if (q) li.dataset.who = q(e); li.append(el("span", "rank", String(i + 1)), el("span", "main-t", main(e)), el("span", "val", val(e)), el("span", "sub-t", sub(e)));
+      if (song && window.OkeArt) OkeArt.row(li, song(e)); ol.append(li); });
   }
 
   // ---------- data ----------
