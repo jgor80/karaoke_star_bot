@@ -82,3 +82,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNI
   explicit UNINDEXED, styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, h UNINDEXED,
   tokenize = 'unicode61 remove_diacritics 2');
 CREATE TABLE IF NOT EXISTS catalog_meta (k text primary key, v text);  -- count, updated, last_attempt, last_result, last_error
+
+-- Crowd draft (POST /api/draft): the crowd drafts someone who has sung here to sing a KaraFun song,
+-- and seconds the picks they like. The Worker creates these tables itself (site/src/drafts_api.js).
+-- night is the karaoke night the pick is for; device_id/ip_hash are only for rate limits and never returned.
+-- Blocked singers (host page) live in host_config k = 'draft_blocked' as a JSON list of lowercase names.
+CREATE TABLE IF NOT EXISTS drafts (
+  id integer primary key autoincrement,
+  night text not null, singer text not null, singer_key text not null,
+  song_id integer, title text not null, artist text,
+  by_name text not null, device_id text not null, ip_hash text,
+  created_at integer not null, removed_at integer);
+CREATE TABLE IF NOT EXISTS draft_votes (
+  draft_id integer not null, device_id text not null, ip_hash text, night text not null, created_at integer not null,
+  primary key (draft_id, device_id));

@@ -405,6 +405,33 @@ nav.tabs button[aria-selected="true"] svg { background: var(--hot-soft); border-
 nav.tabs button:active svg, .act:active, .seg button:active, .chip:active { transform: scale(.96); }
 button:focus-visible, summary:focus-visible, .search:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
+/* crowd draft */
+.dr-go { justify-self: start; }
+.dr-msg:empty { display: none; }
+.dr-msg { margin: 0; }
+.dr-intro { margin: 0; }
+.dr-list .main-t b { color: var(--gold); }
+.dr-vote { font: inherit; font-size: 16px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; white-space: nowrap; min-height: 40px; }
+.dr-vote.on { background: var(--hot-soft); border-color: var(--hot); color: var(--hot); }
+.dr-vote:disabled { opacity: .6; cursor: default; }
+.dr-list li.dr-done { background: linear-gradient(90deg, var(--gold-soft), transparent 85%); }
+dialog.dr-dlg { width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); }
+.dr-dlg[open] { display: grid; gap: 10px; }
+.dr-dlg h3, .dr-dlg p { margin: 0; }
+.dr-picks { max-height: min(52vh, 420px); overflow-y: auto; }
+.dr-picks li { padding: 0; display: block; }
+.dr-picks li.dr-none { padding: 12px 14px; }
+.dr-pick { display: grid; gap: 2px; width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; border: 0; padding: 11px 14px; cursor: pointer; }
+.dr-pick:hover, .dr-pick:focus-visible { background: var(--panel-2, rgba(255,255,255,.04)); }
+.dr-pick .sub-t { grid-column: auto; }
+.dr-confirm { display: grid; gap: 12px; }
+.dr-confirm label { display: grid; gap: 4px; }
+.dr-card { display: grid; gap: 2px; text-align: center; padding: 16px; border-radius: 14px; background: var(--hot-soft); border: 1px solid var(--hot); }
+.dr-card b { font-size: 22px; overflow-wrap: anywhere; }
+.dr-card b:first-child { color: var(--gold); }
+.dr-err { color: var(--hot); margin: 0; }
+.dr-err:empty { display: none; }
+
 /* share dialog */
 dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); padding: 20px; width: min(340px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(8, 3, 12, .7); }
@@ -499,6 +526,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <span class="fm-ic" aria-hidden="true">🎟️</span>
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
     </button>
+    <div class="sec" id="draft"></div>
     <div class="sec">
       <h2 id="dares-h">Tonight's dares</h2>
       <div class="dares" id="dares"></div>
@@ -670,6 +698,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
 <script src="/songs.js"></script>
+<script src="/drafts.js"></script>
 <script src="/art.js"></script>
 <script>
 (function () {
@@ -802,14 +831,16 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     $("aw-h").textContent = tonight ? "Awards so far" : "Awards · " + when;
 
     // leaderboard: songs per singer, ties broken by mic time
-    const all = personTotals(rows);
+    // The host isn't ranked (they'd always top it); they get an unranked row under the top 8 instead.
+    const everyone = personTotals(rows), all = everyone.filter((e) => !OkeAwards.isHost(e.name)), hostE = everyone.find((e) => OkeAwards.isHost(e.name));
     const ol = $("leaderboard"); ol.replaceChildren();
-    if (!all.length) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
-    const lbRow = (e, i) => { const li = el("li", e.k === me ? "mine" : null); li.dataset.who = e.name; li.append(el("span", "rank", String(i + 1)), tagHost(el("span", "main-t", e.name), e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
+    if (!all.length && !hostE) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
+    const lbRow = (e, i) => { const li = el("li", (e.k === me ? "mine" : "") + (i < 0 ? " host-row" : "") || null); li.dataset.who = e.name; li.append(el("span", "rank", i < 0 ? "🎤" : String(i + 1)), tagHost(el("span", "main-t", e.name), e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
       li.append(el("span", "sub-t", mmss(e.secs) + " on the mic")); return li; };
     all.slice(0, 8).forEach((e, i) => ol.append(lbRow(e, i)));
     const mi = all.findIndex((e) => e.k === me);
     if (mi >= 8) ol.append(lbRow(all[mi], mi));
+    if (hostE) ol.append(lbRow(hostE, -1));
 
     // feed (the newest song is already in the hero)
     const feed = $("feed"); feed.replaceChildren();
@@ -914,7 +945,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const t = tallyFor(n.rows), aw = awardsFor(n.rows);
     renderAwardCards($("awards"), aw);
     drawCard(n, t, aw);
-    if (window.KaraokeFun) { renderAwardCards($("season-awards"), KaraokeFun.seasonAwards(plays, people).concat(OkeAwards.reactionAwards(plays, reax, true))); $("season-note").textContent = "Across all " + plural(nights.length, "night") + " so far."; }
+    if (window.KaraokeFun) { renderAwardCards($("season-awards"), KaraokeFun.seasonAwards(plays, people, OkeAwards.isHost).concat(OkeAwards.reactionAwards(plays, reax, true))); $("season-note").textContent = "Across all " + plural(nights.length, "night") + " so far."; }
   }
   function wrapText(ctx, text, x, y, maxW, lh, maxLines) {
     const words = text.split(" "); let line = "", lines = [];
@@ -968,7 +999,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       const e = by.get(k) || { k, group: true, name: clean(p.singer), rows: [], nights: new Set() }; e.rows.push(p); e.nights.add(p.night); by.set(k, e); });
     list.push(...by.values());
     list.sort((a, b) => b.rows.length - a.rows.length || b.nights.size - a.nights.size || (b.secs || 0) - (a.secs || 0) || a.name.localeCompare(b.name));
-    list.forEach((e, i) => { e.rank = i + 1; });
+    let r = 0; list.forEach((e) => { e.rank = OkeAwards.isHost(e.name) ? null : ++r; }); // the host isn't ranked
     return list;
   }
   // Search: one box for singers, songs and artists. Accents and punctuation are ignored; every word must match.
@@ -1048,7 +1079,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const s = el("summary");
     const chev = el("span", "chev", "›"); chev.setAttribute("aria-hidden", "true");
     s.append(el("span", "main-t", e.name), el("span", "val", plural(e.rows.length, "song")), chev,
-      el("span", "sub-t", "#" + e.rank + " of " + total + " · " + plural(e.nights.size, "night") + " · last sang " + ago(e.rows[e.rows.length - 1].played_at, e.rows[e.rows.length - 1].night)));
+      el("span", "sub-t", (e.rank ? "#" + e.rank + " of " + total : "🎤 Host") + " · " + plural(e.nights.size, "night") + " · last sang " + ago(e.rows[e.rows.length - 1].played_at, e.rows[e.rows.length - 1].night)));
     d.append(s);
     d.addEventListener("toggle", () => {
       if (!d.open || d.querySelector(".sbody")) return;
@@ -1072,6 +1103,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (typed.length) extra.push(el("div", "also", "Also typed as: " + typed.join(", ")));
       if (person) { const isMe = getMe() === key(e.name); const mb = el("button", "act me-btn" + (isMe ? " ghost" : ""), isMe ? "That’s not me" : "That’s me 🙋"); mb.type = "button";
         mb.addEventListener("click", () => { setMe(isMe ? null : key(e.name)); if (!isMe) show("tonight"); }); extra.push(mb); }
+      if (person && draft) { const db = el("button", "act ghost me-btn", "🎯 Draft " + e.name + " to sing…"); db.type = "button"; db.addEventListener("click", () => draft.open(e.name)); extra.push(db); }
       const earned = el("div", "badges");
       if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
@@ -1098,11 +1130,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       rec.push(["Longest song ever", clean(l.singer), mmss(l.length_s), songLine(l) + ", " + nightLabel(l.night)]); }
     if (dated.length) { const o = dated.reduce((a, b) => (b.release_year < a.release_year ? b : a));
       rec.push(["Oldest song ever", clean(o.singer), String(o.release_year), songLine(o) + ", " + nightLabel(o.night)]); }
-    const att = new Map(personTotals(plays).map((e) => [e.k, e]));
+    const att = new Map(personTotals(plays).filter((e) => !OkeAwards.isHost(e.name)).map((e) => [e.k, e])); // the host is always there
     const reg = [...att.values()].sort((a, b) => b.nights.size - a.nights.size || b.n - a.n).slice(0, 3);
     if (reg.length) rec.push(["Most loyal regulars", reg.map((r) => r.name).join(", "), plural(reg[0].nights.size, "night"), reg.map((r) => r.name + ": " + r.nights.size + " nights, " + r.n + " songs").join(" · ")]);
     if (window.KaraokeFun) {
-      const sk = [...people.values()].filter((e) => e.rows.length).map((e) => ({ e, s: KaraokeFun.streakOf(e, plays) })).sort((a, b) => b.s.best - a.s.best || b.e.rows.length - a.e.rows.length);
+      const sk = [...people.values()].filter((e) => e.rows.length && !OkeAwards.isHost(e.name)).map((e) => ({ e, s: KaraokeFun.streakOf(e, plays) })).sort((a, b) => b.s.best - a.s.best || b.e.rows.length - a.e.rows.length);
       const top = sk.filter((x) => x.s.best === (sk[0] && sk[0].s.best));
       if (sk.length && sk[0].s.best >= 2) rec.push(["Longest streak", top.slice(0, 3).map((x) => x.e.name).join(", "), sk[0].s.best + " weeks", "Sang every karaoke week in a row" + (top.some((x) => x.s.alive && x.s.current === x.s.best) ? ", and still going" : "")]);
     }
@@ -1332,14 +1364,15 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     if (!e) return;
     box.replaceChildren();
     const tot = personTotals(n.rows), mineE = tot.find((x) => x.k === k), mine = mineE ? mineE.rows : [];
-    const rank = mineE ? tot.filter((x) => x.n > mineE.n).length + 1 : null;
+    const meHost = OkeAwards.isHost(e.name);
+    const rank = mineE && !meHost ? tot.filter((x) => x.n > mineE.n && !OkeAwards.isHost(x.name)).length + 1 : null;
     const top = el("div", "me-top");
     const nm = el("div"); nm.append(el("div", "me-kicker", "That’s you"), el("div", "me-name", e.name));
     const nb = el("button", "linkish", "Not you?"); nb.type = "button"; nb.addEventListener("click", () => setMe(null));
     top.append(nm, nb); box.append(top);
     const row = el("div", "me-row");
     [[tonight ? "Tonight" : "That night", plural(mine.length, "song").replace(" songs", "").replace(" song", "")],
-     ["Rank", rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
+     ["Rank", meHost ? "Host" : rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
     const st = KaraokeFun.streakOf(e, plays);
@@ -1414,6 +1447,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     getMyRows: () => { const k = getMe(), e = k && people.get(k); return e ? e.rows : []; },
     onPick: () => $("sg-find-btn").click(),
   }) : null;
+  // Crowd draft: draft a singer + song, second the picks you like (drafts.js). The board rides along on /api/plays.
+  const draft = window.OkeDraft ? OkeDraft.mount({
+    box: $("draft"), deviceId,
+    getPlays: () => plays,
+    getPeople: () => [...people.values()],
+    getName: reactName,
+    setName: (n) => store.set(NAME_KEY, clean(n).slice(0, 24)),
+  }) : null;
   let bingo = null;
   function renderBingo() {
     if (!window.KaraokeBingo) return;
@@ -1429,11 +1470,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
-      hostKey = key(clean(data.host || ""));
+      hostKey = key(clean(data.host || "")); OkeAwards.setHost(data.host || "");
       tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
+      if (draft) draft.update(data);
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);
