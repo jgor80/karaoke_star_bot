@@ -54,6 +54,19 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .secret-pop .sp-rw { font-size: 19px; font-weight: 700; }
 @media (prefers-reduced-motion: no-preference) { .secret-pop .sp-in { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.recap { display: grid; gap: 8px; }
+.recap-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.recap h2 { margin: 0; font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); font-weight: 500; }
+.recap iframe { width: 100%; height: min(78vh, 680px); border: 1px solid var(--line); border-radius: 18px; background: var(--bg); display: block; }
+.promo { border-radius: 18px; padding: 22px 18px; border: 1px solid var(--gold); display: grid; gap: 6px;
+  background: radial-gradient(120% 90% at 100% 0%, #4a2a14 0%, transparent 60%), var(--panel); }
+.promo-k { font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.promo-when { font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; color: #fff; overflow-wrap: anywhere; }
+.promo-where { font-size: 20px; font-weight: 700; }
+.promo-count { font-size: 18px; color: var(--hot); font-weight: 700; }
+.promo-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.promo-acts .act { text-decoration: none; font-size: 16px; }
+.act.ghost, a.act.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .pill.live { border-color: var(--hot); color: var(--hot); }
 .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); margin-right: 6px; vertical-align: 1px; }
 @media (prefers-reduced-motion: no-preference) { .pill.live::before { animation: blink 1.4s infinite; } }
@@ -225,6 +238,16 @@ details.singer[open] summary .chev { transform: rotate(90deg); }
 .list li[data-who]:active { background: var(--panel-2); }
 details.singer.song summary .main-t { font-weight: 600; }
 
+/* the line: how many are waiting in KaraFun's queue and about how long a new sign-up waits */
+.line { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
+.line-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.line-row div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 13px; color: var(--muted); }
+.line-row strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: var(--ink); line-height: 1.15; }
+.line-next { font-size: 16px; color: var(--muted); overflow-wrap: anywhere; }
+.line-next b { color: var(--ink); font-weight: 600; }
+.line-mine { font-size: 16px; color: var(--gold); font-weight: 600; }
+.line-note { font-size: 13px; color: var(--muted); }
+
 /* "that's me" card */
 .me { border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); display: grid; gap: 8px; }
 .me-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -243,6 +266,14 @@ details.singer.song summary .main-t { font-weight: 600; }
 .prog .pb i { display: block; height: 100%; background: var(--gold); }
 .prog .n { font-family: var(--f-mono); font-size: 14px; color: var(--muted); }
 .linkish { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 15px; text-decoration: underline; cursor: pointer; justify-self: start; }
+
+/* Sunday reminder + hot streaks */
+.remind { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
+.remind b { display: block; font-size: 17px; }
+.remind .rm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.remind .rm-acts a { text-decoration: none; font-size: 15px; padding: 9px 12px; }
+.remind .streaks { font-size: 15px; color: var(--muted); }
+.remind .streaks strong { color: var(--ink); font-weight: 600; }
 
 /* badge book */
 .book { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -376,6 +407,17 @@ dialog::backdrop { background: rgba(8, 3, 12, .7); }
 dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); margin-bottom: 4px; }
 #qr { background: #fff; padding: 14px; border-radius: 12px; margin: 14px auto; width: max-content; }
 #qr img, #qr canvas { display: block; width: 220px; height: 220px; }
+/* tip menu */
+.icon-btn.tip { border-color: var(--gold); color: var(--gold); }
+#tip-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 440px) { .icon-btn.tip .lbl, .top:has(#tip-btn:not([hidden])) #share-btn .lbl { display: none; } }
+.tips { display: grid; gap: 8px; margin: 14px 0; }
+.tip-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-decoration: none; color: var(--ink); background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
+.tip-item:active { transform: scale(.98); }
+.tip-item .te { font-size: 24px; text-align: center; }
+.tip-item b { display: block; font-size: 17px; line-height: 1.25; }
+.tip-item small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
+.tip-item .ta { font-family: var(--f-mono); font-weight: 500; font-size: 17px; color: var(--gold); white-space: nowrap; }
 .url { font-family: var(--f-mono); font-size: 15px; text-align: center; overflow-wrap: anywhere; margin-bottom: 12px; }
 </style>
 </head>
@@ -385,6 +427,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <div class="logo">Oke <span>Night</span></div>
     <span class="pill" id="live-pill">Loading</span>
     <div class="spacer"></div>
+    <button class="icon-btn tip" id="tip-btn" type="button" aria-haspopup="dialog" hidden><span aria-hidden="true">💸</span><span class="lbl">Tip</span></button>
     <button class="icon-btn" id="share-btn" type="button" aria-haspopup="dialog">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
       <span class="lbl">Share</span>
@@ -396,6 +439,22 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <!-- TONIGHT -->
   <section class="panel on" id="p-tonight" role="tabpanel" aria-labelledby="t-tonight">
     <div class="stale" id="stale" role="status" hidden></div>
+    <!-- After a session: the night's recap scrolls like the TV. From the next morning: promote the next session. -->
+    <section class="recap" id="recap" hidden aria-labelledby="recap-h">
+      <div class="recap-top"><h2 id="recap-h">Tonight’s recap</h2><a class="linkish" id="recap-full" href="/tv">Full screen</a></div>
+      <iframe id="recap-tv" title="Tonight’s awards and stats, scrolling" loading="lazy"></iframe>
+    </section>
+    <section class="promo" id="promo" hidden aria-labelledby="promo-when">
+      <div class="promo-k" id="promo-k">Next karaoke</div>
+      <div class="promo-when" id="promo-when"></div>
+      <div class="promo-where" id="promo-where"></div>
+      <div class="promo-count" id="promo-count"></div>
+      <div class="promo-acts">
+        <button class="act" id="promo-remind" type="button" hidden>Remind me</button>
+        <button class="act ghost" id="promo-share" type="button">Invite friends</button>
+        <a class="act ghost" id="promo-recap" href="/tv">Last week’s recap</a>
+      </div>
+    </section>
     <div class="hero" id="hero">
       <div class="label" id="hero-label">On the mic</div>
       <div class="who" id="hero-who">…</div>
@@ -414,12 +473,23 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
         </form>
       </div>
     </div>
+    <div class="line" id="line" hidden aria-live="polite"></div>
     <div class="secret" id="secret" hidden></div>
     <div class="tally-wrap">
       <div class="tally-cap" id="tally-cap"></div>
       <div class="tally" id="tally"></div>
     </div>
     <div class="me" id="me" hidden></div>
+    <div class="remind" id="remind" hidden>
+      <div><b id="rm-h">🗓️ Karaoke every Sunday</b><span class="muted small" id="rm-sub"></span></div>
+      <div class="rm-acts">
+        <a class="act" id="rm-ics" href="/sunday.ics">Add to my calendar</a>
+        <a class="act ghost" id="rm-gcal" target="_blank" rel="noopener">Google Calendar</a>
+        <a class="act ghost" id="rm-push" target="_blank" rel="noopener">Phone alert</a>
+      </div>
+      <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app: open the link, tap Subscribe, and you’ll get a heads-up 2 hours before each Sunday starts.</div>
+      <div class="streaks" id="rm-streaks" hidden></div>
+    </div>
     <button class="find-me" id="find-me" type="button" hidden>
       <span class="fm-ic" aria-hidden="true">🎟️</span>
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
@@ -582,6 +652,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </div>
 </dialog>
 
+<dialog id="tip-dlg" aria-labelledby="tip-h">
+  <h3 id="tip-h">Tip the host</h3>
+  <p class="muted small" style="margin:0" id="tip-sub"></p>
+  <div class="tips" id="tips"></div>
+  <p class="muted small" style="margin:0 0 12px">Opens Venmo with the amount filled in. Perks are up to the host.</p>
+  <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
+</dialog>
+
 <div class="secret-pop" id="secret-pop" hidden role="alert"><div class="sp-in"><div class="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><small>Tap to close</small></div></div>
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
@@ -601,8 +679,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
+  let tips = null; // {venmo, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
+  let queue = null; // KaraFun's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
+  const QUEUE_DEFAULT_LEN = 240; // a queued song with no known length counts as 4 minutes
+  const QUEUE_GAP_S = 25;       // changeover between singers (start-to-start runs ~25s past song length)
   const STALE_S = 15 * 60; // during the session, warn when the laptop hasn't synced for this long
 
   // ---------- helpers ----------
@@ -690,7 +772,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("hero-meta").textContent = "";
       $("hero-meta").append(el("span", null, "Song #" + idx + " tonight"), el("span", null, mmss(Math.min(len, Math.floor(elapsed))) + " / " + mmss(len)));
     }
+    renderStage(live, last);
     renderRx(singing ? last : null);
+    renderLine(live && !paused, singing ? last : null, singing ? Math.max(0, len - elapsed) : 0);
     renderHeroWins(last, tonight);
     renderSecrets(n, tonight);
     const venue = schedule ? schedule.venue : "";
@@ -733,7 +817,43 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
     renderFun(n, tonight);
     renderMe(n, tonight);
+    renderRemind(live);
     renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)));
+  }
+
+  // ---------- the line (KaraFun's queue) ----------
+  // The first queue item is the song on the mic once it has started, so it's skipped while that song plays.
+  // Waits add up the queued songs' lengths plus a short changeover each; they're estimates, and the host can reorder.
+  function waitLabel(s) {
+    const m = Math.round(s / 60);
+    if (m < 1) return "< 1 min";
+    return m < 60 ? m + " min" : Math.floor(m / 60) + " hr" + (m % 60 ? " " + (m % 60) + " min" : "");
+  }
+  function renderLine(on, current, remaining) {
+    const box = $("line");
+    let items = on && queue && Array.isArray(queue.items) ? queue.items.slice() : null;
+    if (items && current && items.length && items[0].id === current.song_id) items.shift();
+    box.hidden = !items;
+    if (!items) return;
+    box.replaceChildren();
+    const starts = []; let t = current ? remaining + QUEUE_GAP_S : 0;
+    items.forEach((q) => { starts.push(t); t += (Number(q.len) || QUEUE_DEFAULT_LEN) + QUEUE_GAP_S; });
+    box.append(el("div", "me-kicker", "The line"));
+    const row = el("div", "line-row");
+    [[items.length ? String(items.length) : "0", items.length === 1 ? "singer waiting" : "singers waiting"],
+     [items.length || current ? "~" + waitLabel(t) : "None", "wait if you sign up now"]].forEach(([v, l]) => {
+      const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
+    box.append(row);
+    if (!items.length) { box.append(el("div", "line-next", current ? "Nobody's queued after this song. Grab the mic!" : "Nobody's in line. Grab the mic!")); return; }
+    const names = items.slice(0, 3).map((q) => clean(q.singer) || "someone");
+    const nx = el("div", "line-next"); nx.append(document.createTextNode("Next up: "), el("b", null, names[0]));
+    if (names.length > 1) nx.append(document.createTextNode(", then " + names.slice(1).join(", ") + (items.length > 3 ? " and " + (items.length - 3) + " more" : "")));
+    box.append(nx);
+    // Your spot, if this phone has a name ("That's me" or the reactions name)
+    const mine = [getMe(), key(clean(store.get(NAME_KEY) || ""))].filter(Boolean);
+    const at = mine.length ? items.findIndex((q) => mine.includes(key(clean(q.singer)))) : -1;
+    if (at >= 0) box.append(el("div", "line-mine", at === 0 && starts[0] < 60 ? "🎤 You're up next, get ready!" : "🎟️ You're #" + (at + 1) + " in line · about " + waitLabel(starts[at])));
+    box.append(el("div", "line-note", "Wait times are estimates from song lengths. The host may shuffle the order."));
   }
 
   // ---------- dares, watch, unlocked badges ----------
@@ -938,6 +1058,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (yrs.length) fact("Oldest pick", String(Math.min(...yrs)));
       if (signature && signature[1] > 1) fact("Signature song", "×" + signature[1]);
       const person = people.get(key(e.name));
+      if (person && window.KaraokeFun) { const st = KaraokeFun.streakOf(person, plays); if (st.alive && st.current >= 2) fact("Streak", "🔥 " + st.current + " wks"); else if (st.best >= 2) fact("Best streak", st.best + " wks"); }
       const extra = [];
       const typed = [...new Set(e.rows.filter((p) => key(p.singer) === e.k).map((p) => clean(p.as_typed || p.singer)))].filter((x) => x !== e.name);
       if (typed.length) extra.push(el("div", "also", "Also typed as: " + typed.join(", ")));
@@ -972,6 +1093,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const att = new Map(personTotals(plays).map((e) => [e.k, e]));
     const reg = [...att.values()].sort((a, b) => b.nights.size - a.nights.size || b.n - a.n).slice(0, 3);
     if (reg.length) rec.push(["Most loyal regulars", reg.map((r) => r.name).join(", "), plural(reg[0].nights.size, "night"), reg.map((r) => r.name + ": " + r.nights.size + " nights, " + r.n + " songs").join(" · ")]);
+    if (window.KaraokeFun) {
+      const sk = [...people.values()].filter((e) => e.rows.length).map((e) => ({ e, s: KaraokeFun.streakOf(e, plays) })).sort((a, b) => b.s.best - a.s.best || b.e.rows.length - a.e.rows.length);
+      const top = sk.filter((x) => x.s.best === (sk[0] && sk[0].s.best));
+      if (sk.length && sk[0].s.best >= 2) rec.push(["Longest streak", top.slice(0, 3).map((x) => x.e.name).join(", "), sk[0].s.best + " weeks", "Sang every karaoke week in a row" + (top.some((x) => x.s.alive && x.s.current === x.s.best) ? ", and still going" : "")]);
+    }
     const top1 = [...att.values()].sort((a, b) => b.n - a.n)[0];
     if (top1) rec.push(["Most songs all-time", top1.name, plural(top1.n, "song"), "across " + plural(top1.nights.size, "night")]);
     const sig = new Map(); songs.forEach((p) => { const k = key(p.singer) + "|" + key(p.title); if (!key(p.singer)) return; const e = sig.get(k) || { p, n: 0 }; e.n++; sig.set(k, e); });
@@ -1128,6 +1254,39 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && rx.play) pollRx(); });
 
+  // ---------- after the session: recap, then promote the next one ----------
+  // A karaoke night runs 6am to 6am Central (same as plays.night). Once the session closes, the rest of that
+  // night shows the scrolling TV recap. From 6am the next day the top of the page promotes the next session.
+  const NIGHT_TZ = "America/Chicago";
+  const nightOf = (ts) => new Date((ts - 6 * 3600) * 1000).toLocaleDateString("en-CA", { timeZone: NIGHT_TZ });
+  let recapFor = null;
+  function renderStage(live, last) {
+    const recap = !live && !!last && last.night === nightOf(now());
+    const promo = !live && !recap && !!schedule;
+    $("hero").hidden = recap || promo;
+    $("recap").hidden = !recap;
+    $("promo").hidden = !promo;
+    if (recap && recapFor !== last.night) {
+      recapFor = last.night;
+      $("recap-tv").src = "/tv?embed=1&night=" + last.night;
+      $("recap-full").href = "/tv?night=" + last.night;
+    }
+    if (!recap && recapFor) { recapFor = null; $("recap-tv").removeAttribute("src"); }
+    if (promo) {
+      const t = schedule.next_start, opt = { timeZone: NIGHT_TZ };
+      $("promo-when").textContent = new Date(t * 1000).toLocaleDateString("en-US", { ...opt, weekday: "long", month: "short", day: "numeric" });
+      $("promo-where").textContent = new Date(t * 1000).toLocaleTimeString("en-US", { ...opt, hour: "numeric", minute: "2-digit" }).replace(":00", "") + " · " + schedule.venue;
+      const days = Math.round((Date.parse(nightOf(t + 6 * 3600)) - Date.parse(new Date(now() * 1000).toLocaleDateString("en-CA", opt))) / 86400000);
+      $("promo-k").textContent = days <= 0 ? "Karaoke tonight" : "Next karaoke";
+      $("promo-count").textContent = days <= 0 ? "Tonight! Warm up those vocals." : days === 1 ? "Tomorrow night" : "In " + days + " days";
+      $("promo-remind").hidden = !$("rm"); // the reminder card (calendar + phone alert), when this page has it
+      if (last) { $("promo-recap").href = "/tv?night=" + last.night; $("promo-recap").textContent = "Recap of " + nightLabel(last.night); }
+      $("promo-recap").hidden = !last;
+    }
+  }
+  $("promo-remind").addEventListener("click", () => { const r = $("rm"); if (r) r.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  $("promo-share").addEventListener("click", () => $("share-btn").click());
+
   // ---------- secret songs ----------
   // Found ones show tonight with who sang it and the reward; a phone that sees a fresh find gets a pop-up once.
   const SECRET_SEEN = "okenight-secrets-seen";
@@ -1175,11 +1334,35 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
      ["Rank", rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
+    const st = KaraokeFun.streakOf(e, plays);
+    if (st.alive && st.current >= 1) box.append(el("div", "me-stats", "🔥 " + plural(st.current, "week") + " in a row" + (st.onTheLine ? ". Sing tonight to keep it!" : st.best > st.current ? " (best: " + st.best + ")" : "")));
+    else if (st.best >= 2) box.append(el("div", "me-stats", "Best streak: " + st.best + " weeks in a row. Start a new one Sunday."));
     const myBands = KaraokeFun.favoriteBands(e.rows, 3);
     if (myBands.length) box.append(bandList(myBands, "Your favorite bands"));
-    const prog = KaraokeFun.progress(e).slice(0, 2);
+    const prog = KaraokeFun.progress(e, plays).slice(0, 2);
     prog.forEach((x) => { const r = el("div", "prog"); const bar = el("span", "pb"); const i = el("i"); i.style.width = Math.round(100 * x.have / x.need) + "%"; bar.append(i);
       r.append(el("span", null, icon(x.id) + " Next: " + x.name + " · " + x.desc), el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
+  }
+
+  // ---------- Sunday reminder + hot streaks ----------
+  // Shown when karaoke isn't on, so people leaving (or checking on a Tuesday) can sign up for next week.
+  function renderRemind(live) {
+    const box = $("remind");
+    box.hidden = !!live;
+    if (live) return;
+    const R = (schedule && schedule.reminder) || {};
+    $("rm-sub").textContent = (schedule ? schedule.hours_label + " at " + schedule.venue + ". Next: " + schedule.next_label + "." : "");
+    if (R.gcal) $("rm-gcal").href = R.gcal; else $("rm-gcal").hidden = true;
+    if (R.ntfy) $("rm-push").href = R.ntfy; else { $("rm-push").hidden = true; $("rm-push-note").hidden = true; }
+    const sb = $("rm-streaks");
+    const hot = window.KaraokeFun ? KaraokeFun.hotStreaks(people, plays) : [];
+    sb.hidden = !hot.length;
+    if (!hot.length) return;
+    const me = getMe(), mine = hot.find((x) => x.key === me);
+    sb.replaceChildren(document.createTextNode("🔥 On a streak: "));
+    hot.slice(0, 6).forEach((x, i) => { if (i) sb.append(document.createTextNode(", ")); sb.append(el("strong", null, x.name), document.createTextNode(" " + x.current + " wks")); });
+    if (hot.length > 6) sb.append(document.createTextNode(" and " + (hot.length - 6) + " more"));
+    sb.append(document.createTextNode(mine ? ". Yours is " + mine.current + " weeks, so don’t break it Sunday!" : ". Sing Sunday to keep yours going."));
   }
 
   // "Favorite bands" chips: tap one to see everything sung by that artist.
@@ -1238,7 +1421,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       hostKey = key(clean(data.host || ""));
+      tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
+      queue = data.queue || null;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
@@ -1298,6 +1483,29 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     try { await navigator.clipboard.writeText(captionFor()); $("card-note").textContent = "Caption copied."; }
     catch (e) { $("card-note").textContent = "Couldn't copy on this phone."; }
   });
+
+  // ---------- tips ----------
+  const tipDlg = $("tip-dlg");
+  function tipName() { let n = null; try { n = localStorage.getItem("oke-react-name"); } catch (e) {} const m = getMe(); if (!n && m && window.KaraokeFun && people.get(m)) n = people.get(m).name; return clean(n || ""); }
+  function venmoLink(t) {
+    const from = tipName();
+    const q = new URLSearchParams({ txn: "pay", recipients: tips.venmo, note: (t.emoji ? t.emoji + " " : "") + t.label + " · Oke Night" + (from ? " · from " + from : "") });
+    if (t.amount) q.set("amount", String(t.amount));
+    return "https://venmo.com/?" + q.toString();
+  }
+  $("tip-btn").addEventListener("click", () => {
+    if (!tips || !tips.venmo) return;
+    $("tip-sub").textContent = "Venmo @" + tips.venmo;
+    $("tips").replaceChildren(...tips.menu.map((t) => {
+      const a = el("a", "tip-item"); a.href = venmoLink(t); a.target = "_blank"; a.rel = "noopener";
+      const mid = el("span"); mid.append(el("b", null, t.label)); if (t.note) mid.append(el("small", null, t.note));
+      a.append(el("span", "te", t.emoji || "💸"), mid, el("span", "ta", t.amount ? "$" + (Number.isInteger(t.amount) ? t.amount : t.amount.toFixed(2)) : "You pick"));
+      return a;
+    }));
+    tipDlg.showModal();
+  });
+  $("tip-close").addEventListener("click", () => tipDlg.close());
+  tipDlg.addEventListener("click", (e) => { if (e.target === tipDlg) tipDlg.close(); });
 
   // ---------- go ----------
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (nights.length) renderAwards(); });

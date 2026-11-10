@@ -4,8 +4,9 @@
 // POST /api/host {action, ...}        (header x-host-key)  add {title, artist?, reward?} | remove {id} | reset {id}
 // POST /api/host {action:"setup", code, key, host_name?}  sets or resets the host key; needs the HOST_SETUP_CODE Worker secret
 // POST /api/host {action:"host_name", host_name}           (header x-host-key) the host's singer name ("" = nobody)
+// POST /api/host {action:"tips", venmo, menu}              (header x-host-key) Venmo handle + tip menu (menu null = default)
 // checkSecrets(env)                   -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
-// publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n, host} folded into /api/plays
+// publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n, host, tips} folded into /api/plays
 //
 // Unfound secrets (titles and rewards) are only ever returned to the host key.
 
@@ -97,9 +98,31 @@ export async function checkSecrets(env) {
 // The host's singer name, shown with a host tag on the phone site and the TV. Set on /host.
 export const DEFAULT_HOST = "Bleacher Jeff";
 function cleanHostName(s) { return String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); }
-async function hostName(env) {
-  const v = (await config(env)).host_name;
-  return v === undefined ? DEFAULT_HOST : v;
+
+// Tip menu: the host's Venmo handle and the menu shown behind the Tip button. Both set on /host.
+// Perks ("skip the line" and so on) are on the honor system: the host sees the note in Venmo and does it.
+export const DEFAULT_VENMO = ""; // no Tip button until the host adds a handle on /host
+export const DEFAULT_TIPS = [
+  { emoji: "🙌", label: "Thanks for hosting", amount: 5, note: "Keep the mics on" },
+  { emoji: "🍻", label: "Buy the host a drink", amount: 8, note: "Cheers from the crowd" },
+  { emoji: "🎲", label: "Host picks my next song", amount: 5, note: "No take-backs, you sing it" },
+  { emoji: "⏩", label: "Bump me up the list", amount: 10, note: "Moves you up a few spots (host's call)" },
+  { emoji: "🎤", label: "Make the host sing one", amount: 15, note: "You pick the song" },
+  { emoji: "🥂", label: "Dedicate a song", amount: 5, note: "Host gives it a shout-out on the mic" },
+];
+function cleanVenmo(s) { return String(s || "").trim().replace(/^@/, "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30); }
+function cleanTips(list) {
+  if (!Array.isArray(list)) return null;
+  const t = (s, n) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, n);
+  return list.slice(0, 10).map((x) => {
+    const amt = Math.round(Number(x && x.amount) * 100) / 100;
+    return { emoji: t(x && x.emoji, 8), label: t(x && x.label, 40), amount: amt > 0 && amt <= 1000 ? amt : null, note: t(x && x.note, 80) };
+  }).filter((x) => x.label);
+}
+function tipsFrom(cfg) {
+  let menu = null;
+  try { menu = cfg.tip_menu ? cleanTips(JSON.parse(cfg.tip_menu)) : null; } catch (e) {}
+  return { venmo: cfg.venmo === undefined ? DEFAULT_VENMO : cfg.venmo, menu: menu || DEFAULT_TIPS };
 }
 
 // Found secrets (with who sang them) and how many are still hidden. Never includes unfound titles.
@@ -110,8 +133,9 @@ export async function publicSecrets(env) {
       env.DB.prepare("SELECT s.id, s.title, s.artist, s.reward, s.found_uuid, s.found_at, p.singer, p.night FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.found_uuid IS NOT NULL ORDER BY s.found_at"),
       env.DB.prepare("SELECT count(*) AS n FROM secret_songs WHERE found_uuid IS NULL"),
     ]);
-    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: await hostName(env) };
-  } catch (e) { return { secrets_found: [], secrets_left: 0, host: DEFAULT_HOST }; }
+    const cfg = await config(env);
+    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: cfg.host_name === undefined ? DEFAULT_HOST : cfg.host_name, tips: tipsFrom(cfg) };
+  } catch (e) { return { secrets_found: [], secrets_left: 0, host: DEFAULT_HOST, tips: { venmo: DEFAULT_VENMO, menu: DEFAULT_TIPS } }; }
 }
 
 export async function handleHost(req, env) {
@@ -163,6 +187,14 @@ export async function handleHost(req, env) {
       const name = cleanHostName(body.host_name);
       if (name) await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('host_name', ?)").bind(name).run();
       else await env.DB.prepare("DELETE FROM host_config WHERE k = 'host_name'").run();
+    } else if (body.action === "tips") {
+      const menu = body.menu == null ? null : cleanTips(body.menu);
+      if (body.menu != null && !menu) return json({ error: "Bad tip menu." }, 400);
+      await env.DB.batch([
+        env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('venmo', ?)").bind(cleanVenmo(body.venmo)),
+        menu ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('tip_menu', ?)").bind(JSON.stringify(menu))
+             : env.DB.prepare("DELETE FROM host_config WHERE k = 'tip_menu'"),
+      ]);
     } else if (body.action === "test") {
       if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
       return json({ ok: true });
@@ -171,6 +203,6 @@ export async function handleHost(req, env) {
   await checkSecrets(env);
   const { results } = await env.DB.prepare(
     "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").all();
-  const name = (await config(env)).host_name;
-  return json({ secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: name === undefined ? DEFAULT_HOST : name, now: now() });
+  const fresh = await config(env);
+  return json({ secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? DEFAULT_HOST : fresh.host_name, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

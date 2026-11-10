@@ -43,6 +43,11 @@ button.small { font-size: 15px; padding: 7px 12px; }
 .list li.found { background: var(--gold-soft); border: 1px solid var(--gold); }
 .list li.found .t::before { content: "🎉 "; }
 .tag { font-family: var(--f-mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.tip-row { background: var(--panel-2); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+.tip-row input { font-size: 16px; padding: 9px 10px; }
+.tip-row .full { grid-column: 1 / -1; }
+.tip-row .amt { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; grid-column: 1 / -1; }
+.tip-row .amt span { color: var(--muted); }
 .alerts-on { color: var(--ok); font-weight: 700; }
 code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; overflow-wrap: anywhere; }
 .alarm { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; text-align: center; gap: 14px; padding: 24px;
@@ -57,7 +62,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 </head>
 <body>
 <main>
-  <h1>🎤 Host page<small>Oke Night. Secret songs and host settings. Only the host can open this page.</small></h1>
+  <h1>🎤 Host page<small>Oke Night. Secret songs, tips and host settings. Only the host can open this page.</small></h1>
 
   <section class="card" id="login" hidden>
     <h2 id="login-h">Host key</h2>
@@ -85,6 +90,17 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <form class="card" id="host-form" style="padding:0;border:0;background:none">
         <label>Your singer name in KaraFun. The site and TV show it with a 🎤 Host tag. Leave it empty for no tag.<input id="host-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
         <div class="row"><button type="submit" class="small">Save</button><span class="hint" id="host-saved"></span></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Tips</h2>
+      <form class="card" id="tips-form" style="padding:0;border:0;background:none">
+        <label>Your Venmo handle. Adds a 💸 Tip button to the phone site. Leave it empty to hide the button.<input id="venmo" maxlength="31" placeholder="@your-handle" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <p class="hint">Tip menu. Each one opens Venmo with the amount and a note filled in. Leave the amount empty to let people type their own. Perks are on the honor system: you’ll see the note in Venmo.</p>
+        <div class="list" id="tip-rows"></div>
+        <div class="row"><button type="button" class="ghost small" id="tip-add">Add an item</button><button type="button" class="ghost small" id="tip-default">Use the default menu</button></div>
+        <div class="row"><button type="submit" class="small">Save tips</button><a class="hint" id="venmo-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check your Venmo link</a><span class="hint" id="tips-saved"></span></div>
       </form>
     </section>
 
@@ -167,6 +183,33 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     $("host-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
     hostNameSet = false; load();
   });
+  // ---------- tips ----------
+  let tipsSet = false, defaultTips = [];
+  function tipRow(t) {
+    const row = el("div", "tip-row");
+    const inp = (cls, ph, val, max, extra) => { const i = el("input", cls); i.placeholder = ph; i.value = val == null ? "" : val; i.maxLength = max; Object.assign(i, extra || {}); return i; };
+    const emo = inp("emo", "🎤", t.emoji, 8, { ariaLabel: "Emoji" }), lab = inp("lab", "What it is, e.g. Buy the host a drink", t.label, 40, { ariaLabel: "Item" });
+    const amt = el("div", "amt"), dollar = el("span", null, "$"), num = inp("num", "any amount", t.amount, 7, { inputMode: "decimal", ariaLabel: "Amount in dollars" });
+    const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => row.remove();
+    amt.append(dollar, num, rm);
+    const note = inp("note full", "Small print, e.g. You pick the song (optional)", t.note, 80, { ariaLabel: "Note" });
+    row.append(emo, lab, note, amt); return row;
+  }
+  function fillTips(menu) { $("tip-rows").replaceChildren(...menu.map(tipRow)); }
+  function readTips() {
+    return [...$("tip-rows").children].map((r) => ({ emoji: r.querySelector(".emo").value, label: r.querySelector(".lab").value, amount: r.querySelector(".num").value.replace(/[$\s]/g, "") || null, note: r.querySelector(".note").value })).filter((t) => t.label.trim());
+  }
+  function venmoTestLink(h) { const v = $("venmo-test"); h = (h || "").trim().replace(/^@/, ""); v.hidden = !h; v.href = "https://venmo.com/u/" + encodeURIComponent(h); }
+  $("venmo").addEventListener("input", () => venmoTestLink($("venmo").value));
+  $("tip-add").addEventListener("click", () => { $("tip-rows").append(tipRow({})); $("tip-rows").lastChild.querySelector(".lab").focus(); });
+  $("tip-default").addEventListener("click", () => fillTips(defaultTips));
+  $("tips-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const r = await api("POST", { action: "tips", venmo: $("venmo").value, menu: readTips() });
+    $("tips-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
+    tipsSet = false; load();
+  });
+
   $("logout").addEventListener("click", () => { store.set(KEY, null); key = null; clearTimeout(pollT); showLogin(false); });
 
   // ---------- data ----------
@@ -185,6 +228,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   function render(d) {
     // Fill the host name once, so polling doesn't overwrite what's being typed.
     if (!hostNameSet) { $("host-name").value = d.host_name || ""; hostNameSet = true; }
+    if (!tipsSet && d.tips) { defaultTips = d.default_tips || []; $("venmo").value = d.tips.venmo ? "@" + d.tips.venmo : ""; venmoTestLink(d.tips.venmo); fillTips(d.tips.menu || []); tipsSet = true; }
     if (d.ntfy_topic) { $("topic").textContent = d.ntfy_topic; $("topic-link").href = "https://ntfy.sh/" + d.ntfy_topic; }
     const hid = d.secrets.filter((s) => !s.found_uuid), fnd = d.secrets.filter((s) => s.found_uuid);
     $("hidden-h").textContent = "Hidden (" + hid.length + ")";

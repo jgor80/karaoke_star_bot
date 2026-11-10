@@ -62,6 +62,10 @@ npx wrangler deploy
 host's singer name. The site and the TV show that name with a 🎤 Host tag (it starts as
 Bleacher Jeff).
 
+The Tips card on `/host` sets the host's Venmo handle and the tip menu. Once a handle is
+saved, phones get a 💸 Tip button in the header; each menu item opens Venmo with the amount
+and a note filled in. Leave the handle empty to hide the button.
+
 Setting up the host key, or resetting a forgotten one, needs a setup code that only the
 owner of the Cloudflare account can set. Set it once:
 
