@@ -193,6 +193,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const isLatest = night === nights[nights.length - 1];
     const live = isLatest && now() - last.played_at < LIVE_WINDOW_S;
     const tonight = isLatest && now() - last.played_at < TONIGHT_WINDOW_S;
+    OkeAwards.setHost(data.host || "");
     const reax = OkeAwards.reactionIndex(data);
     const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null, reax.bySong) : null;
     const totals = (r) => OkeAwards.personTotals(r, people, plays);
@@ -216,7 +217,8 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     if (people) people.forEach((e) => { const d = e.badges.find((b) => b.id === "debut"); if (d && d.at.night === night) debut.push(e.name); });
     if (debut.length) badges.push({ id: "debut", name: "First time on the mic", desc: "Welcome to Oke Night!", who: debut });
     // Leaderboards for the night
-    const singers = totals(rows).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60), host: !!data.host && key(e.name.replace(/\s+/g, " ")) === key(data.host.replace(/\s+/g, " ")) }));
+    // The host isn't ranked with the singers (they're on the mic all night).
+    const singers = totals(rows).filter((e) => !OkeAwards.isHost(e.name)).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60) }));
     const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
       return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
     const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "" })).filter((e) => e.n > 1).slice(0, 6);
