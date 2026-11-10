@@ -36,6 +36,10 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .top { display: flex; align-items: center; gap: 12px; height: 56px; }
 .logo { font-family: var(--f-display); font-size: clamp(19px, 5.6vw, 24px); color: var(--hot); letter-spacing: .01em; white-space: nowrap; }
 .logo span { color: var(--gold); }
+a.logo { text-decoration: none; }
+.where { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); margin: 12px 0 10px; }
+.where b { color: var(--ink); font-weight: 600; }
+.where a { color: var(--gold); margin-left: auto; font-size: 14px; white-space: nowrap; }
 .pill { font-family: var(--f-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .bands { margin: 10px 0 4px; }
@@ -511,7 +515,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <body>
 <header>
   <div class="wrap top">
-    <div class="logo">Oke <span>Night</span></div>
+    <a class="logo" href="/" title="Oke Night home">Oke <span>Night</span></a>
     <span class="pill" id="live-pill">Loading</span>
     <div class="spacer"></div>
     <button class="icon-btn tip" id="tip-btn" type="button" aria-haspopup="dialog" hidden><span aria-hidden="true">💸</span><span class="lbl">Tip</span></button>
@@ -523,12 +527,13 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 </header>
 
 <main class="wrap">
+  <div class="where" id="where"><span aria-hidden="true">📍</span><b id="where-name"></b><a href="/?pick=1">Change bar</a></div>
   <!-- TONIGHT -->
   <section class="panel on" id="p-tonight" role="tabpanel" aria-labelledby="t-tonight">
     <div class="stale" id="stale" role="status" hidden></div>
     <!-- After a session: the night's recap scrolls like the TV. From the next morning: promote the next session. -->
     <section class="recap" id="recap" hidden aria-labelledby="recap-h">
-      <div class="recap-top"><h2 id="recap-h">Tonight’s recap</h2><a class="linkish" id="recap-full" href="/tv">Full screen</a></div>
+      <div class="recap-top"><h2 id="recap-h">Tonight’s recap</h2><a class="linkish" id="recap-full" href="tv">Full screen</a></div>
       <iframe id="recap-tv" title="Tonight’s awards and stats, scrolling" loading="lazy"></iframe>
     </section>
     <section class="promo" id="promo" hidden aria-labelledby="promo-when">
@@ -539,7 +544,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <div class="promo-acts">
         <button class="act" id="promo-remind" type="button" hidden>Remind me</button>
         <button class="act ghost" id="promo-share" type="button">Invite friends</button>
-        <a class="act ghost" id="promo-recap" href="/tv">Last week’s recap</a>
+        <a class="act ghost" id="promo-recap" href="tv">Last week’s recap</a>
       </div>
     </section>
     <div class="hero" id="hero">
@@ -574,13 +579,13 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     </div>
     <div class="me" id="me" hidden></div>
     <div class="remind" id="remind" hidden>
-      <div><b id="rm-h">🗓️ Karaoke every Sunday</b><span class="muted small" id="rm-sub"></span></div>
+      <div><b id="rm-h">🗓️ Karaoke every week</b><span class="muted small" id="rm-sub"></span></div>
       <div class="rm-acts">
-        <a class="act" id="rm-ics" href="/sunday.ics">Add to my calendar</a>
+        <a class="act" id="rm-ics" href="sunday.ics">Add to my calendar</a>
         <a class="act ghost" id="rm-gcal" target="_blank" rel="noopener">Google Calendar</a>
         <a class="act ghost" id="rm-push" target="_blank" rel="noopener">Phone alert</a>
       </div>
-      <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app: open the link, tap Subscribe, and you’ll get a heads-up 2 hours before each Sunday starts.</div>
+      <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app: open the link, tap Subscribe, and you’ll get a heads-up 2 hours before each night starts.</div>
       <div class="streaks" id="rm-streaks" hidden></div>
     </div>
     <button class="find-me" id="find-me" type="button" hidden>
@@ -779,6 +784,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const TONIGHT_WINDOW_S = 10 * 3600;
 
   const $ = (id) => document.getElementById(id);
+  // Which bar this page is for (set by the Worker, see venues.js). Remembered so okenight.com can offer it next time.
+  const VENUE = window.OKE_VENUE || { slug: "wbl", name: "Welcome Back Lounge", day_name: "Sunday", path: "/wbl/" };
+  const VENUE_URL = location.origin + VENUE.path;
+  $("where-name").textContent = VENUE.name;
+  try { localStorage.setItem("oke_venue", VENUE.slug); } catch (e) {}
   let secrets = { found: [], left: 0 }; // from /api/plays: secret songs found so far + how many are still hidden
   let liveNow = false; // set by renderTonight; polls faster while live
   let schedule = null; // {venue, status: live|overtime|off, next_label, ...} from the server
@@ -1051,14 +1061,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     ctx.fillStyle = "rgba(255,255,255,.14)"; ctx.fillRect(P, H - 150, maxW, 2);
     ctx.fillStyle = "#ff5c9d"; ctx.font = "400 34px Bungee, Impact, sans-serif"; ctx.fillText("SEE YOU AT THE MIC", P, H - 92);
     const host = /localhost|127\.0|workers\.dev/.test(location.host) || !location.host ? "okenight.com" : location.host.replace(/^www\./, "");
-    ctx.fillStyle = "#b6a3bd"; ctx.font = "500 30px 'DM Mono', monospace"; ctx.textAlign = "right"; ctx.fillText(host, W - P, H - 94); ctx.textAlign = "left";
+    ctx.fillStyle = "#b6a3bd"; ctx.font = "500 30px 'DM Mono', monospace"; ctx.textAlign = "right"; ctx.fillText(host + "/" + VENUE.slug, W - P, H - 94); ctx.textAlign = "left";
   }
   function captionFor() {
     const n = nights.find((x) => x.night === awardsNight); if (!n) return "";
     const t = tallyFor(n.rows), aw = awardsFor(n.rows), get = (id) => aw.find((a) => a.id === id);
     const lines = ["🎤 Oke Night awards, " + nightLabel(n.night, true), t.songs + " songs from " + t.singers + " singers. Here are your winners:"];
     ["mvp", "broken", "marathon", "time", "squad", "last"].forEach((id) => { const a = get(id); if (a) lines.push("• " + a.label + ": " + a.who + " (" + a.what + ")"); });
-    lines.push("", location.origin, "#karaoke #karaokenight");
+    lines.push("", VENUE_URL, "#karaoke #karaokenight");
     return lines.join("\n");
   }
 
@@ -1329,7 +1339,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     clearTimeout(rx.pollT);
     const play = rx.play; if (!play) return;
     if (!document.hidden) {
-      try { const r = await fetch("/api/reactions?play=" + encodeURIComponent(play)); if (r.ok) { const d = await r.json(); if (rx.play === play) { rx.counts = maxCounts(rx.counts, d.counts || {}); paintRx(); } } } catch (e) {}
+      try { const r = await fetch("api/reactions?play=" + encodeURIComponent(play)); if (r.ok) { const d = await r.json(); if (rx.play === play) { rx.counts = maxCounts(rx.counts, d.counts || {}); paintRx(); } } } catch (e) {}
     }
     if (rx.play === play) rx.pollT = setTimeout(pollRx, 4000);
   }
@@ -1346,7 +1356,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     fly(b, RX_BY.get(k).e);
     rx.counts[k] = (rx.counts[k] || 0) + 1; rx.mine[k] = true; paintRx(); // show it right away, the server's count replaces it
     try {
-      const r = await fetch("/api/react", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ play, r: k, dev: deviceId, name: reactName() }) });
+      const r = await fetch("api/react", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ play, r: k, dev: deviceId, name: reactName() }) });
       const d = await r.json().catch(() => ({}));
       if (rx.play !== play) return;
       if (r.ok) { rx.counts = d.counts || rx.counts; if (d.left === 5) rxMsg("5 reactions left on this song"); }
@@ -1381,8 +1391,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     $("promo").hidden = !promo;
     if (recap && recapFor !== last.night) {
       recapFor = last.night;
-      $("recap-tv").src = "/tv?embed=1&night=" + last.night;
-      $("recap-full").href = "/tv?night=" + last.night;
+      $("recap-tv").src = "tv?embed=1&night=" + last.night;
+      $("recap-full").href = "tv?night=" + last.night;
     }
     if (!recap && recapFor) { recapFor = null; $("recap-tv").removeAttribute("src"); }
     if (promo) {
@@ -1393,7 +1403,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("promo-k").textContent = days <= 0 ? "Karaoke tonight" : "Next karaoke";
       $("promo-count").textContent = days <= 0 ? "Tonight! Warm up those vocals." : days === 1 ? "Tomorrow night" : "In " + days + " days";
       $("promo-remind").hidden = !$("rm"); // the reminder card (calendar + phone alert), when this page has it
-      if (last) { $("promo-recap").href = "/tv?night=" + last.night; $("promo-recap").textContent = "Recap of " + nightLabel(last.night); }
+      if (last) { $("promo-recap").href = "tv?night=" + last.night; $("promo-recap").textContent = "Recap of " + nightLabel(last.night); }
       $("promo-recap").hidden = !last;
     }
   }
@@ -1450,7 +1460,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     box.append(row);
     const st = KaraokeFun.streakOf(e, plays);
     if (st.alive && st.current >= 1) box.append(el("div", "me-stats", "🔥 " + plural(st.current, "week") + " in a row" + (st.onTheLine ? ". Sing tonight to keep it!" : st.best > st.current ? " (best: " + st.best + ")" : "")));
-    else if (st.best >= 2) box.append(el("div", "me-stats", "Best streak: " + st.best + " weeks in a row. Start a new one Sunday."));
+    else if (st.best >= 2) box.append(el("div", "me-stats", "Best streak: " + st.best + " weeks in a row. Start a new one " + VENUE.day_name + "."));
     const myBands = KaraokeFun.favoriteBands(e.rows, 3);
     if (myBands.length) box.append(bandList(myBands, "Your favorite bands"));
     const prog = KaraokeFun.progress(e, plays).slice(0, 2);
@@ -1465,6 +1475,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     box.hidden = !!live;
     if (live) return;
     const R = (schedule && schedule.reminder) || {};
+    $("rm-h").textContent = "🗓️ Karaoke every " + VENUE.day_name;
     $("rm-sub").textContent = (schedule ? schedule.hours_label + " at " + schedule.venue + ". Next: " + schedule.next_label + "." : "");
     if (R.gcal) $("rm-gcal").href = R.gcal; else $("rm-gcal").hidden = true;
     if (R.ntfy) $("rm-push").href = R.ntfy; else { $("rm-push").hidden = true; $("rm-push-note").hidden = true; }
@@ -1476,7 +1487,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     sb.replaceChildren(document.createTextNode("🔥 On a streak: "));
     hot.slice(0, 6).forEach((x, i) => { if (i) sb.append(document.createTextNode(", ")); sb.append(el("strong", null, x.name), document.createTextNode(" " + x.current + " wks")); });
     if (hot.length > 6) sb.append(document.createTextNode(" and " + (hot.length - 6) + " more"));
-    sb.append(document.createTextNode(mine ? ". Yours is " + mine.current + " weeks, so don’t break it Sunday!" : ". Sing Sunday to keep yours going."));
+    sb.append(document.createTextNode(mine ? ". Yours is " + mine.current + " weeks, so don’t break it " + VENUE.day_name + "!" : ". Sing " + VENUE.day_name + " to keep yours going."));
   }
 
   // "Favorite bands" chips: tap one to see everything sung by that artist.
@@ -1537,7 +1548,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); }
   async function refresh() {
     try {
-      const r = await fetch("/api/plays", { cache: "no-store" });
+      const r = await fetch("api/plays", { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const text = await r.text(); const data = JSON.parse(text);
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
@@ -1581,14 +1592,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const dlg = $("share-dlg"); let qrDone = false;
   $("share-btn").addEventListener("click", () => {
     $("share-url").textContent = location.host;
-    if (!qrDone && window.QRCode) { new QRCode($("qr"), { text: location.origin + "/", width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M }); qrDone = true; }
+    if (!qrDone && window.QRCode) { new QRCode($("qr"), { text: VENUE_URL, width: 440, height: 440, correctLevel: QRCode.CorrectLevel.M }); qrDone = true; }
     if (!window.QRCode) $("qr").textContent = location.host;
     dlg.showModal();
   });
   $("share-close").addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   $("share-native").addEventListener("click", async () => {
-    const url = location.origin + "/";
+    const url = VENUE_URL;
     if (navigator.share) { try { await navigator.share({ title: "Oke Night", text: "Live karaoke stats 🎤", url }); } catch (e) {} return; }
     try { await navigator.clipboard.writeText(url); $("share-native").textContent = "Link copied"; } catch (e) {}
   });
