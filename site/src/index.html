@@ -405,6 +405,33 @@ nav.tabs button[aria-selected="true"] svg { background: var(--hot-soft); border-
 nav.tabs button:active svg, .act:active, .seg button:active, .chip:active { transform: scale(.96); }
 button:focus-visible, summary:focus-visible, .search:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
+/* crowd draft */
+.dr-go { justify-self: start; }
+.dr-msg:empty { display: none; }
+.dr-msg { margin: 0; }
+.dr-intro { margin: 0; }
+.dr-list .main-t b { color: var(--gold); }
+.dr-vote { font: inherit; font-size: 16px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; white-space: nowrap; min-height: 40px; }
+.dr-vote.on { background: var(--hot-soft); border-color: var(--hot); color: var(--hot); }
+.dr-vote:disabled { opacity: .6; cursor: default; }
+.dr-list li.dr-done { background: linear-gradient(90deg, var(--gold-soft), transparent 85%); }
+dialog.dr-dlg { width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); }
+.dr-dlg[open] { display: grid; gap: 10px; }
+.dr-dlg h3, .dr-dlg p { margin: 0; }
+.dr-picks { max-height: min(52vh, 420px); overflow-y: auto; }
+.dr-picks li { padding: 0; display: block; }
+.dr-picks li.dr-none { padding: 12px 14px; }
+.dr-pick { display: grid; gap: 2px; width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; border: 0; padding: 11px 14px; cursor: pointer; }
+.dr-pick:hover, .dr-pick:focus-visible { background: var(--panel-2, rgba(255,255,255,.04)); }
+.dr-pick .sub-t { grid-column: auto; }
+.dr-confirm { display: grid; gap: 12px; }
+.dr-confirm label { display: grid; gap: 4px; }
+.dr-card { display: grid; gap: 2px; text-align: center; padding: 16px; border-radius: 14px; background: var(--hot-soft); border: 1px solid var(--hot); }
+.dr-card b { font-size: 22px; overflow-wrap: anywhere; }
+.dr-card b:first-child { color: var(--gold); }
+.dr-err { color: var(--hot); margin: 0; }
+.dr-err:empty { display: none; }
+
 /* share dialog */
 dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); padding: 20px; width: min(340px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(8, 3, 12, .7); }
@@ -498,6 +525,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <span class="fm-ic" aria-hidden="true">🎟️</span>
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
     </button>
+    <div class="sec" id="draft"></div>
     <div class="sec">
       <h2 id="dares-h">Tonight's dares</h2>
       <div class="dares" id="dares"></div>
@@ -669,6 +697,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
 <script src="/songs.js"></script>
+<script src="/drafts.js"></script>
 <script>
 (function () {
   const REFRESH_MS = 30000;
@@ -1068,6 +1097,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (typed.length) extra.push(el("div", "also", "Also typed as: " + typed.join(", ")));
       if (person) { const isMe = getMe() === key(e.name); const mb = el("button", "act me-btn" + (isMe ? " ghost" : ""), isMe ? "That’s not me" : "That’s me 🙋"); mb.type = "button";
         mb.addEventListener("click", () => { setMe(isMe ? null : key(e.name)); if (!isMe) show("tonight"); }); extra.push(mb); }
+      if (person && draft) { const db = el("button", "act ghost me-btn", "🎯 Draft " + e.name + " to sing…"); db.type = "button"; db.addEventListener("click", () => draft.open(e.name)); extra.push(db); }
       const earned = el("div", "badges");
       if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
@@ -1409,6 +1439,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     getMyRows: () => { const k = getMe(), e = k && people.get(k); return e ? e.rows : []; },
     onPick: () => $("sg-find-btn").click(),
   }) : null;
+  // Crowd draft: draft a singer + song, second the picks you like (drafts.js). The board rides along on /api/plays.
+  const draft = window.OkeDraft ? OkeDraft.mount({
+    box: $("draft"), deviceId,
+    getPlays: () => plays,
+    getPeople: () => [...people.values()],
+    getName: reactName,
+    setName: (n) => store.set(NAME_KEY, clean(n).slice(0, 24)),
+  }) : null;
   let bingo = null;
   function renderBingo() {
     if (!window.KaraokeBingo) return;
@@ -1429,6 +1467,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
+      if (draft) draft.update(data);
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);

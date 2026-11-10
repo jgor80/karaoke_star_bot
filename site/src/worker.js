@@ -1,7 +1,8 @@
 // Serves the phone page, the TV screen (/tv), the read-only stats JSON, KaraFun catalog search
 // (/api/catalog, see catalog_api.js) and live emoji reactions.
 // All SQL is fixed statements with bound values: visitors can't send queries. The only thing they can
-// write is a reaction to the song on the mic, which is rate limited (see reactions_api.js).
+// write is a reaction to the song on the mic, which is rate limited (see reactions_api.js), and crowd
+// draft picks and seconds, also rate limited (see drafts_api.js).
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 import PAGE from "./index.html";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
@@ -15,6 +16,8 @@ import HOST from "./host.html";
 import SONGS from "./songs.js";
 import { handleCatalog } from "./catalog_api.js";
 import { maybeImportCatalog } from "./catalog_import.js";
+import { handleDraft, draftBoard } from "./drafts_api.js";
+import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
 
 const PLAYS_SQL =
@@ -46,6 +49,10 @@ export default {
       if (req.method !== "POST") return new Response("POST only", { status: 405 });
       return handleReact(req, env);
     }
+    if (url.pathname === "/api/draft") {
+      if (req.method !== "POST") return new Response("POST only", { status: 405 });
+      return handleDraft(req, env);
+    }
     if (url.pathname === "/api/host") return handleHost(req, env);
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
@@ -61,9 +68,9 @@ export default {
       let res = await cache.match(key);
       if (!res) {
         await checkSecrets(env).catch(() => {}); // a new song may have found a secret: mark it before reading
-        const [[plays, sync], reax, secrets, queue] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env), liveQueue(env)]);
+        const [[plays, sync], reax, secrets, queue, drafts] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env), liveQueue(env), draftBoard(env)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets, ...queue }),
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets, ...queue, ...drafts }),
           { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));
@@ -99,6 +106,9 @@ export default {
     }
     if (url.pathname === "/songs.js") {
       return new Response(SONGS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
+    }
+    if (url.pathname === "/drafts.js") {
+      return new Response(DRAFTS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     if (url.pathname === "/awards.js") {
       return new Response(AWARDS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
