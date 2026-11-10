@@ -147,7 +147,7 @@
       if (opts.count) opts.count.textContent = todo.length ? String(todo.length) : "";
     }
 
-    // Before the laptop has loaded KaraFun's catalog, search the songs already sung here.
+    // Until the first catalog import finishes, search the songs already sung here.
     function localSearch(words) {
       const seen = new Map(), sung = sungIndex();
       (opts.getPlays() || []).forEach((p) => {

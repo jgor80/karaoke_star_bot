@@ -8,9 +8,6 @@ again never creates duplicates.
 If karaoke_sync_config.json sits next to this script, new plays are also
 uploaded to the Cloudflare D1 database it names.
 
-Once a week the daily run also refreshes KaraFun's song catalog for the site's
-Songbook (see karaoke_catalog.py; needs that file next to this one).
-
 With --watch it keeps running and syncs within seconds whenever KaraFun
 writes a new song, so the public stats site stays live during a session.
 
@@ -331,18 +328,6 @@ def watch(a, log):
         time.sleep(WATCH_POLL_S)
 
 
-def refresh_catalog(a):
-    """Weekly: send changes in KaraFun's song catalog to D1 for the site's Songbook (karaoke_catalog.py)."""
-    try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        import karaoke_catalog
-        with open(a.config, encoding="utf-8") as f:
-            cfg = json.load(f)
-        return karaoke_catalog.refresh(a.target, cfg, d1_query)
-    except Exception as e:  # the catalog never stops the play sync
-        return f"catalog error: {e}"
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", default=DEFAULT_SOURCE)
@@ -355,10 +340,6 @@ def main():
         sys.exit(watch(a, log))
     ok, msg = run_once(a)
     write_log(log, msg)
-    if ok and os.path.exists(a.config):
-        catalog_msg = refresh_catalog(a)
-        if catalog_msg:
-            write_log(log, catalog_msg)
     sys.exit(0 if ok else 1)
 
 

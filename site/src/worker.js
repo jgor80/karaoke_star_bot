@@ -14,6 +14,7 @@ import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
 import SONGS from "./songs.js";
 import { handleCatalog } from "./catalog_api.js";
+import { maybeImportCatalog } from "./catalog_import.js";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays ORDER BY played_at";
@@ -83,5 +84,7 @@ export default {
   // Every minute: catch secret songs even when no phone or TV is open, so the host still gets the push.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(checkSecrets(env));
+    // Weekly: refresh KaraFun's song catalog for the Songbook (no-op unless due, see catalog_import.js).
+    ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
   },
 };
