@@ -63,6 +63,17 @@
     return wrap;
   }
 
+  // Small helpers for the song request box.
+  function readStore(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function writeStore(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function readReqs() { try { const v = JSON.parse(readStore("oke-requests") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function writeReqs(v) { writeStore("oke-requests", JSON.stringify(v)); }
+  function deviceId() {
+    let d = readStore("oke-device");
+    if (!/^[a-f0-9]{32}$/.test(d || "")) { const a = new Uint8Array(16); crypto.getRandomValues(a); d = [...a].map((x) => x.toString(16).padStart(2, "0")).join(""); writeStore("oke-device", d); }
+    return d;
+  }
+
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const key = (s) => (s || "").trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const songKey = (title, artist) => key(title) + "|" + key(artist);
@@ -150,7 +161,7 @@
     topWrap.append(topH, top);
     const ol = el("ol", "list songs");
     const moreBtn = el("button", "act ghost more", "Show more"); moreBtn.type = "button"; moreBtn.hidden = true;
-    find.append(sw, filters, note, topWrap, ol, moreBtn);
+    find.append(sw, filters, note, topWrap, ol, moreBtn, requestBox());
 
     // ---- my list ----
     mine.replaceChildren();
@@ -323,7 +334,7 @@
             (q ? "Nothing sung here matches “" + q + "” yet. The full song list is coming soon." : "The full song list is coming soon.");
         } else {
           results = append ? results.concat(d.songs) : d.songs; more = d.more;
-          if (!results.length) note.textContent = "No songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words." : "these filters. Try loosening one.");
+          if (!results.length) note.textContent = "No songs match " + (q ? "“" + q + "”" + (filtersOn() ? " with these filters" : "") + ". Try fewer words, or request it below." : "these filters. Try loosening one.");
           else if (!q && !filtersOn()) note.textContent = "Most popular of " + total.toLocaleString("en-US") + " songs. Search or filter to find more.";
           else note.textContent = describe() + "." + (f.voice && d.voice && d.voice.done < d.voice.total ?
             " Singer voices are still being looked up (" + Math.floor(100 * d.voice.done / d.voice.total) + "% of artists so far), so more songs will show up." : f.voice ? " Bands aren’t sorted by voice yet." : "");
@@ -354,6 +365,63 @@
       return what + ", " + (SORT_OPTS.find((o) => o[0] === f.sort) || SORT_OPTS[0])[2];
     }
     moreBtn.addEventListener("click", () => { page++; search(true); });
+
+    // ---- request a song that isn't in the list (goes to the host, see requests_api.js) ----
+    function requestBox() {
+      const box = el("div", "card req");
+      const open = el("button", "act ghost req-open", "🙋 Request a song"); open.type = "button";
+      const lead = el("p", "req-lead"); lead.append(el("b", null, "Can’t find your song?"), document.createTextNode(" Ask the host to add it."));
+      const form = el("form", "req-form"); form.hidden = true;
+      const field = (label, max, ph) => { const l = el("label", "req-l", label), i = el("input", "search"); Object.assign(i, { maxLength: max, placeholder: ph, autocomplete: "off" }); l.append(i); form.append(l); return i; };
+      const tIn = field("Song title", 100, "e.g. Dancing Queen"), aIn = field("Artist", 80, "e.g. ABBA"), nIn = field("Your name (optional)", 24, "So the host knows who asked");
+      tIn.required = true;
+      const send = el("button", "act", "Send to the host"); send.type = "submit";
+      const cancel = el("button", "act ghost", "Cancel"); cancel.type = "button";
+      const row = el("div", "btns"); row.append(send, cancel); form.append(row);
+      const msg = el("p", "muted small req-msg"); msg.setAttribute("role", "status"); msg.hidden = true;
+      const mineH = el("div", "me-kicker", "Your requests"), mineL = el("ul", "req-mine");
+      box.append(lead, open, form, msg, mineH, mineL);
+      const show = (on) => {
+        form.hidden = !on; open.hidden = on;
+        if (on) { if (!tIn.value && q) tIn.value = q; if (!nIn.value) nIn.value = readStore("oke-react-name") || ""; tIn.focus(); }
+      };
+      open.addEventListener("click", () => { msg.hidden = true; show(true); });
+      cancel.addEventListener("click", () => show(false));
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault(); send.disabled = true; msg.hidden = false; msg.textContent = "Sending…";
+        try {
+          const r = await fetch("/api/request", { method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: tIn.value, artist: aIn.value, name: nIn.value, dev: deviceId() }) });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || "That didn’t go through.");
+          msg.textContent = d.merged ? "Someone already asked for that one, so your vote was added. 🎤" : "Sent to the host! 🎤 You’ll see here if it gets added.";
+          const mine = readReqs().filter((x) => x.id !== d.id);
+          mine.unshift({ id: d.id, t: tIn.value.trim(), a: aIn.value.trim(), s: "open" }); writeReqs(mine.slice(0, 20));
+          if (nIn.value.trim()) writeStore("oke-react-name", nIn.value.trim());
+          tIn.value = ""; aIn.value = ""; show(false); renderReqs();
+        } catch (err) { msg.textContent = err.message || "That didn’t go through. Try again in a bit."; }
+        send.disabled = false;
+      });
+      const LABEL = { open: "⏳ Asked", added: "✅ Added, go sign up!", unavailable: "❌ Not available" };
+      function renderReqs() {
+        const mine = readReqs();
+        mineH.hidden = mineL.hidden = !mine.length;
+        mineL.replaceChildren(...mine.map((x) => { const li = el("li");
+          li.append(el("span", "req-t", x.t + (x.a ? " – " + x.a : "")), el("span", "req-s req-" + x.s, LABEL[x.s] || LABEL.open)); return li; }));
+      }
+      async function refreshReqs() {
+        const mine = readReqs(), ids = mine.filter((x) => x.s === "open").map((x) => x.id);
+        if (!ids.length) return;
+        try {
+          const d = await (await fetch("/api/request?ids=" + ids.join(","))).json();
+          const st = new Map((d.requests || []).map((r) => [r.id, r.status]));
+          writeReqs(mine.filter((x) => x.s !== "open" || st.has(x.id)).map((x) => st.has(x.id) ? { ...x, s: st.get(x.id) } : x));
+          renderReqs();
+        } catch (e) {}
+      }
+      renderReqs(); setTimeout(refreshReqs, 1500);
+      return box;
+    }
     clearDone.addEventListener("click", () => { list = list.filter((x) => !sungAt(x)); writeList(list); renderMine(); renderResults(); });
     shareBtn.addEventListener("click", async () => {
       const todo = list.filter((x) => !sungAt(x));

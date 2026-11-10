@@ -20,6 +20,7 @@ import { handleArt } from "./art_api.js";
 import ART from "./art.js";
 import { maybeImportCatalog } from "./catalog_import.js";
 import { updateVoices } from "./voice_import.js";
+import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
@@ -60,6 +61,7 @@ export default {
     }
     if (url.pathname === "/api/host") return handleHost(req, env);
     if (url.pathname === "/api/crowd") return handleCrowd(req, env); // the /host phone's crowd meter (host key only)
+    if (url.pathname === "/api/request") return handleRequest(req, env, ctx); // song requests for the host, see requests_api.js
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
     if (url.pathname === "/api/catalog") return handleCatalog(req, env, ctx);

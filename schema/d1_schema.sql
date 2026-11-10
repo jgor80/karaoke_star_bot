@@ -110,3 +110,16 @@ CREATE TABLE IF NOT EXISTS crowd_levels (ts integer not null, src text not null,
 -- crowd_scores: per song, the applause peak, the room's chatter level (base) and how far above it the
 -- applause went (over, dB). over is NULL when nobody was listening.
 CREATE TABLE IF NOT EXISTS crowd_scores (uuid text primary key, src text, peak real, base real, over real, scored_at integer not null);
+
+-- Song requests from the Songbook ("Request a song"): songs people want that aren't in the song list.
+-- Only the host sees them (/host + ntfy push). Created by site/src/requests_api.js.
+CREATE TABLE IF NOT EXISTS song_requests (
+  id integer primary key autoincrement, title text not null, artist text, k text not null,
+  names text, votes integer not null default 1, status text not null default 'open',  -- open | added | unavailable
+  created_at integer not null, updated_at integer not null);
+CREATE INDEX IF NOT EXISTS song_requests_k ON song_requests (k, status);
+CREATE TABLE IF NOT EXISTS song_request_asks (
+  request_id integer not null, device_id text not null, ip_hash text, day text not null, created_at integer not null,
+  primary key (request_id, device_id));
+CREATE INDEX IF NOT EXISTS song_request_asks_dev ON song_request_asks (device_id, day);
+CREATE INDEX IF NOT EXISTS song_request_asks_ip ON song_request_asks (ip_hash, day);

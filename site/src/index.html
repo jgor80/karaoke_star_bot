@@ -386,6 +386,16 @@ details.singer.song summary .main-t { font-weight: 600; }
 .rm { border-color: transparent; color: var(--muted); font-size: 26px; }
 .band[aria-pressed="true"] { background: var(--hot-soft); border-color: var(--hot); color: var(--ink); }
 .cat-note { margin: 0; }
+/* "Request a song" box at the bottom of the Songbook (songs.js) */
+.req { display: grid; gap: 10px; }
+.req-lead { margin: 0; }
+.req-form { display: grid; gap: 10px; }
+.req-l { display: grid; gap: 4px; font-size: 15px; color: var(--muted); }
+.req-mine { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.req-mine li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.req-t { overflow-wrap: anywhere; min-width: 0; }
+.req-s { flex: none; font-size: 14px; color: var(--muted); }
+.req-s.req-added { color: var(--gold); font-weight: 700; }
 /* Songbook filters: swipeable pill rows (songs.js). Genre pills each get their own hue (--h). */
 .cat-filters { display: grid; gap: 8px; min-width: 0; }
 .pills { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding: 2px 16px; scroll-snap-type: x proximity; scroll-padding-inline: 16px; }

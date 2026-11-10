@@ -88,6 +88,13 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <p class="hint" id="ntfy">For alerts when this page is closed, install the free <b>ntfy</b> app, tap <b>+</b>, and subscribe to <code id="topic">…</code>. <a id="topic-link" href="#" target="_blank" rel="noopener" style="color:var(--hot)">Open it</a></p>
     </section>
 
+    <section>
+      <h2 id="req-h">Song requests</h2>
+      <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below.</p>
+      <ul class="list" id="req-list"></ul>
+      <details id="req-done-box" hidden><summary class="hint">Recently handled</summary><ul class="list" id="req-done"></ul></details>
+    </section>
+
     <section class="card">
       <h2>Crowd meter mic</h2>
       <p class="hint">Scores the applause after each song. The karaoke laptop listens on its own when its sync is running. This phone can listen too, as a backup or a second spot: park it at the host table, away from the speakers, and leave this page open. Only loudness numbers are sent, never sound.</p>
@@ -261,6 +268,22 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       li.append(el("span", "tag", "Found " + when(s.found_at)), el("span", "t", s.sung_title || s.title), el("span", "s", "Sung by " + (s.singer || "someone")));
       if (s.reward) li.append(el("span", "rw", "🎁 " + s.reward));
       li.append(actions(s, true)); fl.append(li); });
+    // Song requests from the Songbook
+    const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
+    $("req-h").textContent = "Song requests (" + rq.length + ")";
+    if (!rq.length) rl.append(el("li", "s", "No open requests."));
+    rq.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")),
+        el("span", "s", (x.votes > 1 ? "🙋 " + x.votes + " asked · " : "") + (x.names ? "from " + x.names + " · " : "") + when(x.created_at)));
+      const row = el("div", "row");
+      [["✅ Added", "added"], ["❌ Not available", "unavailable"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: st }); row.append(b); });
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => { if (confirm("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
+      row.append(rm); li.append(row); rl.append(li); });
+    const rd = d.requests_done || [], rdl = $("req-done"); rdl.replaceChildren(); $("req-done-box").hidden = !rd.length;
+    rd.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", (x.status === "added" ? "✅ Added" : "❌ Not available") + " · " + when(x.updated_at)));
+      const b = el("button", "ghost small", "Undo"); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: "open" });
+      const row = el("div", "row"); row.append(b); li.append(row); rdl.append(li); });
     // Crowd draft picks and blocked names
     const dr = d.drafts || [], dl = $("draft-list"); dl.replaceChildren();
     $("draft-h").textContent = "Crowd draft (" + dr.length + ")";
