@@ -225,6 +225,16 @@ details.singer[open] summary .chev { transform: rotate(90deg); }
 .list li[data-who]:active { background: var(--panel-2); }
 details.singer.song summary .main-t { font-weight: 600; }
 
+/* the line: how many are waiting in KaraFun's queue and about how long a new sign-up waits */
+.line { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
+.line-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.line-row div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 13px; color: var(--muted); }
+.line-row strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: var(--ink); line-height: 1.15; }
+.line-next { font-size: 16px; color: var(--muted); overflow-wrap: anywhere; }
+.line-next b { color: var(--ink); font-weight: 600; }
+.line-mine { font-size: 16px; color: var(--gold); font-weight: 600; }
+.line-note { font-size: 13px; color: var(--muted); }
+
 /* "that's me" card */
 .me { border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); display: grid; gap: 8px; }
 .me-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -408,6 +418,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
         </form>
       </div>
     </div>
+    <div class="line" id="line" hidden aria-live="polite"></div>
     <div class="secret" id="secret" hidden></div>
     <div class="tally-wrap">
       <div class="tally-cap" id="tally-cap"></div>
@@ -593,6 +604,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
+  let queue = null; // KaraFun's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
+  const QUEUE_DEFAULT_LEN = 240; // a queued song with no known length counts as 4 minutes
+  const QUEUE_GAP_S = 25;       // changeover between singers (start-to-start runs ~25s past song length)
   const STALE_S = 15 * 60; // during the session, warn when the laptop hasn't synced for this long
 
   // ---------- helpers ----------
@@ -681,6 +695,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("hero-meta").append(el("span", null, "Song #" + idx + " tonight"), el("span", null, mmss(Math.min(len, Math.floor(elapsed))) + " / " + mmss(len)));
     }
     renderRx(singing ? last : null);
+    renderLine(live && !paused, singing ? last : null, singing ? Math.max(0, len - elapsed) : 0);
     renderHeroWins(last, tonight);
     renderSecrets(n, tonight);
     const venue = schedule ? schedule.venue : "";
@@ -725,6 +740,41 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     renderMe(n, tonight);
     renderRemind(live);
     renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)));
+  }
+
+  // ---------- the line (KaraFun's queue) ----------
+  // The first queue item is the song on the mic once it has started, so it's skipped while that song plays.
+  // Waits add up the queued songs' lengths plus a short changeover each; they're estimates, and the host can reorder.
+  function waitLabel(s) {
+    const m = Math.round(s / 60);
+    if (m < 1) return "< 1 min";
+    return m < 60 ? m + " min" : Math.floor(m / 60) + " hr" + (m % 60 ? " " + (m % 60) + " min" : "");
+  }
+  function renderLine(on, current, remaining) {
+    const box = $("line");
+    let items = on && queue && Array.isArray(queue.items) ? queue.items.slice() : null;
+    if (items && current && items.length && items[0].id === current.song_id) items.shift();
+    box.hidden = !items;
+    if (!items) return;
+    box.replaceChildren();
+    const starts = []; let t = current ? remaining + QUEUE_GAP_S : 0;
+    items.forEach((q) => { starts.push(t); t += (Number(q.len) || QUEUE_DEFAULT_LEN) + QUEUE_GAP_S; });
+    box.append(el("div", "me-kicker", "The line"));
+    const row = el("div", "line-row");
+    [[items.length ? String(items.length) : "0", items.length === 1 ? "singer waiting" : "singers waiting"],
+     [items.length || current ? "~" + waitLabel(t) : "None", "wait if you sign up now"]].forEach(([v, l]) => {
+      const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
+    box.append(row);
+    if (!items.length) { box.append(el("div", "line-next", current ? "Nobody's queued after this song. Grab the mic!" : "Nobody's in line. Grab the mic!")); return; }
+    const names = items.slice(0, 3).map((q) => clean(q.singer) || "someone");
+    const nx = el("div", "line-next"); nx.append(document.createTextNode("Next up: "), el("b", null, names[0]));
+    if (names.length > 1) nx.append(document.createTextNode(", then " + names.slice(1).join(", ") + (items.length > 3 ? " and " + (items.length - 3) + " more" : "")));
+    box.append(nx);
+    // Your spot, if this phone has a name ("That's me" or the reactions name)
+    const mine = [getMe(), key(clean(store.get(NAME_KEY) || ""))].filter(Boolean);
+    const at = mine.length ? items.findIndex((q) => mine.includes(key(clean(q.singer)))) : -1;
+    if (at >= 0) box.append(el("div", "line-mine", at === 0 && starts[0] < 60 ? "🎤 You're up next, get ready!" : "🎟️ You're #" + (at + 1) + " in line · about " + waitLabel(starts[at])));
+    box.append(el("div", "line-note", "Wait times are estimates from song lengths. The host may shuffle the order."));
   }
 
   // ---------- dares, watch, unlocked badges ----------
@@ -1253,6 +1303,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       hostKey = key(clean(data.host || ""));
       lastSyncTs = Number(data.last_sync_ts) || 0;
+      queue = data.queue || null;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
