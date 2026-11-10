@@ -150,7 +150,7 @@ export async function handleDraft(req, env) {
   const singer = await knownSinger(env, key);
   if (!singer) return json({ error: "Only people who’ve sung here can be drafted." }, 400);
   const song = await lookupSong(env, songId);
-  if (!song) return json({ error: "Couldn’t find that song in KaraFun." }, 400);
+  if (!song) return json({ error: "Couldn’t find that song." }, 400);
 
   // Already drafted? Then this counts as a second for it instead of a new pick.
   const dup = await env.DB.prepare("SELECT id FROM drafts WHERE night = ?1 AND singer_key = ?2 AND song_id = ?3 AND removed_at IS NULL").bind(night, key, songId).first();

@@ -19,7 +19,8 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS artist_voice_v ON artist_voice (voice, artist)",
   "CREATE TABLE IF NOT EXISTS mb_person (nk text primary key, kind text, gender text, checked integer)",
 ];
-const PER_RUN = 14;      // MusicBrainz requests per cron run
+const PER_RUN = 16;      // MusicBrainz requests per cron run
+const MAX_SLOWDOWNS = 5; // "slow down" answers allowed per run before giving up until the next minute
 const GAP_MS = 1100;
 const MAX_PARTS = 4;
 const MB_UA = "OkeNight/1.0 ( https://okenight.com )";
@@ -95,16 +96,20 @@ export async function updateVoices(env, now = Date.now()) {
     const { results } = await env.DB.prepare("SELECT nk, kind, gender FROM mb_person WHERE nk IN (" + chunk.map(() => "?").join(",") + ")").bind(...chunk).all();
     results.forEach((r) => known.set(r.nk, r));
   }
-  let budget = PER_RUN, stop = false, done = 0;
+  let budget = PER_RUN, stop = false, done = 0, slowdowns = 0;
   const ask = async (name) => {
     const nk = norm(name);
     if (!nk) return { kind: "none", gender: "" };
     if (known.has(nk)) return known.get(nk);
-    if (stop || budget <= 0) return undefined;
-    if (budget < PER_RUN) await sleep(GAP_MS);
-    budget--;
-    const r = await lookup(name).catch(() => undefined);
-    if (r === null) { stop = true; return undefined; }
+    let r = null;
+    // MusicBrainz often says "slow down" to Cloudflare's shared addresses, so back off and try again a few times.
+    while (r === null) {
+      if (stop || budget <= 0) return undefined;
+      if (budget < PER_RUN) await sleep(slowdowns ? 2500 : GAP_MS);
+      budget--;
+      r = await lookup(name).catch(() => undefined);
+      if (r === null && ++slowdowns >= MAX_SLOWDOWNS) stop = true;
+    }
     if (!r) return undefined;
     known.set(nk, r);
     await env.DB.prepare("INSERT OR REPLACE INTO mb_person (nk, kind, gender, checked) VALUES (?, ?, ?, ?)").bind(nk, r.kind, r.gender, Math.floor(now / 1000)).run();

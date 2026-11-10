@@ -121,7 +121,7 @@
     let stage = "singer", singer = null, song = null, timer = null, ctrl = null;
 
     function singers() {
-      // People who've sung on their own (the server only accepts names KaraFun has seen), tonight's singers first.
+      // People who've sung on their own (the server only accepts names the karaoke app has seen), tonight's singers first.
       const solo = new Set((plays || []).map((p) => skey(p.singer)));
       const last = plays.length ? plays[plays.length - 1].night : null;
       return (opts.getPeople() || []).filter((e) => solo.has(skey(e.name))).map((e) => ({
@@ -163,7 +163,7 @@
         const mine = theirSongs();
         picks.replaceChildren();
         if (mine.length) { picks.append(el("li", "muted small dr-none", "Or an encore of one of theirs:")); mine.forEach((s) => picks.append(songRow(s))); }
-        else picks.append(el("li", "muted small dr-none", "Search KaraFun’s whole catalog."));
+        else picks.append(el("li", "muted small dr-none", "Search the whole song catalog."));
         return;
       }
       try {
