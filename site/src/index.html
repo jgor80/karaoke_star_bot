@@ -54,6 +54,19 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .secret-pop .sp-rw { font-size: 19px; font-weight: 700; }
 @media (prefers-reduced-motion: no-preference) { .secret-pop .sp-in { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.recap { display: grid; gap: 8px; }
+.recap-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.recap h2 { margin: 0; font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); font-weight: 500; }
+.recap iframe { width: 100%; height: min(78vh, 680px); border: 1px solid var(--line); border-radius: 18px; background: var(--bg); display: block; }
+.promo { border-radius: 18px; padding: 22px 18px; border: 1px solid var(--gold); display: grid; gap: 6px;
+  background: radial-gradient(120% 90% at 100% 0%, #4a2a14 0%, transparent 60%), var(--panel); }
+.promo-k { font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.promo-when { font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; color: #fff; overflow-wrap: anywhere; }
+.promo-where { font-size: 20px; font-weight: 700; }
+.promo-count { font-size: 18px; color: var(--hot); font-weight: 700; }
+.promo-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.promo-acts .act { text-decoration: none; font-size: 16px; }
+.act.ghost, a.act.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .pill.live { border-color: var(--hot); color: var(--hot); }
 .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); margin-right: 6px; vertical-align: 1px; }
 @media (prefers-reduced-motion: no-preference) { .pill.live::before { animation: blink 1.4s infinite; } }
@@ -412,6 +425,22 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <!-- TONIGHT -->
   <section class="panel on" id="p-tonight" role="tabpanel" aria-labelledby="t-tonight">
     <div class="stale" id="stale" role="status" hidden></div>
+    <!-- After a session: the night's recap scrolls like the TV. From the next morning: promote the next session. -->
+    <section class="recap" id="recap" hidden aria-labelledby="recap-h">
+      <div class="recap-top"><h2 id="recap-h">Tonight’s recap</h2><a class="linkish" id="recap-full" href="/tv">Full screen</a></div>
+      <iframe id="recap-tv" title="Tonight’s awards and stats, scrolling" loading="lazy"></iframe>
+    </section>
+    <section class="promo" id="promo" hidden aria-labelledby="promo-when">
+      <div class="promo-k" id="promo-k">Next karaoke</div>
+      <div class="promo-when" id="promo-when"></div>
+      <div class="promo-where" id="promo-where"></div>
+      <div class="promo-count" id="promo-count"></div>
+      <div class="promo-acts">
+        <button class="act" id="promo-remind" type="button" hidden>Remind me</button>
+        <button class="act ghost" id="promo-share" type="button">Invite friends</button>
+        <a class="act ghost" id="promo-recap" href="/tv">Last week’s recap</a>
+      </div>
+    </section>
     <div class="hero" id="hero">
       <div class="label" id="hero-label">On the mic</div>
       <div class="who" id="hero-who">…</div>
@@ -715,6 +744,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("hero-meta").textContent = "";
       $("hero-meta").append(el("span", null, "Song #" + idx + " tonight"), el("span", null, mmss(Math.min(len, Math.floor(elapsed))) + " / " + mmss(len)));
     }
+    renderStage(live, last);
     renderRx(singing ? last : null);
     renderLine(live && !paused, singing ? last : null, singing ? Math.max(0, len - elapsed) : 0);
     renderHeroWins(last, tonight);
@@ -1195,6 +1225,39 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     store.set(NAME_KEY, v); $("rx-name").hidden = true; paintRx(); rxMsg(v ? "Got it, " + v + "!" : "Name cleared.");
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && rx.play) pollRx(); });
+
+  // ---------- after the session: recap, then promote the next one ----------
+  // A karaoke night runs 6am to 6am Central (same as plays.night). Once the session closes, the rest of that
+  // night shows the scrolling TV recap. From 6am the next day the top of the page promotes the next session.
+  const NIGHT_TZ = "America/Chicago";
+  const nightOf = (ts) => new Date((ts - 6 * 3600) * 1000).toLocaleDateString("en-CA", { timeZone: NIGHT_TZ });
+  let recapFor = null;
+  function renderStage(live, last) {
+    const recap = !live && !!last && last.night === nightOf(now());
+    const promo = !live && !recap && !!schedule;
+    $("hero").hidden = recap || promo;
+    $("recap").hidden = !recap;
+    $("promo").hidden = !promo;
+    if (recap && recapFor !== last.night) {
+      recapFor = last.night;
+      $("recap-tv").src = "/tv?embed=1&night=" + last.night;
+      $("recap-full").href = "/tv?night=" + last.night;
+    }
+    if (!recap && recapFor) { recapFor = null; $("recap-tv").removeAttribute("src"); }
+    if (promo) {
+      const t = schedule.next_start, opt = { timeZone: NIGHT_TZ };
+      $("promo-when").textContent = new Date(t * 1000).toLocaleDateString("en-US", { ...opt, weekday: "long", month: "short", day: "numeric" });
+      $("promo-where").textContent = new Date(t * 1000).toLocaleTimeString("en-US", { ...opt, hour: "numeric", minute: "2-digit" }).replace(":00", "") + " · " + schedule.venue;
+      const days = Math.round((Date.parse(nightOf(t + 6 * 3600)) - Date.parse(new Date(now() * 1000).toLocaleDateString("en-CA", opt))) / 86400000);
+      $("promo-k").textContent = days <= 0 ? "Karaoke tonight" : "Next karaoke";
+      $("promo-count").textContent = days <= 0 ? "Tonight! Warm up those vocals." : days === 1 ? "Tomorrow night" : "In " + days + " days";
+      $("promo-remind").hidden = !$("rm"); // the reminder card (calendar + phone alert), when this page has it
+      if (last) { $("promo-recap").href = "/tv?night=" + last.night; $("promo-recap").textContent = "Recap of " + nightLabel(last.night); }
+      $("promo-recap").hidden = !last;
+    }
+  }
+  $("promo-remind").addEventListener("click", () => { const r = $("rm"); if (r) r.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  $("promo-share").addEventListener("click", () => $("share-btn").click());
 
   // ---------- secret songs ----------
   // Found ones show tonight with who sang it and the reward; a phone that sees a fresh find gets a pop-up once.
