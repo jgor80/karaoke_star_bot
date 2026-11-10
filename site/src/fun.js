@@ -259,17 +259,19 @@
   }
 
   // ---------- season awards (all nights) ----------
-  function seasonAwards(plays, ppl) {
+  // `isHost` (optional, name -> bool) leaves the host out of the volume awards: most songs, nights and mic time.
+  function seasonAwards(plays, ppl, isHost) {
     const out = [], list = [...ppl.values()].filter((e) => e.rows.length);
+    const guests = isHost ? list.filter((e) => !isHost(e.name)) : list;
     // Ties go to more songs, then more nights, then more mic time: the same order the site's leaderboards use.
     const secsOf = (e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0);
     const tie = (a, b) => b.rows.length - a.rows.length || new Set(b.rows.map((p) => p.night)).size - new Set(a.rows.map((p) => p.night)).size || secsOf(b) - secsOf(a);
-    const best = (score, min) => list.filter((e) => (min ? e.rows.length >= min : true)).map((e) => ({ e, v: score(e) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v || tie(a.e, b.e))[0];
+    const best = (score, min, pool) => (pool || list).filter((e) => (min ? e.rows.length >= min : true)).map((e) => ({ e, v: score(e) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v || tie(a.e, b.e))[0];
     const nightsOf = (e) => new Set(e.rows.map((p) => p.night)).size;
     let w;
-    if ((w = best((e) => e.rows.length))) out.push({ id: "s-mvp", label: "Season MVP", who: w.e.name, what: "Most songs of the season", stat: w.v + " songs" });
-    if ((w = best(nightsOf)) && w.v > 1) out.push({ id: "s-loyal", label: "Perfect Attendance", who: w.e.name, what: "Showed up and sang the most nights", stat: w.v + " nights" });
-    if ((w = best((e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0)))) out.push({ id: "s-mic", label: "Mic Time Champ", who: w.e.name, what: "Most minutes on the mic", stat: Math.round(w.v / 60) + " minutes" });
+    if ((w = best((e) => e.rows.length, 0, guests))) out.push({ id: "s-mvp", label: "Season MVP", who: w.e.name, what: "Most songs of the season", stat: w.v + " songs" });
+    if ((w = best(nightsOf, 0, guests)) && w.v > 1) out.push({ id: "s-loyal", label: "Perfect Attendance", who: w.e.name, what: "Showed up and sang the most nights", stat: w.v + " nights" });
+    if ((w = best((e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0), 0, guests))) out.push({ id: "s-mic", label: "Mic Time Champ", who: w.e.name, what: "Most minutes on the mic", stat: Math.round(w.v / 60) + " minutes" });
     if ((w = best((e) => e.badges.filter((b) => b.id !== "debut").length))) out.push({ id: "s-badges", label: "Badge Hunter", who: w.e.name, what: "Most badges earned", stat: w.v + " badges" });
     if ((w = best((e) => new Set(e.rows.filter((p) => p.release_year).map((p) => decade(p.release_year))).size, 3))) out.push({ id: "s-range", label: "Widest Range", who: w.e.name, what: "Songs from the most decades", stat: w.v + " decades" });
     if ((w = best((e) => e.rows.filter((p) => isGroup(p.singer)).length)) && w.v > 1) out.push({ id: "s-duet", label: "Best Duet Partner", who: w.e.name, what: "Shared the mic the most", stat: w.v + " group songs" });

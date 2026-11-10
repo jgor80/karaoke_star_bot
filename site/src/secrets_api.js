@@ -5,10 +5,13 @@
 // POST /api/host {action:"setup", code, key, host_name?}  sets or resets the host key; needs the HOST_SETUP_CODE Worker secret
 // POST /api/host {action:"host_name", host_name}           (header x-host-key) the host's singer name ("" = nobody)
 // POST /api/host {action:"tips", venmo, menu}              (header x-host-key) Venmo handle + tip menu (menu null = default)
+// POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
 // checkSecrets(env)                   -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
 // publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n, host, tips} folded into /api/plays
 //
 // Unfound secrets (titles and rewards) are only ever returned to the host key.
+
+import { hostDraftAction, draftBoard } from "./drafts_api.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
@@ -195,6 +198,9 @@ export async function handleHost(req, env) {
         menu ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('tip_menu', ?)").bind(JSON.stringify(menu))
              : env.DB.prepare("DELETE FROM host_config WHERE k = 'tip_menu'"),
       ]);
+    } else if (String(body.action || "").startsWith("draft_")) {
+      const r = await hostDraftAction(env, body); // crowd draft: remove a pick, block or unblock a singer
+      if (r.error) return json(r, 400);
     } else if (body.action === "test") {
       if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
       return json({ ok: true });
@@ -204,5 +210,6 @@ export async function handleHost(req, env) {
   const { results } = await env.DB.prepare(
     "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").all();
   const fresh = await config(env);
-  return json({ secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? DEFAULT_HOST : fresh.host_name, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
+  return json({ ...(await draftBoard(env)), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? DEFAULT_HOST : fresh.host_name, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

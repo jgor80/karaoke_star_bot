@@ -125,6 +125,12 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <h2>Found</h2>
       <ul class="list" id="found-list"></ul>
     </section>
+    <section>
+      <h2 id="draft-h">Crowd draft</h2>
+      <p class="hint" style="margin-bottom:8px">Picks the crowd made on their phones (a singer + a song), most seconded first. Remove anything that isn’t fun. Block someone who doesn’t want to be drafted and nobody can pick them again.</p>
+      <ul class="list" id="draft-list"></ul>
+      <p class="hint" id="draft-blocked" hidden></p>
+    </section>
     <div class="row"><button type="button" class="ghost small" id="logout">Log out of this phone</button></div>
   </div>
 </main>
@@ -244,6 +250,21 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       li.append(el("span", "tag", "Found " + when(s.found_at)), el("span", "t", s.sung_title || s.title), el("span", "s", "Sung by " + (s.singer || "someone")));
       if (s.reward) li.append(el("span", "rw", "🎁 " + s.reward));
       li.append(actions(s, true)); fl.append(li); });
+    // Crowd draft picks and blocked names
+    const dr = d.drafts || [], dl = $("draft-list"); dl.replaceChildren();
+    $("draft-h").textContent = "Crowd draft (" + dr.length + ")";
+    if (!dr.length) dl.append(el("li", "s", "No draft picks for " + (d.draft_night || "tonight") + " yet."));
+    dr.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", x.singer + " → “" + x.title + "”"), el("span", "s", (x.artist ? x.artist + " · " : "") + "👍 " + x.votes + " · drafted by " + x.by + " · " + when(x.created_at)));
+      const row = el("div", "row");
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "draft_remove", id: x.id });
+      const bl = el("button", "ghost small", "Block " + x.singer); bl.type = "button";
+      bl.onclick = () => { if (confirm("Stop anyone drafting " + x.singer + "? Their picks come off the board.")) act({ action: "draft_block", singer: x.singer }); };
+      row.append(rm, bl); li.append(row); dl.append(li); });
+    const blk = d.draft_blocked || [], bp = $("draft-blocked"); bp.replaceChildren(); bp.hidden = !blk.length;
+    if (blk.length) { bp.append(document.createTextNode("Can’t be drafted: "));
+      blk.forEach((k) => { const b = el("button", "ghost small", k + " ✕"); b.type = "button"; b.title = "Let people draft them again"; b.style.margin = "2px";
+        b.onclick = () => act({ action: "draft_unblock", singer: k }); bp.append(b); }); }
     // New finds since last look: alarm (not for ones already found before this phone first loaded)
     // A find is keyed by id and when it was found, so a secret that was hidden again alarms again when re-found.
     const fk = (s) => s.id + "@" + s.found_at;
