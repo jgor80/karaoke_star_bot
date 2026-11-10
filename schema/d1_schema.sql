@@ -66,3 +66,9 @@ CREATE TABLE IF NOT EXISTS secret_songs (
 );
 -- key_salt + key_hash (sha256 of the host key), ntfy_topic (random, for push alerts)
 CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null);
+
+-- KaraFun's song queue, so the phone site can show how many are waiting and the rough wait.
+-- One row (id = 1) replaced by sync/karaoke_sync.py whenever the queue changes; the Worker also
+-- creates the table itself (site/src/worker.js). items is JSON: [{id: song id, singer, len: seconds}],
+-- in queue order, with the song on the mic first once it has started.
+CREATE TABLE IF NOT EXISTS live_queue (id integer primary key, updated_at integer not null, items text not null);

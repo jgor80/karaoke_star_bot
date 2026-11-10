@@ -11,6 +11,9 @@ uploaded to the Cloudflare D1 database it names.
 With --watch it keeps running and syncs within seconds whenever KaraFun
 writes a new song, so the public stats site stays live during a session.
 
+It also uploads KaraFun's song queue (singer and song length only), so the
+site can show how many people are waiting and roughly how long the wait is.
+
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
 """
 import argparse
@@ -122,6 +125,22 @@ update plays set artist = coalesce(artist, ?), title = coalesce(title, ?), lengt
 where type_id = 2 and song_id = ? and title is null
 """
 
+# KaraFun saves its queue in queue_item, rewritten in order (item_id 1, 2, ...) on every change.
+# The first item is the song on the mic once it starts. Only singer, song id and length leave the laptop.
+READ_QUEUE = """
+select q.item_ref_id, q.singer_name, coalesce(s.len, c.len)
+from queue_item q
+left join song s on q.item_type_id = 1 and s.song_id = q.item_ref_id
+left join community c on q.item_type_id = 2 and c.community_id = q.item_ref_id
+order by q.item_id
+"""
+READ_QUEUE_NO_COMMUNITY = """
+select q.item_ref_id, q.singer_name, s.len
+from queue_item q left join song s on q.item_type_id = 1 and s.song_id = q.item_ref_id
+order by q.item_id
+"""
+QUEUE_MAX = 100
+
 UPSERT_PLAY = """
 insert into plays (uuid, played_at, session_start, singer, type_id, song_id, artist, title,
                    release_year, length_s, pitch, tempo, lead_vocal_a, lead_vocal_b, backing,
@@ -164,6 +183,7 @@ def sync(source, target):
             community = src.execute(READ_COMMUNITY).fetchall()
         except sqlite3.Error:
             community = []
+        queue = read_queue(src)
         src.close()
 
     now = dt.datetime.now().isoformat(timespec="seconds")
@@ -183,7 +203,20 @@ def sync(source, target):
         total = db.execute("select count(*) from plays").fetchone()[0]
         db.execute("insert or replace into sync_runs values (?,?,?,?)", (now, len(plays), total - before, total))
     db.close()
-    return len(plays), total - before, total, gap
+    return len(plays), total - before, total, gap, queue
+
+
+def read_queue(src):
+    """KaraFun's queue as a list of {id, singer, len}, or None if this KaraFun version has no queue table."""
+    for sql in (READ_QUEUE, READ_QUEUE_NO_COMMUNITY):
+        try:
+            rows = src.execute(sql).fetchall()
+            break
+        except sqlite3.Error:
+            rows = None
+    if rows is None:
+        return None
+    return [{"id": r[0], "singer": (r[1] or "").strip()[:40], "len": r[2]} for r in rows[:QUEUE_MAX]]
 
 
 D1_PLAY_COLS = ["uuid", "played_at", "played_at_local", "night", "session_start", "singer",
@@ -255,10 +288,28 @@ def upload(target, cfg):
     return len(rows)
 
 
+_queue_sent = None  # last queue sent to D1 by this process, so an unchanged queue isn't re-sent
+
+
+def upload_queue(cfg, queue):
+    """Replace the one-row live_queue table in D1 when the queue changed. Returns True if it sent."""
+    global _queue_sent
+    items = json.dumps(queue, separators=(",", ":"))
+    if items == _queue_sent:
+        return False
+    if _queue_sent is None:
+        d1_query(cfg, "create table if not exists live_queue"
+                 " (id integer primary key, updated_at integer not null, items text not null)", [])
+    d1_query(cfg, "insert or replace into live_queue (id, updated_at, items) values (1, ?, ?)",
+             [int(time.time()), items])
+    _queue_sent = items
+    return True
+
+
 def run_once(a):
     """One sync (and upload, when configured). Returns (ok, message)."""
     try:
-        rows, new, total, gap = sync(a.source, a.target)
+        rows, new, total, gap, queue = sync(a.source, a.target)
         msg = f"ok: read {rows} plays from KaraFun, {new} new, {total} total"
         if gap:
             msg += (" WARNING: KaraFun's oldest saved song is newer than our newest, so some songs"
@@ -267,6 +318,8 @@ def run_once(a):
             with open(a.config, encoding="utf-8") as f:
                 cfg = json.load(f)
             msg += f", uploaded {upload(a.target, cfg)} to Cloudflare"
+            if queue is not None and upload_queue(cfg, queue):
+                msg += f", queue now {len(queue)}"
         return True, msg
     except BaseException as e:  # log every failure, including SystemExit
         if isinstance(e, KeyboardInterrupt):

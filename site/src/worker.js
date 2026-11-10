@@ -13,8 +13,26 @@ import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
 
 const PLAYS_SQL =
-  "SELECT uuid, night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
+  "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays ORDER BY played_at";
 const SYNC_SQL = "SELECT max(ran_at) AS last FROM sync_runs";
+// KaraFun's song queue, one row replaced by the laptop's sync each time it changes (sync/karaoke_sync.py).
+// items is a JSON list of {id: song id, singer, len: seconds or null}, the song on the mic first once it starts.
+const QUEUE_TABLE =
+  "CREATE TABLE IF NOT EXISTS live_queue (id integer primary key, updated_at integer not null, items text not null)";
+const QUEUE_SQL = "SELECT updated_at, items FROM live_queue WHERE id = 1";
+let queueReady = null; // one CREATE ... IF NOT EXISTS per Worker instance, so no manual migration is needed
+async function liveQueue(env) {
+  try {
+    if (!queueReady) queueReady = env.DB.prepare(QUEUE_TABLE).run().catch((e) => { queueReady = null; throw e; });
+    await queueReady;
+    const row = await env.DB.prepare(QUEUE_SQL).first();
+    if (!row) return { queue: null };
+    const items = JSON.parse(row.items);
+    return { queue: { updated_at: row.updated_at, items: Array.isArray(items) ? items : [] } };
+  } catch (e) {
+    return { queue: null }; // the stats still load if the queue can't be read
+  }
+}
 
 export default {
   async fetch(req, env, ctx) {
@@ -37,9 +55,9 @@ export default {
       let res = await cache.match(key);
       if (!res) {
         await checkSecrets(env).catch(() => {}); // a new song may have found a secret: mark it before reading
-        const [[plays, sync], reax, secrets] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env)]);
+        const [[plays, sync], reax, secrets, queue] = await Promise.all([env.DB.batch([env.DB.prepare(PLAYS_SQL), env.DB.prepare(SYNC_SQL)]), reactionTotals(env), publicSecrets(env), liveQueue(env)]);
         res = new Response(
-          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets }),
+          JSON.stringify({ plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last), served_at: Math.floor(Date.now() / 1000), schedule, ...reax, ...secrets, ...queue }),
           { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
         );
         ctx.waitUntil(cache.put(key, res.clone()));
