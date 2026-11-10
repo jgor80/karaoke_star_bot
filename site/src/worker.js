@@ -1,4 +1,5 @@
-// Serves the phone page, the TV screen (/tv), the read-only stats JSON and live emoji reactions.
+// Serves the phone page, the TV screen (/tv), the read-only stats JSON, KaraFun catalog search
+// (/api/catalog, see catalog_api.js) and live emoji reactions.
 // All SQL is fixed statements with bound values: visitors can't send queries. The only thing they can
 // write is a reaction to the song on the mic, which is rate limited (see reactions_api.js).
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
@@ -11,9 +12,11 @@ import TV from "./tv.html";
 import { handleReact, handleCounts, reactionTotals } from "./reactions_api.js";
 import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
+import SONGS from "./songs.js";
+import { handleCatalog } from "./catalog_api.js";
 
 const PLAYS_SQL =
-  "SELECT uuid, night, played_at, singer, artist, title, release_year, length_s FROM plays ORDER BY played_at";
+  "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays ORDER BY played_at";
 const SYNC_SQL = "SELECT max(ran_at) AS last FROM sync_runs";
 
 export default {
@@ -26,6 +29,7 @@ export default {
     if (url.pathname === "/api/host") return handleHost(req, env);
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
     if (url.pathname === "/api/reactions") return handleCounts(req, env, ctx);
+    if (url.pathname === "/api/catalog") return handleCatalog(req, env, ctx);
 
     if (url.pathname === "/api/plays") {
       // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
@@ -67,6 +71,9 @@ export default {
     }
     if (url.pathname === "/fun.js") {
       return new Response(FUN, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
+    }
+    if (url.pathname === "/songs.js") {
+      return new Response(SONGS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
     }
     if (url.pathname === "/awards.js") {
       return new Response(AWARDS, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });

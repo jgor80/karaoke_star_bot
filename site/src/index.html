@@ -344,10 +344,24 @@ details.singer.song summary .main-t { font-weight: 600; }
   @keyframes pop { 0% { transform: scale(1); } 30% { transform: scale(1.04) rotate(-1deg); } 60% { transform: scale(.99) rotate(1deg); } 100% { transform: none; } }
 }
 
+/* songbook (songs.js) */
+.list.songs li { grid-template-columns: minmax(0, 1fr) auto; padding: 9px 8px 9px 14px; }
+.list.songs .sub-t { grid-column: 1; font-size: 15px; }
+.list.songs .main-t { grid-column: 1; grid-row: 1; }
+.list.songs .add, .list.songs .acts { grid-column: 2; grid-row: 1 / span 2; }
+.acts { display: flex; gap: 2px; }
+.add, .rm { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--hot); font-size: 22px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.add.on { background: var(--hot); border-color: var(--hot); color: #1a0710; font-weight: 700; }
+.rm { border-color: transparent; color: var(--muted); font-size: 26px; }
+.band[aria-pressed="true"] { background: var(--hot-soft); border-color: var(--hot); color: var(--ink); }
+.cat-note { margin: 0; }
+.tab-n { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--hot); color: #1a0710; font: 700 11px/18px var(--f-body); }
+.tab-n:empty { display: none; }
+
 /* tab bar */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: #12091a; border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px); }
-nav.tabs .wrap { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: var(--tabbar); }
+nav.tabs .wrap { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); height: var(--tabbar); }
 nav.tabs button { background: none; border: 0; cursor: pointer; display: grid; place-content: center; gap: 2px; justify-items: center; color: var(--muted); font-size: clamp(11px, 3.3vw, 14px); font-weight: 600; min-width: 0; white-space: nowrap; }
 nav.tabs button svg { width: 22px; height: 22px; padding: 2px 10px; box-sizing: content-box; }
 nav.tabs button { position: relative; }
@@ -431,6 +445,17 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <h2 id="aw-h">Awards so far</h2>
       <div class="awards" id="tonight-awards"></div>
     </div>
+  </section>
+
+  <!-- SONGBOOK -->
+  <section class="panel" id="p-songs" role="tabpanel" aria-labelledby="t-songs">
+    <div class="seg" role="tablist" aria-label="Songbook view" data-seg="sg">
+      <button type="button" role="tab" aria-selected="true" data-sub="sg-find" id="sg-find-btn">Find a song</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="sg-mine" id="sg-mine-btn">My list</button>
+    </div>
+    <div class="sub on" id="sg-find"><div class="sec" id="cat-find"></div></div>
+    <div class="sub" id="sg-mine"></div>
+    <p class="muted small" style="margin:0">Song list from <a href="https://www.karafun.com/karaoke-song-list.html" rel="noopener" target="_blank" style="color:inherit">KaraFun’s catalog</a>. Your list stays on this phone.</p>
   </section>
 
   <!-- AWARDS -->
@@ -533,6 +558,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <div class="wrap" role="tablist">
     <button type="button" role="tab" id="t-tonight" aria-controls="p-tonight" aria-selected="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>Tonight</button>
+    <button type="button" role="tab" id="t-songs" aria-controls="p-songs" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Songbook<span class="tab-n" id="my-count" aria-label="songs on my list"></span></button>
     <button type="button" role="tab" id="t-awards" aria-controls="p-awards" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Awards</button>
     <button type="button" role="tab" id="t-bingo" aria-controls="p-bingo" aria-selected="false">
@@ -559,6 +586,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
+<script src="/songs.js"></script>
 <script>
 (function () {
   const REFRESH_MS = 30000;
@@ -1187,13 +1215,20 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, liveNight, reax.bySong) : new Map();
     renderAll();
   }
+  // Songbook: KaraFun catalog search + "my list" (songs.js).
+  const songbook = window.OkeSongs ? OkeSongs.mount({
+    find: $("cat-find"), mine: $("sg-mine"), count: $("my-count"),
+    getPlays: () => plays,
+    getMyRows: () => { const k = getMe(), e = k && people.get(k); return e ? e.rows : []; },
+    onPick: () => $("sg-find-btn").click(),
+  }) : null;
   let bingo = null;
   function renderBingo() {
     if (!window.KaraokeBingo) return;
     if (!bingo) bingo = KaraokeBingo.mount($("bingo"), { getRows: async () => plays, onStatus: () => {} });
     bingo.refresh();
   }
-  function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); }
+  function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); }
   async function refresh() {
     try {
       const r = await fetch("/api/plays", { cache: "no-store" });
@@ -1213,9 +1248,10 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   }
 
   // ---------- tabs ----------
-  const tabs = ["tonight", "awards", "bingo", "singers", "records"];
+  const tabs = ["tonight", "songs", "awards", "bingo", "singers", "records"];
   function show(name) {
     tabs.forEach((t) => { $("t-" + t).setAttribute("aria-selected", String(t === name)); $("p-" + t).classList.toggle("on", t === name); });
+    if (name === "songs" && songbook) songbook.start();
     if (location.hash.slice(1) !== name) history.replaceState(null, "", name === "tonight" ? location.pathname : "#" + name);
     window.scrollTo(0, 0);
   }
