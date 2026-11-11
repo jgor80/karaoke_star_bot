@@ -26,7 +26,7 @@ in your Downloads folder for new karaoke files (.cdg/.kfn, an .mp3 with a matchi
 those, or a video or audio file with "karaoke" in its name), moves them into your karaoke songs folder,
 and marks any open song request (from the site's "Request a song") whose title is in the file name
 as added, so the person who asked sees it on their phone.
-Config keys (optional): "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
+Config keys (optional): "venue" (the bar's slug on okenight.com, default "wbl"); "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
 "karaoke_dir" (default ~/Music/Karaoke Songs), the folder your karaoke player reads local songs from.
 
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
@@ -618,7 +618,9 @@ def request_filer(a, log):
             now = time.time()
             if cfg.get("api_token") and time.monotonic() - last_req >= REQUESTS_EVERY_S:
                 try:
-                    body = d1_query(cfg, "SELECT id, title, artist FROM song_requests WHERE status = 'open'", [])
+                    # Only this bar's requests ("venue" in the config is the bar's slug on okenight.com).
+                    body = d1_query(cfg, "SELECT id, title, artist FROM song_requests WHERE status = 'open' AND venue = ?",
+                                    [cfg.get("venue") or "wbl"])
                     requests = body["result"][0]["results"]
                 except Exception:
                     pass  # offline, or nobody has requested anything yet (no table)
