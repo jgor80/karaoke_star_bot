@@ -111,6 +111,16 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <ul class="list" id="leads-list"></ul>
     </section>
 
+    <section>
+      <h2>Take a singer off the site</h2>
+      <p class="hint" style="margin-bottom:8px">When someone asks (at the bar, or by email to info@synthwaveweb.com), type their singer name exactly as the site shows it. Their songs stay in the night’s totals, but the name becomes “Removed singer” and a number everywhere on this bar’s pages, including songs they sing later. This can’t be undone. <a href="/privacy">Privacy page</a></p>
+      <form class="row" id="erase-form">
+        <input id="erase-name" maxlength="80" autocomplete="off" placeholder="Singer name" aria-label="Singer name to remove" style="flex:1;min-width:12em">
+        <button type="submit" class="ghost small">Remove name</button>
+      </form>
+      <p class="hint" id="erase-msg" role="status" aria-live="polite"></p>
+    </section>
+
     <section class="card">
       <h2>Songbook</h2>
       <p class="hint">Which songs people can search in the Songbook tab. Use your own list if your songs come from somewhere else, or add your extra songs on top of the full catalog.</p>
@@ -437,6 +447,9 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
         rm.onclick = () => { if (confirm("Remove this lead? Their contact details are deleted.")) act({ action: "lead_remove", id: x.id }); };
         row.append(rm); li.append(row); ll.append(li); });
     }
+    // Singers taken off the site (privacy): only the label and when, never the name
+    const er = d.erased_singers || [];
+    if (!$("erase-msg").dataset.busy) $("erase-msg").textContent = er.length ? er.length + (er.length === 1 ? " singer has" : " singers have") + " been taken off the site." : "";
     // Crowd draft picks and blocked names
     const dr = d.drafts || [], dl = $("draft-list"); dl.replaceChildren();
     $("draft-h").textContent = "Crowd draft (" + dr.length + ")";
@@ -467,6 +480,17 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     rm.onclick = () => { if (confirm("Remove “" + s.title + "”?")) act({ action: "remove", id: s.id }); }; row.append(rm);
     return row;
   }
+  $("erase-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $("erase-name").value.trim(), m = $("erase-msg");
+    if (!name) return;
+    if (!confirm("Take “" + name + "” off this bar’s pages? Their songs will show as a removed singer. This can’t be undone.")) return;
+    m.dataset.busy = "1"; m.textContent = "Removing…";
+    const r = await api("POST", { action: "singer_erase", singer: name }).catch(() => ({ ok: false, d: { error: "Couldn’t reach the site. Check the connection and try again." } }));
+    m.textContent = r.ok ? "Done. “" + name + "” now shows as " + r.d.label + ". Phones that already have the page open catch up within about 10 minutes." : (r.d.error || "That didn’t work.");
+    if (r.ok) $("erase-name").value = "";
+    setTimeout(() => { delete m.dataset.busy; }, 15000);
+  };
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {

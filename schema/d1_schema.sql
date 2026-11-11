@@ -141,3 +141,8 @@ CREATE INDEX IF NOT EXISTS leads_ip ON leads (ip_hash, day);
 -- host_config (via cfgKey): songbook_source = catalog | mine | both (which list the Songbook tab searches), songbook_count, songbook_updated.
 CREATE VIRTUAL TABLE IF NOT EXISTS songbook USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED, explicit UNINDEXED,
   styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, venue UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
+
+-- Privacy (site/src/privacy_api.js, notice at okenight.com/privacy): host_config k = 'erased_singers'
+-- (per venue) lists singers who asked to be taken off the site; their plays show "Removed singer NNNN".
+-- A daily cron blanks device_id/ip_hash on reactions, drafts, draft_votes and song_request_asks after
+-- 90 days, and deletes leads after a year.

@@ -28,6 +28,8 @@ import { maybeImportCatalog } from "./catalog_import.js";
 import { updateVoices } from "./voice_import.js";
 import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
+import { erasedSingers, relabel, sweepErased, dailyCleanup } from "./privacy_api.js";
+import PRIVACY from "./privacy.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
@@ -54,7 +56,9 @@ async function liveQueue(env, venue) {
     const row = await env.DB.prepare(QUEUE_SQL).bind(venue.slug).first();
     if (!row) return { queue: null };
     const items = JSON.parse(row.items);
-    return { queue: { updated_at: row.updated_at, items: Array.isArray(items) ? items : [] } };
+    const erased = await erasedSingers(env, venue); // singers who asked to be taken off the site
+    const list = (Array.isArray(items) ? items : []).map((x) => (x && x.singer && erased.length ? { ...x, singer: relabel(erased, x.singer) } : x));
+    return { queue: { updated_at: row.updated_at, items: list } };
   } catch (e) {
     return { queue: null }; // the stats still load if the queue can't be read
   }
@@ -154,6 +158,7 @@ export default {
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
       });
     }
+    if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
     if (path === "/api/lead") return handleLead(req, env, ctx); // "bring Oke Night to your bar" form on the intro page
     if (path.startsWith("/api/")) return handleApi(path.slice(5), req, env, ctx, DEFAULT_VENUE, url); // old links = first venue
     if (STATIC_JS[path]) return js(STATIC_JS[path]);
@@ -178,7 +183,9 @@ export default {
         await checkSecrets(env, v).catch(() => {});
         await scoreCrowd(env, v).catch(() => {}); // crowd meter
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic
+        await sweepErased(env, v).catch(() => {}); // new songs by singers who asked to be removed
       }
+      await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
     })().catch(() => {}));
     // Weekly: refresh the song catalog for the Songbook (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
