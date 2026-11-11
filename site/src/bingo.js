@@ -13,7 +13,7 @@
   const hit = (p, extra) => ({ who: (p.singer || "Someone").trim(), what: p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a song", extra });
   const isGroup = (s) => /^table\s*\d+/i.test((s || "").trim()) || /(,|&|\/|\band\b|\bn\b|\+)/i.test(s || "");
   // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
-  const VENUE_TZ = "America/Chicago";
+  const VENUE_TZ = (typeof window !== "undefined" && window.OKE_VENUE && window.OKE_VENUE.tz) || "America/Chicago"; // the bar's time zone (venues.js)
   let venueFmt = null;
   const venueHM = (ts) => {
     try {
@@ -137,8 +137,12 @@
     return pick;
   }
 
-  // 6am-6am "night" in the viewer's local time, as YYYY-MM-DD
-  function tonight(now) { const d = new Date((now || Date.now()) - 6 * 3600 * 1000); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  // 6am-6am "night" at the venue (same as plays.night), as YYYY-MM-DD, whatever time zone the phone is in
+  function tonight(now) {
+    const t = (now || Date.now()) - 6 * 3600 * 1000;
+    try { return new Date(t).toLocaleDateString("en-CA", { timeZone: VENUE_TZ }); }
+    catch (e) { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  }
 
   // since (epoch s, optional): only songs sung from then on mark squares, so a card made late in the
   // night (or swapped for a new one) can't win on songs that were sung before it existed.

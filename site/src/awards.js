@@ -7,7 +7,7 @@
   const clean = (s) => (s || "").trim().replace(/\s+/g, " ");
   const mmss = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
-  const VENUE_TZ = "America/Chicago";
+  const VENUE_TZ = (typeof window !== "undefined" && window.OKE_VENUE && window.OKE_VENUE.tz) || "America/Chicago"; // the bar's time zone (venues.js)
   let venueFmt = null;
   const venueHM = (ts) => {
     try {

@@ -15,7 +15,7 @@
   const decade = (y) => Math.floor(y / 10) * 10;
   const art = (re) => (p) => p.title && re.test(p.artist || "");
   // Hour and minute at the venue (Central time), whatever time zone the phone or TV is set to.
-  const VENUE_TZ = "America/Chicago";
+  const VENUE_TZ = (typeof window !== "undefined" && window.OKE_VENUE && window.OKE_VENUE.tz) || "America/Chicago"; // the bar's time zone (venues.js)
   let venueFmt = null;
   const venueHM = (ts) => {
     try {

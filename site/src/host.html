@@ -475,7 +475,12 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     if (!r.ok) { $("add-err").textContent = r.d.error || "Couldn’t add it."; return; }
     $("title").value = ""; $("artist").value = ""; load();
   });
-  $("test-btn").addEventListener("click", async () => { const r = await api("POST", { action: "test" }); $("test-btn").textContent = r.ok ? "Test sent ✓" : "Test failed"; });
+  $("test-btn").addEventListener("click", async () => {
+    const b = $("test-btn"), label = b.dataset.label || (b.dataset.label = b.textContent);
+    let r; try { r = await api("POST", { action: "test" }); } catch (e) { r = { ok: false, d: { error: "Can’t reach the site." } }; }
+    b.textContent = r.ok ? "Test sent ✓" : "Test failed: " + (r.d.error || "try again");
+    clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = label; }, 5000);
+  });
 
   // Title/artist suggestions from songs sung here
   fetch("api/plays").then((r) => r.json()).then((d) => {

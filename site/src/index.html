@@ -595,16 +595,17 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
     </button>
     <div class="sec" id="draft"></div>
-    <div class="sec">
+    <p class="hint" id="no-songs" hidden>No songs yet. The first song of the night shows up here.</p>
+    <div class="sec night-sec">
       <h2 id="dares-h">Tonight's dares</h2>
       <div class="dares" id="dares"></div>
       <div class="watch" id="watch" hidden></div>
     </div>
-    <div class="sec">
+    <div class="sec night-sec">
       <h2 id="lb-h">Tonight's leaderboard</h2>
       <ol class="list" id="leaderboard"></ol>
     </div>
-    <div class="sec">
+    <div class="sec night-sec">
       <h2 id="feed-h">Earlier tonight</h2>
       <ol class="list feed" id="feed"></ol>
     </div>
@@ -612,7 +613,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <h2>Badges unlocked tonight</h2>
       <div class="unl" id="unlocked"></div>
     </div>
-    <div class="sec">
+    <div class="sec night-sec">
       <h2 id="aw-h">Awards so far</h2>
       <div class="awards" id="tonight-awards"></div>
     </div>
@@ -903,6 +904,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       ? "Karaoke is on now at " + venue + ". First song coming up. Here’s how " + nightLabel(n.night, true) + " went."
       : "No karaoke going right now." + (schedule ? " Next: " + schedule.next_label + " at " + venue + "." : "") + " Here’s how " + nightLabel(n.night, true) + " went.";
 
+    document.querySelectorAll(".night-sec").forEach((x) => { x.hidden = !n; });
+    $("no-songs").hidden = !!n;
     if (!n) return;
     const rows = n.rows, me = getMe();
     $("tally-cap").textContent = tonight ? "Tonight so far" : nightLabel(n.night, true);

@@ -421,6 +421,9 @@
         } catch (e) {}
       }
       renderReqs(); setTimeout(refreshReqs, 1500);
+      // Keep checking while the page is open, so "Asked" turns into "Added" without a reload.
+      setInterval(() => { if (!document.hidden) refreshReqs(); }, 60000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshReqs(); });
       return box;
     }
     clearDone.addEventListener("click", () => { list = list.filter((x) => !sungAt(x)); writeList(list); renderMine(); renderResults(); });
