@@ -107,6 +107,17 @@ async function knownSinger(env, venue, key) {
   return hits.length ? cleanName(hits[0].singer) : null;
 }
 
+// A second for a pick. The network limit check and the insert are one statement, so a burst can't slip
+// past the limit together. Returns false when the network is over its limit (and hadn't already voted).
+async function addVote(env, id, dev, ipHash, night, now) {
+  const ins = await env.DB.prepare(`INSERT OR IGNORE INTO draft_votes (draft_id, device_id, ip_hash, night, created_at)
+      SELECT ?1, ?2, ?3, ?4, ?5
+      WHERE (?3 IS NULL OR (SELECT count(*) FROM draft_votes WHERE ip_hash = ?3 AND night = ?4) < ?6)`)
+    .bind(id, dev, ipHash, night, now, LIMITS.votesPerIp).run();
+  if (ins.meta.changes) return true;
+  return !!(await env.DB.prepare("SELECT 1 FROM draft_votes WHERE draft_id = ?1 AND device_id = ?2").bind(id, dev).first());
+}
+
 export async function handleDraft(req, env, venue = DEFAULT_VENUE) {
   const url = new URL(req.url);
   const origin = req.headers.get("origin");
@@ -129,15 +140,7 @@ export async function handleDraft(req, env, venue = DEFAULT_VENUE) {
     if (body.action === "unvote") {
       await env.DB.prepare("DELETE FROM draft_votes WHERE draft_id = ?1 AND device_id = ?2").bind(id, dev).run();
     } else {
-      // The limit check and the insert are one statement, so a burst can't slip past the limit together.
-      const ins = await env.DB.prepare(`INSERT OR IGNORE INTO draft_votes (draft_id, device_id, ip_hash, night, created_at)
-          SELECT ?1, ?2, ?3, ?4, ?5
-          WHERE (?3 IS NULL OR (SELECT count(*) FROM draft_votes WHERE ip_hash = ?3 AND night = ?4) < ?6)`)
-        .bind(id, dev, ipHash, night, now, LIMITS.votesPerIp).run();
-      if (!ins.meta.changes) {
-        const had = await env.DB.prepare("SELECT 1 FROM draft_votes WHERE draft_id = ?1 AND device_id = ?2").bind(id, dev).first();
-        if (!had) return json({ error: "Too many votes from this network tonight." }, 429);
-      }
+      if (!(await addVote(env, id, dev, ipHash, night, now))) return json({ error: "Too many votes from this network tonight." }, 429);
     }
     return json({ ok: true, board: await boardFor(env, venue, night) });
   }
@@ -155,7 +158,8 @@ export async function handleDraft(req, env, venue = DEFAULT_VENUE) {
   // Already drafted? Then this counts as a second for it instead of a new pick.
   const dup = await env.DB.prepare("SELECT id FROM drafts WHERE night = ?1 AND singer_key = ?2 AND song_id = ?3 AND venue = ?4 AND removed_at IS NULL").bind(night, key, songId, venue.slug).first();
   if (dup) {
-    await env.DB.prepare("INSERT OR IGNORE INTO draft_votes (draft_id, device_id, ip_hash, night, created_at) VALUES (?1, ?2, ?3, ?4, ?5)").bind(dup.id, dev, ipHash, night, now).run();
+    // Same network limit as a plain second, so re-picking can't be used to stuff the vote count.
+    if (!(await addVote(env, dup.id, dev, ipHash, night, now))) return json({ error: "Too many votes from this network tonight.", board: await boardFor(env, venue, night) }, 429);
     return json({ ok: true, draft_id: dup.id, dup: true, board: await boardFor(env, venue, night) });
   }
 
