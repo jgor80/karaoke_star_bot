@@ -323,7 +323,7 @@
         ["voice", "genre", "decade", "lang"].forEach((k) => { if (f[k]) p.set(k, f[k]); });
         if (f.sort !== "pop") p.set("sort", f.sort);
         if (page) p.set("page", page);
-        const u = "/api/catalog?" + p;
+        const u = "api/catalog?" + p;
         const r = await fetch(u, { signal: ctrl.signal });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const d = await r.json();
@@ -391,7 +391,7 @@
       form.addEventListener("submit", async (e) => {
         e.preventDefault(); send.disabled = true; msg.hidden = false; msg.textContent = "Sending…";
         try {
-          const r = await fetch("/api/request", { method: "POST", headers: { "content-type": "application/json" },
+          const r = await fetch("api/request", { method: "POST", headers: { "content-type": "application/json" },
             body: JSON.stringify({ title: tIn.value, artist: aIn.value, name: nIn.value, dev: deviceId() }) });
           const d = await r.json();
           if (!r.ok) throw new Error(d.error || "That didn’t go through.");
@@ -414,7 +414,7 @@
         const mine = readReqs(), ids = mine.filter((x) => x.s === "open").map((x) => x.id);
         if (!ids.length) return;
         try {
-          const d = await (await fetch("/api/request?ids=" + ids.join(","))).json();
+          const d = await (await fetch("api/request?ids=" + ids.join(","))).json();
           const st = new Map((d.requests || []).map((r) => [r.id, r.status]));
           writeReqs(mine.filter((x) => x.s !== "open" || st.has(x.id)).map((x) => st.has(x.id) ? { ...x, s: st.get(x.id) } : x));
           renderReqs();

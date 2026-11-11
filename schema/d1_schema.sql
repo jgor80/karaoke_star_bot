@@ -123,3 +123,16 @@ CREATE TABLE IF NOT EXISTS song_request_asks (
   primary key (request_id, device_id));
 CREATE INDEX IF NOT EXISTS song_request_asks_dev ON song_request_asks (device_id, day);
 CREATE INDEX IF NOT EXISTS song_request_asks_ip ON song_request_asks (ip_hash, day);
+
+-- Venues (site/src/venues.js). Each bar lives at okenight.com/<slug>/. The Worker adds
+--   venue text not null default 'wbl'
+-- (plus an index <table>_venue) to plays, sync_runs, live_queue, reactions, drafts, secret_songs and
+-- song_requests by itself, so rows from before venues existed, and anything the laptop sync writes without a
+-- venue, belong to Welcome Back Lounge ("wbl"). Per-bar settings in host_config use the plain key for "wbl" and
+-- "<slug>:<key>" for other venues. crowd_levels keeps its (ts, src) key: other venues write src "<slug>:laptop".
+
+-- "Bring Oke Night to your bar" form on okenight.com (site/src/leads_api.js). Never shown publicly.
+CREATE TABLE IF NOT EXISTS leads (
+  id integer primary key autoincrement, name text, bar text not null, city text, contact text not null,
+  role text, note text, ip_hash text, day text not null, created_at integer not null);
+CREATE INDEX IF NOT EXISTS leads_ip ON leads (ip_hash, day);

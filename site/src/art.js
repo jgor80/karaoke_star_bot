@@ -34,7 +34,7 @@
   const idOf = (song) => Number(song && (song.song_id != null ? song.song_id : song.id)) || 0;
   const titleOf = (song) => (song && (song.title || song.t)) || "";
   function src(song, big) {
-    return "/api/art?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
+    return "api/art?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
   }
 
   function el(song, opts) {
@@ -52,7 +52,7 @@
         box.title = "Listen to this song";
       };
       const open = (e) => { if (!box.classList.contains("ok")) return; e.preventDefault(); e.stopPropagation();
-        window.open("/api/listen?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))), "_blank", "noopener"); };
+        window.open("api/listen?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))), "_blank", "noopener"); };
       box.addEventListener("click", open);
       box.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") open(e); });
       img.onerror = () => img.remove();

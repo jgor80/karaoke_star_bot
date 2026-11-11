@@ -22,6 +22,19 @@ KaraFun desktop (Windows laptop)
   site/  Cloudflare Worker: public, read-only, mobile-first stats site
 ```
 
+## Venues
+
+okenight.com is an intro page for Oke Night with a bar picker (closest bar first when the phone shares its
+location) and a "Bring Oke Night to your bar" form (saved to D1 `leads`, pushed to the first venue's host ntfy topic).
+Each bar has its own pages under its slug: `/wbl/` (phone page), `/wbl/tv`, `/wbl/host`, `/wbl/sunday.ics` and
+its API at `/wbl/api/...`. The list of bars is `site/src/venues.js`; `/api/venues` returns it as JSON (with
+whether each one is on tonight) for the picker and the app. Old links (`/tv`, `/host`) redirect to `/wbl/...`,
+`/sunday.ics` and `/api/...` without a venue still mean Welcome Back Lounge.
+
+Each bar's data is kept apart by a `venue` column (see the end of `schema/d1_schema.sql`). To add a bar: add an
+entry to `venues.js` (the slug never changes once it's on a QR code), deploy, set its host key on `/<slug>/host`,
+and give its laptop sync the venue slug (the sync script still writes Welcome Back Lounge only; venue support there comes with the second bar).
+
 ## Folders
 
 | Folder | What it is |

@@ -1,13 +1,7 @@
-// Weekly karaoke schedule, worked out in Central time so DST is handled.
-// Sunday 9pm to 1am is the regular session; it can run over until 2am at the latest.
-export const SCHEDULE = {
-  venue: "Welcome Back Lounge",
-  tz: "America/Chicago",
-  weekday: 0,        // Sunday (0 = Sunday ... 6 = Saturday)
-  start: [21, 0],    // 9:00 pm
-  hours: 4,          // regular end 1:00 am
-  latest_hours: 5,   // can run until 2:00 am
-};
+// Weekly karaoke schedule for a venue (see venues.js), worked out in the venue's time zone so DST is handled.
+// A session runs `hours` from `start` on `weekday` and can run over until `latest_hours`.
+import { DEFAULT_VENUE } from "./venues.js";
+export const SCHEDULE = DEFAULT_VENUE; // functions below take any venue; this is the default
 
 const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
@@ -58,13 +52,14 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
   const next = status === "off" ? sessionStart(nd.getUTCFullYear(), nd.getUTCMonth() + 1, nd.getUTCDate(), sch) : start;
   return {
     venue: sch.venue,
+    slug: sch.slug,
     status,
     session_start: start,
     session_end: end,
     latest_end: latest,
     next_start: next,
     next_label: label(next, sch.tz, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(":00", ""),
-    hours_label: "Sundays 9 PM – 1 AM Central",
+    hours_label: sch.hours_label,
   };
 }
 
