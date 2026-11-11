@@ -34,7 +34,8 @@
   const idOf = (song) => Number(song && (song.song_id != null ? song.song_id : song.id)) || 0;
   const titleOf = (song) => (song && (song.title || song.t)) || "";
   function src(song, big) {
-    return "api/art?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
+    // a=1: Apple-only covers, so phones drop images cached from the old sources.
+    return "api/art?a=1&id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
   }
 
   function el(song, opts) {
@@ -69,7 +70,7 @@
     return !!k;
   }
   // Keep in step with ART_SOURCES in wrangler.toml.
-  const CREDIT = "Album covers from Apple Music, Deezer and the Cover Art Archive. Tap a cover to hear the song.";
+  const CREDIT = "Album covers from Apple Music. Tap a cover to hear the song.";
   function credit() { const p = document.createElement("p"); p.className = "art-credit"; p.textContent = CREDIT; return p; }
   window.OkeArt = { el, row, put, src, credit };
 })();
