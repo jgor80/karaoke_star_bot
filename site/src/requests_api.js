@@ -67,25 +67,41 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
   const ipHash = ip ? (await sha("oke-night|" + ip + "|" + day)).slice(0, 24) : null;
   const now = nowS();
 
-  const lim = await env.DB.prepare("SELECT (SELECT count(*) FROM song_request_asks WHERE device_id = ?1 AND day = ?3) AS dev_n," +
-    " (SELECT count(*) FROM song_request_asks WHERE ?2 IS NOT NULL AND ip_hash = ?2 AND day = ?3) AS ip_n").bind(dev, ipHash, day).first();
-  if (lim.dev_n >= REQ_LIMITS.perPhone || lim.ip_n >= REQ_LIMITS.perIp) return json({ error: "That’s plenty of requests for today. Try again next time!" }, 429);
-
+  // Create-or-merge and the limit checks run as one batch (D1 runs a batch as a single transaction), so
+  // phones asking at the same moment can't each slip past the limits or each start a duplicate request.
+  //   1. a new request, only if there's no open one for this song and this phone/network is under its limits
+  //   2. this phone's ask on the open request (new or existing), under the same limits
+  //   3. votes = the number of asks, so the count can't drift
   const k = requestKey(title, artist);
-  const dup = await env.DB.prepare("SELECT id, names FROM song_requests WHERE k = ? AND venue = ? AND status = 'open'").bind(k, venue.slug).first();
-  if (dup) {
-    const ins = await env.DB.prepare("INSERT OR IGNORE INTO song_request_asks (request_id, device_id, ip_hash, day, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(dup.id, dev, ipHash, day, now).run();
-    if (ins.meta.changes) {
-      const names = name && !(dup.names || "").split(", ").includes(name) ? (dup.names ? dup.names + ", " : "") + name : dup.names;
-      await env.DB.prepare("UPDATE song_requests SET votes = votes + 1, names = ?, updated_at = ? WHERE id = ?").bind((names || "").slice(0, 300) || null, now, dup.id).run();
+  const underLimits = "(SELECT count(*) FROM song_request_asks WHERE device_id = ?2 AND day = ?4) < ?5" +
+    " AND (?3 IS NULL OR (SELECT count(*) FROM song_request_asks WHERE ip_hash = ?3 AND day = ?4) < ?6)";
+  const openReq = "SELECT id FROM song_requests WHERE k = ?1 AND venue = ?7 AND status = 'open' ORDER BY id LIMIT 1";
+  const lims = [k, dev, ipHash, day, REQ_LIMITS.perPhone, REQ_LIMITS.perIp, venue.slug];
+  const [created, asked] = await env.DB.batch([
+    env.DB.prepare("INSERT INTO song_requests (title, artist, k, names, created_at, updated_at, venue)" +
+      " SELECT ?8, ?9, ?1, ?10, ?11, ?11, ?7 WHERE NOT EXISTS (" + openReq + ") AND " + underLimits)
+      .bind(...lims, title, artist || null, name || null, now),
+    env.DB.prepare("INSERT OR IGNORE INTO song_request_asks (request_id, device_id, ip_hash, day, created_at)" +
+      " SELECT id, ?2, ?3, ?4, ?8 FROM (" + openReq + ") WHERE " + underLimits).bind(...lims, now),
+    env.DB.prepare("UPDATE song_requests SET votes = (SELECT count(*) FROM song_request_asks WHERE request_id = song_requests.id)," +
+      " updated_at = ?2 WHERE id = (SELECT id FROM song_requests WHERE k = ?1 AND venue = ?3 AND status = 'open' ORDER BY id LIMIT 1)")
+      .bind(k, now, venue.slug),
+  ]);
+  const open = await env.DB.prepare("SELECT id FROM song_requests WHERE k = ?1 AND venue = ?2 AND status = 'open' ORDER BY id LIMIT 1").bind(k, venue.slug).first();
+  if (!open) return json({ error: "That’s plenty of requests for today. Try again next time!" }, 429);
+  if (!created.meta.changes) {
+    if (!asked.meta.changes) {
+      const had = await env.DB.prepare("SELECT 1 FROM song_request_asks WHERE request_id = ? AND device_id = ?").bind(open.id, dev).first();
+      if (!had) return json({ error: "That’s plenty of requests for today. Try again next time!" }, 429);
+    } else if (name) {
+      // Add the name in SQL, so two asks at once don't overwrite each other's name.
+      await env.DB.prepare("UPDATE song_requests SET names = substr(CASE WHEN names IS NULL OR names = '' THEN ?1" +
+        " WHEN instr(', ' || names || ', ', ', ' || ?1 || ', ') > 0 THEN names ELSE names || ', ' || ?1 END, 1, 300) WHERE id = ?2")
+        .bind(name, open.id).run();
     }
-    return json({ ok: true, id: dup.id, merged: true });
+    return json({ ok: true, id: open.id, merged: true });
   }
-  const r = await env.DB.prepare("INSERT INTO song_requests (title, artist, k, names, created_at, updated_at, venue) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id")
-    .bind(title, artist || null, k, name || null, now, now, venue.slug).first();
-  await env.DB.prepare("INSERT OR IGNORE INTO song_request_asks (request_id, device_id, ip_hash, day, created_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(r.id, dev, ipHash, day, now).run();
+  const r = open;
   // Push it to the host's phone (same ntfy topic as the secret song alerts).
   ctx.waitUntil((async () => {
     const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(venue, "ntfy_topic")).first().catch(() => null);
