@@ -151,6 +151,7 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 .clap-tv .ct-bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--hot), var(--gold)); transition: width 1.6s cubic-bezier(.2, .9, .3, 1); }
 @media (prefers-reduced-motion: reduce) { .clap-tv .ct-bar i { transition: none; } }
 body.embed { cursor: auto; }
+.view.manual { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 /* In a phone-width frame, size everything from the width (vh would make the text tiny). */
 @media (max-aspect-ratio: 4/3) { html.embed { --u: 1.5vw; } html.embed .grid { grid-template-columns: minmax(0, 1fr); } }
 body.embed .qr, body.embed .fs { display: none !important; }
@@ -384,10 +385,14 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   // If everything fits, it sits still. Otherwise a second copy goes underneath and the reel slides up by one
   // copy's height, then wraps, so it loops with no jump.
   let offset = 0, span = 0, lastT = 0, pauseUntil = 0;
+  const EMBED = !!qs.get("embed"), REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   function layout() {
     const view = $("view"), reel = $("reel");
     [...reel.querySelectorAll(".copy.dup")].forEach((d) => d.remove());
     const first = reel.firstElementChild;
+    // Inside the phone page (?embed=1) the recap doesn't move by itself: people scroll it at their own
+    // pace (WCAG 2.2.2). The same when the device asks for reduced motion.
+    if (EMBED || REDUCED) { view.classList.add("manual"); span = 0; offset = 0; reel.style.transform = ""; return; }
     const fits = !first || first.offsetHeight <= view.clientHeight;
     view.classList.toggle("still", fits);
     if (fits) { span = 0; offset = 0; reel.style.transform = ""; return; }
