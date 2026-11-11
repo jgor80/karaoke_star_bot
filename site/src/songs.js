@@ -162,6 +162,7 @@
     const ol = el("ol", "list songs");
     const moreBtn = el("button", "act ghost more", "Show more"); moreBtn.type = "button"; moreBtn.hidden = true;
     find.append(sw, filters, note, topWrap, ol, moreBtn, requestBox());
+    if (window.OkeArt) find.append(OkeArt.credit());
 
     // ---- my list ----
     mine.replaceChildren();
