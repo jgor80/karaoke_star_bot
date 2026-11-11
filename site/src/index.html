@@ -1546,11 +1546,28 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     bingo.refresh();
   }
   function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); }
+  // The whole history loads once; after that each refresh asks only for the newest night on ("?since="),
+  // and the answer replaces that part of what we have. Every 10 minutes it reloads everything, so a fix
+  // to an older night (a singer's name corrected in KaraFun, say) still shows up.
+  const FULL_RELOAD_MS = 10 * 60 * 1000;
+  let base = null, baseAt = 0;
+  function newestNight(d) { let n = ""; d.plays.forEach((p) => { if (p.night && p.night > n) n = p.night; }); return n; }
+  function mergeSince(b, d) {
+    const keep = b.plays.filter((p) => !(p.night && p.night >= d.since));
+    const kept = new Set(keep.map((p) => p.uuid));
+    return { ...d,
+      plays: keep.concat(d.plays),
+      reactions: (b.reactions || []).filter((x) => kept.has(x.play)).concat(d.reactions || []),
+      reactors: (b.reactors || []).filter((x) => !(x.night && x.night >= d.since)).concat(d.reactors || []) };
+  }
   async function refresh() {
     try {
-      const r = await fetch("api/plays", { cache: "no-store" });
+      const since = base && Date.now() - baseAt < FULL_RELOAD_MS ? newestNight(base) : "";
+      const r = await fetch("api/plays" + (since ? "?since=" + since : ""), { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const text = await r.text(); const data = JSON.parse(text);
+      const text = await r.text(); let data = JSON.parse(text);
+      if (data.since && base) data = mergeSince(base, data); else baseAt = Date.now();
+      base = data;
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };

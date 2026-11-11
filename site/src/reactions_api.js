@@ -119,13 +119,16 @@ export async function handleCounts(req, env, ctx) {
 }
 
 // For /api/plays: counts per song and emoji (distinct phones), and per reactor name and night (no device ids or IPs).
-export async function reactionTotals(env, venue = DEFAULT_VENUE) {
+// since (YYYY-MM-DD, optional): only reactions from that night on, for /api/plays?since=.
+export async function reactionTotals(env, venue = DEFAULT_VENUE, since = null) {
   try {
+    const where = since ? "WHERE venue = ?1 AND night >= ?2" : "WHERE venue = ?1";
+    const bind = (q) => (since ? q.bind(venue.slug, since) : q.bind(venue.slug));
     const [bySong, byWho] = await env.DB.batch([
       // n = how many different phones sent that emoji on that song, so one phone tapping
       // ten times counts once toward crowd awards and badges. taps = the raw number of taps.
-      env.DB.prepare("SELECT play_uuid AS play, reaction AS r, count(DISTINCT device_id) AS n, count(*) AS taps FROM reactions WHERE venue = ?1 GROUP BY play_uuid, reaction").bind(venue.slug),
-      env.DB.prepare("SELECT night, who, reaction AS r, count(*) AS n FROM reactions WHERE venue = ?1 GROUP BY night, who, reaction").bind(venue.slug),
+      bind(env.DB.prepare("SELECT play_uuid AS play, reaction AS r, count(DISTINCT device_id) AS n, count(*) AS taps FROM reactions " + where + " GROUP BY play_uuid, reaction")),
+      bind(env.DB.prepare("SELECT night, who, reaction AS r, count(*) AS n FROM reactions " + where + " GROUP BY night, who, reaction")),
     ]);
     return { reactions: bySong.results, reactors: byWho.results };
   } catch (e) {
