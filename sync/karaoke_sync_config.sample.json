@@ -1,5 +1,6 @@
 {
   "account_id": "PASTE_YOUR_CLOUDFLARE_ACCOUNT_ID",
   "database_id": "61453b2b-22e8-480d-a1ac-a6db72aa29a9",
-  "api_token": "PASTE_A_CLOUDFLARE_API_TOKEN_WITH_D1_EDIT"
+  "api_token": "PASTE_A_CLOUDFLARE_API_TOKEN_WITH_D1_EDIT",
+  "venue": "wbl"
 }
