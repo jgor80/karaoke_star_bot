@@ -1,7 +1,8 @@
 // "Bring Oke Night to your bar" form on the intro page (okenight.com/).
 // POST /api/lead {name, bar, city, contact, role, note, dev} -> {ok}
-// Saved to D1 (leads) and pushed to the owner's phone on the first venue's host ntfy topic. Nothing here is
-// ever shown publicly. Limited per network per day so the form can't be used to flood the owner's phone.
+// Saved to D1 (leads) and listed on the first venue's /host page (hostLeads). The push to that venue's ntfy
+// topic only says a lead came in: ntfy.sh topics are public to anyone who knows the name, so the contact
+// details stay in D1. Nothing here is ever shown publicly. Limited per network per day so the form can't be used to flood the owner's phone.
 import { DEFAULT_VENUE, cfgKey } from "./venues.js";
 import { cleanText } from "./requests_api.js";
 
@@ -51,9 +52,27 @@ export async function handleLead(req, env, ctx) {
   ctx.waitUntil((async () => {
     const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(DEFAULT_VENUE, "ntfy_topic")).first().catch(() => null);
     if (!t || !t.v) return;
-    const lines = [lead.bar + (lead.city ? " (" + lead.city + ")" : ""), (lead.name ? lead.name + (lead.role ? ", " + lead.role : "") + ": " : "") + lead.contact];
-    if (lead.note) lines.push(lead.note);
-    await fetch("https://ntfy.sh/" + t.v, { method: "POST", body: lines.join("\n"), headers: { Title: "New bar interested in Oke Night", Tags: "beers" } });
+    const body = lead.bar + (lead.city ? " (" + lead.city + ")" : "") + "\nDetails on okenight.com/" + DEFAULT_VENUE.slug + "/host";
+    await fetch("https://ntfy.sh/" + t.v, { method: "POST", body, headers: { Title: "New bar interested in Oke Night", Tags: "beers" } });
   })().catch(() => {}));
   return json({ ok: true });
+}
+
+// For the first venue's /api/host: the newest leads. The owner runs that venue, so that's where they're read.
+export async function hostLeads(env) {
+  try {
+    await ensure(env);
+    const { results } = await env.DB.prepare("SELECT id, name, bar, city, contact, role, note, created_at FROM leads ORDER BY id DESC LIMIT 100").all();
+    return { leads: results };
+  } catch (e) {
+    return { leads: [] };
+  }
+}
+
+// lead_remove {id}: delete a lead once it's been handled (it holds someone's contact details).
+export async function hostLeadAction(env, body) {
+  await ensure(env);
+  if (body.action !== "lead_remove") return { error: "unknown action" };
+  await env.DB.prepare("DELETE FROM leads WHERE id = ?").bind(Number(body.id) || 0).run();
+  return { ok: true };
 }

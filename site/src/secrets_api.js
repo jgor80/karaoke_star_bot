@@ -15,6 +15,7 @@
 
 import { hostDraftAction, draftBoard } from "./drafts_api.js";
 import { hostRequests, hostRequestAction } from "./requests_api.js";
+import { hostLeads, hostLeadAction } from "./leads_api.js";
 import { hostSongbookAction, songbookConfig } from "./songbook_api.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.js";
 
@@ -225,6 +226,10 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (String(body.action || "").startsWith("request_")) {
       const r = await hostRequestAction(env, body, venue); // song requests: mark added / not available, or remove
       if (r.error) return json(r, 400);
+    } else if (String(body.action || "").startsWith("lead_")) {
+      if (venue.slug !== DEFAULT_VENUE.slug) return json({ error: "Leads are on the first venue's host page." }, 403);
+      const r = await hostLeadAction(env, body); // "Bring Oke Night to your bar" leads: remove one once handled
+      if (r.error) return json(r, 400);
     } else if (body.action === "test") {
       if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
       return json({ ok: true });
@@ -235,5 +240,6 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.venue = ? ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").bind(venue.slug).all();
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
-  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
+  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

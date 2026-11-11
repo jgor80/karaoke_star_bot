@@ -105,6 +105,12 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <details id="req-done-box" hidden><summary class="hint">Recently handled</summary><ul class="list" id="req-done"></ul></details>
     </section>
 
+    <section id="leads-box" hidden>
+      <h2 id="leads-h">Bars interested in Oke Night</h2>
+      <p class="hint" style="margin-bottom:8px">From the “Bring Oke Night to your bar” form on okenight.com, newest first. The ntfy push only says one came in; the details are here. Remove a lead once you’ve followed up, so their contact details aren’t kept longer than needed.</p>
+      <ul class="list" id="leads-list"></ul>
+    </section>
+
     <section class="card">
       <h2>Songbook</h2>
       <p class="hint">Which songs people can search in the Songbook tab. Use your own list if your songs come from somewhere else, or add your extra songs on top of the full catalog.</p>
@@ -403,6 +409,24 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", (x.status === "added" ? "✅ Added" : "❌ Not available") + " · " + when(x.updated_at)));
       const b = el("button", "ghost small", "Undo"); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: "open" });
       const row = el("div", "row"); row.append(b); li.append(row); rdl.append(li); });
+    // "Bring Oke Night to your bar" leads (first venue only; the server leaves leads out elsewhere)
+    $("leads-box").hidden = !Array.isArray(d.leads);
+    if (Array.isArray(d.leads)) {
+      const ll = $("leads-list"); ll.replaceChildren();
+      $("leads-h").textContent = "Bars interested in Oke Night (" + d.leads.length + ")";
+      if (!d.leads.length) ll.append(el("li", "s", "No leads yet."));
+      d.leads.forEach((x) => { const li = el("li");
+        li.append(el("span", "t", x.bar + (x.city ? " (" + x.city + ")" : "")),
+          el("span", "s", (x.name ? x.name + (x.role ? ", " + x.role : "") + " · " : "") + x.contact + " · " + when(x.created_at)));
+        if (x.note) li.append(el("span", "s", "“" + x.note + "”"));
+        const row = el("div", "row");
+        const c = String(x.contact || "").trim();
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) { const a = el("a", "ghost small btn-link", "✉️ Email"); a.href = "mailto:" + c + "?subject=" + encodeURIComponent("Oke Night at " + x.bar); row.append(a); }
+        else if (/^[+\d][\d\s().-]{6,}$/.test(c)) { const a = el("a", "ghost small btn-link", "📞 Call"); a.href = "tel:" + c.replace(/[^\d+]/g, ""); row.append(a); }
+        const rm = el("button", "ghost small", "Remove"); rm.type = "button";
+        rm.onclick = () => { if (confirm("Remove this lead? Their contact details are deleted.")) act({ action: "lead_remove", id: x.id }); };
+        row.append(rm); li.append(row); ll.append(li); });
+    }
     // Crowd draft picks and blocked names
     const dr = d.drafts || [], dl = $("draft-list"); dl.replaceChildren();
     $("draft-h").textContent = "Crowd draft (" + dr.length + ")";
