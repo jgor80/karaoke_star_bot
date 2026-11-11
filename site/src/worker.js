@@ -34,6 +34,11 @@ import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
+// ?since=YYYY-MM-DD: only plays from that night on. Phones load the whole history once and then poll this,
+// so a 10 s refresh during the night sends tonight's songs instead of every song ever sung.
+const PLAYS_SINCE_SQL =
+  "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 AND night >= ?2 ORDER BY played_at";
+const NIGHT_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SYNC_SQL = "SELECT max(ran_at) AS last FROM sync_runs WHERE venue = ?1";
 // The karaoke app's song queue, one row per venue replaced by that bar's laptop sync each time it changes
 // (sync/karaoke_sync.py). items is a JSON list of {id: song id, singer, len: seconds or null}, the song on the
@@ -99,17 +104,20 @@ async function handleApi(name, req, env, ctx, venue, url) {
     const now = Math.floor(Date.now() / 1000);
     const schedule = { ...scheduleStatus(now, venue), reminder: reminderLinks(now, venue) };
     const maxAge = schedule.status === "off" ? 15 : 5;
+    const since = url.searchParams.get("since");
+    const delta = since && NIGHT_RE.test(since) ? since : null;
     const cache = caches.default;
-    const key = new Request(url.origin + "/" + venue.slug + "/api/plays");
+    const key = new Request(url.origin + "/" + venue.slug + "/api/plays" + (delta ? "?since=" + delta : ""));
     let res = await cache.match(key);
     if (!res) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
+      const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
       const [[plays, sync], reax, secrets, queue, drafts, crowd] = await Promise.all([
-        env.DB.batch([env.DB.prepare(PLAYS_SQL).bind(venue.slug), env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
-        reactionTotals(env, venue), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue)]);
+        env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
+        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue)]);
       res = new Response(
-        JSON.stringify({ venue: publicVenue(venue), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd }),
+        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
       );
       ctx.waitUntil(cache.put(key, res.clone()));
