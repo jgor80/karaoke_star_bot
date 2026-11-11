@@ -219,15 +219,21 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     $("key").autocomplete = setupMode ? "new-password" : "current-password";
     $("login-err").textContent = msg || "";
   }
+  const OFFLINE = "Can’t reach the site. Check the wifi or data and try again.";
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const k = $("key").value.trim(); if (!k) return;
-    if (setupMode) {
-      key = k; const r = await api("POST", { action: "setup", key: k, code: $("code").value, host_name: $("setup-name").value });
-      if (!r.ok) return showLogin(true, r.d.error || "Couldn’t set it up.");
-      $("code").value = "";
-    }
-    key = k; store.set(KEY, k); load();
+    const btn = $("login-btn"); btn.disabled = true; $("login-err").textContent = "";
+    try {
+      if (setupMode) {
+        key = k; const r = await api("POST", { action: "setup", key: k, code: $("code").value, host_name: $("setup-name").value });
+        if (!r.ok) return showLogin(true, r.d.error || "Couldn’t set it up.");
+        $("code").value = "";
+      }
+      key = k; store.set(KEY, k); await load();
+    } catch (e) {
+      $("login-err").textContent = OFFLINE;
+    } finally { btn.disabled = false; }
   });
   $("forgot").addEventListener("click", () => showLogin(true));
   $("host-form").addEventListener("submit", async (ev) => {
@@ -352,7 +358,11 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   async function load() {
     clearTimeout(pollT);
     let r;
-    try { r = await api("GET"); } catch (e) { pollT = setTimeout(load, 10000); return; }
+    try { r = await api("GET"); } catch (e) {
+      // Say so, instead of a blank page or a button that looks dead. It keeps retrying in the background.
+      if ($("app").hidden) showLogin(setupMode, "Can’t reach the site. Check the wifi or data. Retrying…");
+      pollT = setTimeout(load, 10000); return;
+    }
     if (r.status === 401 && r.d.needs_setup) return showLogin(true);
     if (r.status === 403) { store.set(KEY, null); return showLogin(false, "That key didn’t work."); }
     if (!r.ok) { pollT = setTimeout(load, 10000); return; }

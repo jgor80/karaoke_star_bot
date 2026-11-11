@@ -56,6 +56,8 @@ a.logo { text-decoration: none; }
 .secret-pop .sp-big { font-family: var(--f-display); font-size: clamp(30px, 9vw, 44px); line-height: 1.05; }
 .secret-pop .sp-who { font-size: 22px; font-weight: 800; overflow-wrap: anywhere; }
 .secret-pop .sp-rw { font-size: 19px; font-weight: 700; }
+.secret-pop .sp-close { justify-self: center; min-height: 44px; padding: 0 22px; border-radius: 999px; border: 2px solid #1a0710; background: transparent; color: #1a0710; font: inherit; font-weight: 800; cursor: pointer; }
+.secret-pop .sp-close:focus-visible { outline: 3px solid #1a0710; outline-offset: 3px; }
 @media (prefers-reduced-motion: no-preference) { .secret-pop .sp-in { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .recap { display: grid; gap: 8px; }
@@ -769,7 +771,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
 </dialog>
 
-<div class="secret-pop" id="secret-pop" hidden role="alert"><div class="sp-in"><div class="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><small>Tap to close</small></div></div>
+<div class="secret-pop" id="secret-pop" hidden role="alertdialog" aria-modal="true" aria-labelledby="sp-big" aria-describedby="sp-who sp-rw"><div class="sp-in"><div class="sp-big" id="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><button type="button" class="sp-close" id="sp-close">Close</button></div></div>
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
 <script src="/awards.js"></script>
@@ -1431,11 +1433,20 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     secretSeenMem.forEach((k) => seen.add(k));
     const fresh = secrets.found.filter((s) => !seen.has(secretKey(s)));
     const pop = fresh.filter((s) => now() - s.found_at < 15 * 60).pop();
-    if (pop) { $("sp-who").textContent = (clean(pop.singer) || "Someone") + " sang “" + pop.title + "”"; $("sp-rw").textContent = pop.reward ? "🎁 " + pop.reward : ""; $("secret-pop").hidden = false;
+    if (pop) { $("sp-who").textContent = (clean(pop.singer) || "Someone") + " sang “" + pop.title + "”"; $("sp-rw").textContent = pop.reward ? "🎁 " + pop.reward : ""; secretOpener = document.activeElement; $("secret-pop").hidden = false; $("sp-close").focus();
       try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
     if (fresh.length) { fresh.forEach((s) => { seen.add(secretKey(s)); secretSeenMem.add(secretKey(s)); }); try { localStorage.setItem(SECRET_SEEN, JSON.stringify([...seen])); } catch (e) {} }
   }
-  $("secret-pop").addEventListener("click", () => { $("secret-pop").hidden = true; });
+  // Tap anywhere, the Close button, or Esc. Focus goes back where it was.
+  let secretOpener = null;
+  function closeSecret() {
+    if ($("secret-pop").hidden) return;
+    $("secret-pop").hidden = true;
+    if (secretOpener && secretOpener.focus) try { secretOpener.focus(); } catch (e) {}
+    secretOpener = null;
+  }
+  $("secret-pop").addEventListener("click", closeSecret);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSecret(); });
 
   // ---------- "that's me" ----------
   const ME_KEY = "karaoke-me";
