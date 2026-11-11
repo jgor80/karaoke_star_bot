@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacy · Oke Night</title>
+<meta name="description" content="What Oke Night keeps, why, for how long, and how to have your name taken off.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<style>
+/* Same colors as the other pages, system fonts only (this page loads nothing from anyone else). */
+:root {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843; --hot: #ff5c9d; --gold: #f5b84a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 28px max(16px, env(safe-area-inset-left, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)); }
+a { color: var(--gold); }
+h1 { font-size: clamp(28px, 7vw, 40px); line-height: 1.1; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 28px 0 8px; color: var(--hot); }
+p, li { color: var(--ink); }
+ul { padding-left: 1.2em; }
+li { margin: 6px 0; }
+.muted { color: var(--muted); font-size: 15px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 18px 0; }
+.box p { margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <a href="/">← Oke Night</a>
+  <h1>Privacy</h1>
+  <p class="muted">Last updated November 11, 2026.</p>
+
+  <p>Oke Night shows karaoke nights at bars: who sang what, live reactions, crowd picks and stats. There are no accounts, no ads and no tracking cookies, and nothing is sold or shared for marketing.</p>
+
+  <div class="box">
+    <p><b>Want your name taken off?</b> Email <a href="mailto:info@synthwaveweb.com?subject=Oke%20Night%20name%20removal">info@synthwaveweb.com</a> with your name as it shows on the site and the bar, or ask the host at the bar. Your songs stay in the night’s totals, but your name is replaced with “Removed singer” and a number everywhere on that bar’s pages, including songs you sing later. It’s usually done within a few days.</p>
+  </div>
+
+  <h2>What we keep and why</h2>
+  <ul>
+    <li><b>Singer names and songs.</b> The host types your singer name into the karaoke app when you sign up to sing. Each song you sing, with the night and time, is shown publicly on that bar’s page so the crowd can follow along and see stats and awards.</li>
+    <li><b>A name you type</b> for reactions, awards or crowd picks (24 characters at most), or “Anon” and four letters if you don’t. It shows next to what you post.</li>
+    <li><b>A random ID for your phone and a scrambled network code</b> (a hash of your IP address that changes every day). They only stop one phone from flooding reactions, picks and requests, and are never shown. We blank them after 90 days.</li>
+    <li><b>Crowd noise levels.</b> The host’s laptop or phone measures how loud the room is for the applause meter. Only loudness numbers are sent, never audio. They are deleted after 45 days.</li>
+    <li><b>Song requests</b> you send from the Songbook: the song and the name you typed. Only the host sees them.</li>
+    <li><b>The “bring Oke Night to your bar” form.</b> Your name, bar, city, contact details and note, so we can reply. Only the site owner sees them. They are deleted once handled, or after a year.</li>
+    <li><b>On your phone only:</b> the browser keeps your random ID, the name you typed, the bar you picked and your settings. Clear the site’s data in your browser to remove them. If you let the home page use your location to find the nearest bar, that stays on your phone and is never sent.</li>
+  </ul>
+
+  <h2>Who else is involved</h2>
+  <ul>
+    <li><b>Cloudflare</b> hosts the site and its database.</li>
+    <li><b>ntfy.sh</b> sends push alerts to the host’s phone (for example “a secret song was found” or “a new bar is interested”). Alerts don’t include contact details.</li>
+    <li><b>Apple Music:</b> album covers come from Apple through our server, so your phone usually doesn’t contact Apple until you tap a cover to hear the song.</li>
+    <li><b>Google Fonts:</b> the main pages load their fonts from Google, so your browser contacts Google’s font servers.</li>
+    <li><b>Venmo and Google Calendar</b> only if you tap a tip or “add to calendar” link, which takes you to their site.</li>
+  </ul>
+
+  <h2>Your choices</h2>
+  <p>You can ask for your name to be removed, ask what we hold about you, or ask us to correct it, by emailing <a href="mailto:info@synthwaveweb.com">info@synthwaveweb.com</a>. You don’t have to type a name to react or pick songs. If you don’t want your songs on the site at all, tell the host before you sing.</p>
+
+  <h2>Contact</h2>
+  <p>Oke Night, <a href="mailto:info@synthwaveweb.com">info@synthwaveweb.com</a>. If this page changes, the date at the top changes too.</p>
+</main>
+</body>
+</html>

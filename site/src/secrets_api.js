@@ -8,6 +8,7 @@
 // POST /api/host {action:"songbook_upload"|"songbook_source"|"songbook_clear", ...}  the host's own songbook (songbook_api.js)
 // POST /api/host {action:"request_done", id, status} | {action:"request_remove", id}  song requests (requests_api.js)
 // POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
+// POST /api/host {action:"singer_erase", singer}  take a singer's name off the site (privacy_api.js)
 // checkSecrets(env, venue)                 -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
 // publicSecrets(env, venue)                -> {secrets_found: [...], secrets_left: n, host, tips} folded into /api/plays
 //
@@ -17,6 +18,7 @@ import { hostDraftAction, draftBoard } from "./drafts_api.js";
 import { hostRequests, hostRequestAction } from "./requests_api.js";
 import { hostLeads, hostLeadAction } from "./leads_api.js";
 import { hostSongbookAction, songbookConfig } from "./songbook_api.js";
+import { eraseSinger, erasedSingers } from "./privacy_api.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.js";
 
 const SCHEMA = [
@@ -230,6 +232,10 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       if (venue.slug !== DEFAULT_VENUE.slug) return json({ error: "Leads are on the first venue's host page." }, 403);
       const r = await hostLeadAction(env, body); // "Bring Oke Night to your bar" leads: remove one once handled
       if (r.error) return json(r, 400);
+    } else if (body.action === "singer_erase") {
+      const r = await eraseSinger(env, body, venue); // privacy: a singer asked to be taken off the site
+      if (r.error) return json(r, 400);
+      return json(r);
     } else if (body.action === "test") {
       if (!cfg.ntfy_topic) return json({ error: "No alert topic yet." }, 400);
       const sent = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } })
@@ -243,5 +249,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
