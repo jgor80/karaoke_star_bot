@@ -2,6 +2,8 @@
 //
 // The host uploads a CSV/TXT songbook on /host. The page parses it and sends rows in chunks to /api/host:
 //   {action: "songbook_upload", rows: [[title, artist, year, genre, duet], ...], start: true|false, done: true|false}
+//     Chunks go in under a staging venue ("<slug>~new") that no search sees. The last chunk (done) swaps them in
+//     for the old songbook in one transaction, so an upload that stops halfway leaves the old songbook as it was.
 //   {action: "songbook_source", source: "catalog" | "mine" | "both"}   which list the Songbook tab searches
 //   {action: "songbook_clear"}
 // Songs go into the D1 full-text table `songbook`, with the same columns as `catalog` (plus `venue`, the bar's slug)
@@ -57,6 +59,8 @@ const lit = (v) => v == null ? "NULL" : typeof v === "number" ? String(v) : "'" 
 const clean = (s, n) => String(s == null ? "" : s).normalize("NFC").replace(/[\u0000-\u001f\u007f-\u009f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, n);
 const truthy = (v) => /^(1|y|yes|true|x|duet|duo)$/i.test(String(v || "").trim());
 
+const staging = (venue) => venue.slug + "~new";
+
 export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
   await ensureSongbook(env);
   const set = (k, v) => env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(cfgKey(venue, k), String(v));
@@ -64,11 +68,12 @@ export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
     if (!SOURCES.includes(body.source)) return { error: "bad source" };
     await set("songbook_source", body.source).run();
   } else if (body.action === "songbook_clear") {
-    await env.DB.batch([env.DB.prepare("DELETE FROM songbook WHERE venue = ?").bind(venue.slug), set("songbook_count", 0), set("songbook_source", "catalog"), set("songbook_updated", new Date().toISOString())]);
+    await env.DB.batch([env.DB.prepare("DELETE FROM songbook WHERE venue IN (?1, ?2)").bind(venue.slug, staging(venue)), set("songbook_count", 0), set("songbook_source", "catalog"), set("songbook_updated", new Date().toISOString())]);
   } else if (body.action === "songbook_upload") {
     const rows = Array.isArray(body.rows) ? body.rows.slice(0, CHUNK) : [];
-    if (body.start) await env.DB.prepare("DELETE FROM songbook WHERE venue = ?").bind(venue.slug).run();
-    const have = body.start ? 0 : (await env.DB.prepare("SELECT count(*) AS n FROM songbook WHERE venue = ?").bind(venue.slug).first()).n;
+    const stage = staging(venue);
+    if (body.start) await env.DB.prepare("DELETE FROM songbook WHERE venue = ?").bind(stage).run(); // a half-done earlier upload
+    const have = body.start ? 0 : (await env.DB.prepare("SELECT count(*) AS n FROM songbook WHERE venue = ?").bind(stage).first()).n;
     // Ids carry on after the highest one in the table (all venues share it).
     const next = Number((await env.DB.prepare("SELECT max(rowid) AS m FROM songbook").first()).m || OWN_BASE - 1) + 1;
     if (have + rows.length > MAX_OWN) return { error: "That’s more than " + MAX_OWN.toLocaleString("en-US") + " songs." };
@@ -94,12 +99,16 @@ export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
     const stmts = [];
     for (let i = 0; i < songs.length; i += 150) {
       stmts.push(env.DB.prepare(head + songs.slice(i, i + 150).map((s) =>
-        "(" + [s.id, s.title, s.artist, s.k, s.year, s.duo, 0, s.styles, "", "", rank.get(s.k) || UNRANKED + s.n, venue.slug].map(lit).join(",") + ")").join(",")));
+        "(" + [s.id, s.title, s.artist, s.k, s.year, s.duo, 0, s.styles, "", "", rank.get(s.k) || UNRANKED + s.n, stage].map(lit).join(",") + ")").join(",")));
     }
     for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5));
     if (body.done) {
-      const n = (await env.DB.prepare("SELECT count(*) AS n FROM songbook WHERE venue = ?").bind(venue.slug).first()).n;
-      await env.DB.batch([set("songbook_count", n), set("songbook_updated", new Date().toISOString())]);
+      // Swap the new songbook in and the old one out together (a D1 batch is one transaction).
+      const n = (await env.DB.prepare("SELECT count(*) AS n FROM songbook WHERE venue = ?").bind(stage).first()).n;
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM songbook WHERE venue = ?").bind(venue.slug),
+        env.DB.prepare("UPDATE songbook SET venue = ?1 WHERE venue = ?2").bind(venue.slug, stage),
+        set("songbook_count", n), set("songbook_updated", new Date().toISOString())]);
     }
     forgetSongbookConfig(venue);
     return { ok: true, added: songs.length };
