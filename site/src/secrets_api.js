@@ -226,8 +226,10 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       const r = await hostRequestAction(env, body, venue); // song requests: mark added / not available, or remove
       if (r.error) return json(r, 400);
     } else if (body.action === "test") {
-      if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
-      return json({ ok: true });
+      if (!cfg.ntfy_topic) return json({ error: "No alert topic yet." }, 400);
+      const sent = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } })
+        .then((r) => r.ok).catch(() => false);
+      return sent ? json({ ok: true }) : json({ error: "ntfy didn’t take the test. Try again in a minute." }, 502);
     } else return json({ error: "unknown action" }, 400);
   }
   await checkSecrets(env, venue);

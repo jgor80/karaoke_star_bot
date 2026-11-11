@@ -155,7 +155,7 @@ body.embed { cursor: auto; }
 @media (max-aspect-ratio: 4/3) { html.embed { --u: 1.5vw; } html.embed .grid { grid-template-columns: minmax(0, 1fr); } }
 body.embed .qr, body.embed .fs { display: none !important; }
 body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
-.status.bad { color: var(--hot); opacity: 1; }
+.status.bad { color: var(--hot); opacity: 1; font-size: calc(2.2 * var(--u)); background: rgba(0, 0, 0, .6); padding: calc(.6 * var(--u)) calc(1.2 * var(--u)); border-radius: calc(1 * var(--u)); max-width: 60vw; }
 
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
 @media (max-aspect-ratio: 4/3) { :root { --u: .75vw; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cols { grid-template-columns: minmax(0, 1fr); } header { grid-template-columns: minmax(0, 1fr) auto; } .tally { display: none; } }
@@ -423,7 +423,12 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       watchRx(v.current);
       secretMoment(data);
       crowdMoment(data);
-      setStatus(v.missing ? "No songs on " + v.missing + ", so this shows the latest night instead." : new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), !!v.missing);
+      // Same rule as the phone page: during the session, no word from the karaoke laptop for 15 minutes.
+      const sc = data.schedule && data.schedule.status, sync = Number(data.last_sync_ts) || 0, quiet = sync ? Math.floor((now() - sync) / 60) : 0;
+      const paused = (sc === "live" || sc === "overtime") && sync && quiet > 15;
+      setStatus(v.missing ? "No songs on " + v.missing + ", so this shows the latest night instead."
+        : paused ? "Stats paused: the karaoke laptop last checked in " + (quiet < 120 ? quiet + " min" : Math.round(quiet / 60) + " h") + " ago. New songs may be missing."
+        : new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }), !!v.missing || !!paused);
     } catch (e) {
       setStatus(lastView ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Retrying…", true);
     }
