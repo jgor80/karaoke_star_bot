@@ -309,8 +309,18 @@ def upload(target, cfg):
     now = dt.datetime.now().isoformat(timespec="seconds")
     with db:
         db.executemany("insert or replace into d1_uploaded values (?,?)", [(r[0], now) for r in rows])
-    d1_query(cfg, "insert or replace into sync_runs values (?,?,?,?)",
-             [now, os.environ.get("COMPUTERNAME", ""), len(plays), len(rows)])
+    # Name the columns: the Worker adds a venue column to sync_runs (site/src/venues.js), so a
+    # positional insert fails on every run and the site thinks the sync has stopped. On a brand-new
+    # database the site may not have added that column yet, so fall back to the original four.
+    beat = [now, os.environ.get("COMPUTERNAME", ""), len(plays), len(rows)]
+    try:
+        d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded, venue)"
+                 " values (?,?,?,?,?)", beat + [cfg.get("venue") or "wbl"])
+    except Exception as e:
+        if "venue" not in str(e).lower():
+            raise
+        d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded)"
+                 " values (?,?,?,?)", beat)
     db.close()
     return len(rows)
 
@@ -355,9 +365,16 @@ def run_once(a):
         if os.path.exists(a.config):
             with open(a.config, encoding="utf-8") as f:
                 cfg = json.load(f)
-            msg += f", uploaded {upload(a.target, cfg)} to Cloudflare"
+            # Send the queue even if the play upload fails, so one problem doesn't freeze "the line".
+            upload_error = None
+            try:
+                msg += f", uploaded {upload(a.target, cfg)} to Cloudflare"
+            except Exception as e:
+                upload_error = e
             if queue is not None and upload_queue(cfg, queue):
                 msg += f", queue now {len(queue)}"
+            if upload_error is not None:
+                raise upload_error
         return True, msg
     except BaseException as e:  # log every failure, including SystemExit
         if isinstance(e, KeyboardInterrupt):
