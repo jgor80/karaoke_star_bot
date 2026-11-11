@@ -16,9 +16,10 @@ routes = [
 crons = ["* * * * *"]
 
 # Album cover sources, in order (see src/art_api.js). itunes = Apple, deezer, coverart = Cover Art Archive.
-# Apple's artwork links back to Apple Music and is the one to keep when the site makes money.
+# Apple only: its artwork links back to Apple Music. Deezer and the Cover Art Archive don't license
+# their images for commercial use, and the site now takes tips.
 [vars]
-ART_SOURCES = "itunes,deezer,coverart"
+ART_SOURCES = "itunes"
 
 [[d1_databases]]
 binding = "DB"
