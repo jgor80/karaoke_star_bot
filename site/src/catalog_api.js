@@ -1,3 +1,5 @@
+import { songbookConfig } from "./songbook_api.js";
+import { DEFAULT_VENUE } from "./venues.js";
 import { ensureVoiceTables } from "./voice_import.js";
 
 // Search KaraFun's song catalog:
@@ -39,7 +41,8 @@ const SORTS = {
   old: "year IS NULL OR year = '', CAST(year AS INTEGER), pop",    // oldest songs
 };
 
-export function catalogQuery(params) {
+// source: "catalog" (the full song list), "mine" (the host's uploaded songbook, see songbook_api.js) or "both".
+export function catalogQuery(params, source = "catalog", version = "", venueSlug = DEFAULT_VENUE.slug) {
   const tokens = toTokens(params.get("q"));
   const f = {
     duo: params.get("duo") === "1",
@@ -52,7 +55,7 @@ export function catalogQuery(params) {
     page: Math.min(MAX_PAGE, Math.max(0, parseInt(params.get("page"), 10) || 0)),
   };
   const where = [], bind = [];
-  if (tokens.length) { where.push("catalog MATCH ?"); bind.push(tokens.map((t) => '"' + t + '"*').join(" ")); }
+  if (tokens.length) { where.push("{T} MATCH ?"); bind.push(tokens.map((t) => '"' + t + '"*').join(" ")); }
   if (f.duo) where.push("duo = 1");
   if (f.hits) where.push("pop <= 1000");
   if (f.voice) { where.push("artist IN (SELECT artist FROM artist_voice WHERE voice = ?)"); bind.push(f.voice); }
@@ -60,16 +63,30 @@ export function catalogQuery(params) {
   if (f.lang) { where.push("(',' || languages || ',') LIKE ?"); bind.push("%," + f.lang + ",%"); }
   if (f.decade === 1900) where.push("CAST(year AS INTEGER) BETWEEN 1 AND 1949");
   else if (f.decade) { where.push("CAST(year AS INTEGER) BETWEEN ? AND ?"); bind.push(f.decade, f.decade + 9); }
-  const sql = "SELECT rowid AS id, title, artist, year, duo, explicit, styles FROM catalog" +
-    (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY " + SORTS[f.sort] + " LIMIT " + (PAGE + 1) + " OFFSET " + f.page * PAGE;
+  // The songbook table holds every venue's own list, so it's also filtered by venue (bound last).
+  const whereSql = (t) => { const w = where.map((x) => x.replace("{T}", t)).concat(t === "songbook" ? ["venue = ?"] : []); return w.length ? " WHERE " + w.join(" AND ") : ""; };
+  const tail = " ORDER BY " + SORTS[f.sort] + " LIMIT " + (PAGE + 1) + " OFFSET " + f.page * PAGE;
+  let sql, allBind = bind;
+  if (source === "both") {
+    // Both lists, with a song that's in both shown once (the copy with the better rank).
+    const part = (t) => "SELECT rowid AS id, title, artist, k, year, duo, explicit, styles, added, pop FROM " + t + whereSql(t);
+    sql = "SELECT id, title, artist, year, duo, explicit, styles, added, min(pop) AS pop FROM (" + part("catalog") + " UNION ALL " + part("songbook") + ") GROUP BY k" + tail;
+    allBind = bind.concat(bind, [venueSlug]);
+  } else {
+    const t = source === "mine" ? "songbook" : "catalog";
+    sql = "SELECT rowid AS id, title, artist, year, duo, explicit, styles FROM " + t + whereSql(t) + tail;
+    if (t === "songbook") allBind = bind.concat([venueSlug]);
+  }
   const key = "q=" + encodeURIComponent(tokens.join(" ")) + "&duo=" + +f.duo + "&hits=" + +f.hits + "&genre=" + encodeURIComponent(f.genre) +
-    "&lang=" + encodeURIComponent(f.lang) + "&decade=" + f.decade + "&voice=" + f.voice + "&sort=" + f.sort + "&page=" + f.page;
-  return { sql, bind, key, page: f.page, voice: f.voice, filtered: tokens.length > 0 || where.length > 0 };
+    "&lang=" + encodeURIComponent(f.lang) + "&decade=" + f.decade + "&voice=" + f.voice + "&sort=" + f.sort + "&page=" + f.page +
+    (source !== "catalog" ? "&src=" + source + "&venue=" + encodeURIComponent(venueSlug) + "&v=" + encodeURIComponent(version) : "");
+  return { sql, bind: allBind, key, page: f.page, voice: f.voice, filtered: tokens.length > 0 || where.length > 0 };
 }
 
-export async function handleCatalog(req, env, ctx) {
+export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
   const url = new URL(req.url);
-  const cq = catalogQuery(url.searchParams);
+  const sb = await songbookConfig(env, venue);
+  const cq = catalogQuery(url.searchParams, sb.source, sb.updated || "", venue.slug);
   const key = new Request(url.origin + "/api/catalog?" + cq.key);
   const cache = caches.default;
   const hit = await cache.match(key);
@@ -88,7 +105,8 @@ export async function handleCatalog(req, env, ctx) {
       id: r.id, title: r.title, artist: r.artist, year: r.year ? Number(r.year) : null,
       duo: Number(r.duo) === 1, explicit: Number(r.explicit) === 1, styles: r.styles || "",
     }));
-    const body = { ready: Number(m.count) > 0, songs, more: found.results.length > PAGE && cq.page < MAX_PAGE, count: Number(m.count) || 0, updated: m.updated || null };
+    const total = sb.source === "mine" ? sb.count : sb.source === "both" ? (Number(m.count) || 0) + sb.count : Number(m.count) || 0;
+    const body = { ready: total > 0, source: sb.source, songs, more: found.results.length > PAGE && cq.page < MAX_PAGE, count: total, updated: m.updated || null };
     if (vc) body.voice = { done: Number(vc.results[0].done) || 0, total: Number(vc.results[0].total) || 0 };
     // The list changes at most once a week, so results can be cached for hours. Voice results grow
     // while the artists are still being looked up, so those are cached for 10 minutes until it's done.

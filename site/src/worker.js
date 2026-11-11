@@ -90,7 +90,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
   if (name === "reactions") return handleCounts(req, env, ctx);
-  if (name === "catalog") return handleCatalog(req, env, ctx);
+  if (name === "catalog") return handleCatalog(req, env, ctx, venue); // the venue picks its songbook (songbook_api.js)
   if (name === "art") return handleArt(req, env, ctx); // album covers, see art_api.js
   if (name === "plays") {
     // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.

@@ -136,3 +136,8 @@ CREATE TABLE IF NOT EXISTS leads (
   id integer primary key autoincrement, name text, bar text not null, city text, contact text not null,
   role text, note text, ip_hash text, day text not null, created_at integer not null);
 CREATE INDEX IF NOT EXISTS leads_ip ON leads (ip_hash, day);
+
+-- The host's own songbook, per venue (uploaded on /host; site/src/songbook_api.js). Same columns as catalog, ids from 1,000,000,000.
+-- host_config (via cfgKey): songbook_source = catalog | mine | both (which list the Songbook tab searches), songbook_count, songbook_updated.
+CREATE VIRTUAL TABLE IF NOT EXISTS songbook USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED, explicit UNINDEXED,
+  styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, venue UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');

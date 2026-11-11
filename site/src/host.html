@@ -32,6 +32,16 @@ input:focus { outline: 2px solid var(--hot); outline-offset: 1px; }
 button { font: inherit; font-weight: 700; font-size: 17px; border-radius: 12px; padding: 12px 16px; cursor: pointer; border: 1px solid var(--hot); background: var(--hot); color: #1a0710; }
 button.ghost { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 600; }
 button.small { font-size: 15px; padding: 7px 12px; }
+a.btn-link { font-size: 15px; font-weight: 600; padding: 7px 12px; border-radius: 12px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.req-buy { margin-top: 6px; }
+select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.sb-src { display: grid; gap: 8px; }
+.sb-src label { display: flex; gap: 10px; align-items: center; color: var(--ink); font-size: 16px; }
+.sb-src input { width: auto; }
+.sb-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.sb-prev { width: 100%; border-collapse: collapse; font-size: 14px; display: block; overflow-x: auto; }
+.sb-prev td, .sb-prev th { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; white-space: nowrap; }
+.sb-prev th { color: var(--muted); font-weight: 600; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .hint { font-size: 15px; color: var(--muted); margin: 0; }
 .err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
@@ -90,9 +100,27 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 
     <section>
       <h2 id="req-h">Song requests</h2>
-      <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below.</p>
+      <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below. Bought a track? Download it on the karaoke laptop and the sync files it into your karaoke songs folder and marks the request added by itself.</p>
       <ul class="list" id="req-list"></ul>
       <details id="req-done-box" hidden><summary class="hint">Recently handled</summary><ul class="list" id="req-done"></ul></details>
+    </section>
+
+    <section class="card">
+      <h2>Songbook</h2>
+      <p class="hint">Which songs people can search in the Songbook tab. Use your own list if your songs come from somewhere else, or add your extra songs on top of the full catalog.</p>
+      <div class="sb-src" id="sb-src" role="radiogroup" aria-label="Songbook source">
+        <label><input type="radio" name="sb-src" value="catalog"> <span>The full catalog <span class="hint" id="sb-n-catalog"></span></span></label>
+        <label><input type="radio" name="sb-src" value="mine"> <span>Only my songbook <span class="hint" id="sb-n-mine"></span></span></label>
+        <label><input type="radio" name="sb-src" value="both"> <span>Both</span></label>
+      </div>
+      <label>Upload your songbook (a CSV or text file, one song per row with title and artist; save Excel sheets as CSV first)<input type="file" id="sb-file" accept=".csv,.txt,.tsv,text/csv,text/plain"></label>
+      <div id="sb-step" hidden>
+        <p class="hint" id="sb-found"></p>
+        <div class="sb-map" id="sb-map"></div>
+        <table class="sb-prev" id="sb-prev"></table>
+        <div class="row"><button type="button" id="sb-go">Upload</button><span class="hint" id="sb-progress"></span></div>
+      </div>
+      <div class="row"><button type="button" class="ghost small" id="sb-clear" hidden>Delete my songbook</button><span class="hint" id="sb-status"></span></div>
     </section>
 
     <section class="card">
@@ -237,6 +265,89 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 
   $("logout").addEventListener("click", () => { store.set(KEY, null); key = null; clearTimeout(pollT); showLogin(false); });
 
+  // ---------- your own songbook ----------
+  // Split CSV/TSV/semicolon/pipe text into rows, with "quoted, fields" handled.
+  function parseTable(text) {
+    text = text.replace(/^\uFEFF/, "");
+    const first = (text.split(/\r?\n/).find((l) => l.trim()) || "");
+    const delim = [";", ",", "\t", "|"].map((d) => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0];
+    const d = delim[1] > 1 ? delim[0] : null;
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; continue; }
+      if (c === '"' && cell === "") q = true;
+      else if (d && c === d) { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); if (row.some((x) => x.trim())) rows.push(row); row = []; cell = ""; }
+      else cell += c;
+    }
+    row.push(cell); if (row.some((x) => x.trim())) rows.push(row);
+    // One column like "Artist - Title": split it in two.
+    if (!d && rows.filter((r) => / - /.test(r[0])).length > rows.length / 2) {
+      return { dash: true, rows: rows.map((r) => { const k = r[0].indexOf(" - "); return k < 0 ? ["", r[0].trim()] : [r[0].slice(0, k).trim(), r[0].slice(k + 3).trim()]; }) };
+    }
+    return { rows, dash: false };
+  }
+  const FIELDS = [["title", "Title", /^(song ?)?(title|name|song|track)$/i], ["artist", "Artist", /^(artist|singer|band|performer|artist ?name)$/i],
+    ["year", "Year", /^(year|released?|release ?year)$/i], ["genre", "Genre", /^(genres?|styles?|category|categories)$/i], ["duet", "Duet", /^(duet|duo)$/i]];
+  let sbTable = null, sbMap = {};
+  $("sb-file").addEventListener("change", async () => {
+    const f = $("sb-file").files[0]; if (!f) return;
+    $("sb-progress").textContent = ""; $("sb-status").textContent = "";
+    if (f.size > 25e6) { $("sb-status").textContent = "That file is over 25 MB."; return; }
+    const t = parseTable(await f.text());
+    const head = t.rows[0] || [];
+    const isHead = !t.dash && head.some((c) => FIELDS.slice(0, 2).some(([, , re]) => re.test(c.trim())));
+    sbTable = { header: isHead ? head.map((c) => c.trim()) : null, rows: isHead ? t.rows.slice(1) : t.rows };
+    const ncol = Math.max(...sbTable.rows.slice(0, 50).map((r) => r.length), 1);
+    sbMap = {};
+    FIELDS.forEach(([k, , re]) => { const i = sbTable.header ? sbTable.header.findIndex((c) => re.test(c)) : -1; sbMap[k] = i; });
+    if (!sbTable.header) { if (t.dash) { sbMap.artist = 0; sbMap.title = 1; } else { sbMap.title = 0; sbMap.artist = ncol > 1 ? 1 : -1; } }
+    const colName = (i) => sbTable.header ? (sbTable.header[i] || "Column " + (i + 1)) : "Column " + (i + 1);
+    const map = $("sb-map"); map.replaceChildren();
+    FIELDS.forEach(([k, label]) => {
+      const l = el("label", null, label), sel = el("select");
+      sel.append(new Option("—", "-1"));
+      for (let i = 0; i < ncol; i++) sel.append(new Option(colName(i), String(i)));
+      sel.value = String(sbMap[k]); sel.onchange = () => { sbMap[k] = Number(sel.value); preview(); };
+      l.append(sel); map.append(l);
+    });
+    $("sb-found").textContent = sbTable.rows.length.toLocaleString("en-US") + " rows found. Check that Title and Artist point at the right columns:";
+    $("sb-step").hidden = false; preview();
+  });
+  function mapped(r) { return FIELDS.map(([k]) => (sbMap[k] >= 0 ? String(r[sbMap[k]] || "").trim() : "")); }
+  function preview() {
+    const t = $("sb-prev"); t.replaceChildren();
+    const h = el("tr"); FIELDS.forEach(([, label]) => h.append(el("th", null, label))); t.append(h);
+    sbTable.rows.slice(0, 5).forEach((r) => { const tr = el("tr"); mapped(r).forEach((v) => tr.append(el("td", null, v))); t.append(tr); });
+    const n = sbTable.rows.filter((r) => mapped(r)[0]).length;
+    $("sb-go").textContent = "Upload " + n.toLocaleString("en-US") + " songs"; $("sb-go").disabled = sbMap.title < 0 || !n;
+  }
+  $("sb-go").addEventListener("click", async () => {
+    const rows = sbTable.rows.map(mapped).filter((r) => r[0]);
+    if (sbCount && !confirm("This replaces your current songbook (" + sbCount.toLocaleString("en-US") + " songs). Go ahead?")) return;
+    $("sb-go").disabled = true;
+    for (let i = 0; i < rows.length; i += 2000) {
+      $("sb-progress").textContent = "Uploading " + Math.min(i + 2000, rows.length).toLocaleString("en-US") + " / " + rows.length.toLocaleString("en-US") + "…";
+      const r = await api("POST", { action: "songbook_upload", rows: rows.slice(i, i + 2000), start: i === 0, done: i + 2000 >= rows.length });
+      if (!r.ok) { $("sb-progress").textContent = r.d.error || "Upload failed. Try again."; $("sb-go").disabled = false; return; }
+    }
+    if (sbSource === "catalog") await api("POST", { action: "songbook_source", source: sbCatalogCount ? "both" : "mine" });
+    $("sb-progress").textContent = "Done ✓"; $("sb-step").hidden = true; $("sb-file").value = ""; sbSet = false; load();
+  });
+  document.querySelectorAll('input[name="sb-src"]').forEach((r) => r.addEventListener("change", () => act({ action: "songbook_source", source: r.value })));
+  $("sb-clear").addEventListener("click", () => { if (confirm("Delete your songbook? The Songbook tab goes back to the full catalog.")) act({ action: "songbook_clear" }); });
+  let sbCount = 0, sbSource = "catalog", sbCatalogCount = 0, sbSet = false;
+  function renderSongbook(d) {
+    const sb = d.songbook || { source: "catalog", count: 0 };
+    sbCount = sb.count; sbSource = sb.source; sbCatalogCount = d.catalog_count || 0;
+    document.querySelectorAll('input[name="sb-src"]').forEach((r) => { r.checked = r.value === sb.source; r.disabled = r.value !== "catalog" && !sb.count; });
+    $("sb-n-catalog").textContent = sbCatalogCount ? "(" + sbCatalogCount.toLocaleString("en-US") + " songs)" : "";
+    $("sb-n-mine").textContent = sb.count ? "(" + sb.count.toLocaleString("en-US") + " songs)" : "(upload one first)";
+    $("sb-clear").hidden = !sb.count;
+    $("sb-status").textContent = sb.count && sb.updated ? "Uploaded " + new Date(sb.updated).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+  }
+
   // ---------- data ----------
   async function load() {
     clearTimeout(pollT);
@@ -269,6 +380,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       li.append(el("span", "tag", "Found " + when(s.found_at)), el("span", "t", s.sung_title || s.title), el("span", "s", "Sung by " + (s.singer || "someone")));
       if (s.reward) li.append(el("span", "rw", "🎁 " + s.reward));
       li.append(actions(s, true)); fl.append(li); });
+    renderSongbook(d);
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
     $("req-h").textContent = "Song requests (" + rq.length + ")";
@@ -279,7 +391,13 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       const row = el("div", "row");
       [["✅ Added", "added"], ["❌ Not available", "unavailable"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: st }); row.append(b); });
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => { if (confirm("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
-      row.append(rm); li.append(row); rl.append(li); });
+      row.append(rm);
+      // Where to get it: a licensed karaoke store, and official karaoke channels on YouTube.
+      const q = (x.title + " " + (x.artist || "")).trim(), links = el("div", "row req-buy");
+      [["🛒 Karaoke Version", "https://www.google.com/search?q=" + encodeURIComponent("site:karaoke-version.com " + q)],
+       ["▶️ YouTube", "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " karaoke")]].forEach(([t, href]) => {
+        const l = el("a", "ghost small btn-link", t); l.href = href; l.target = "_blank"; l.rel = "noopener"; links.append(l); });
+      li.append(row, links); rl.append(li); });
     const rd = d.requests_done || [], rdl = $("req-done"); rdl.replaceChildren(); $("req-done-box").hidden = !rd.length;
     rd.forEach((x) => { const li = el("li");
       li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", (x.status === "added" ? "✅ Added" : "❌ Not available") + " · " + when(x.updated_at)));

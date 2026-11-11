@@ -5,6 +5,7 @@
 // POST /api/host {action:"setup", code, key, host_name?}  sets or resets the host key; needs the HOST_SETUP_CODE Worker secret
 // POST /api/host {action:"host_name", host_name}           (header x-host-key) the host's singer name ("" = nobody)
 // POST /api/host {action:"tips", venmo, menu}              (header x-host-key) Venmo handle + tip menu (menu null = default)
+// POST /api/host {action:"songbook_upload"|"songbook_source"|"songbook_clear", ...}  the host's own songbook (songbook_api.js)
 // POST /api/host {action:"request_done", id, status} | {action:"request_remove", id}  song requests (requests_api.js)
 // POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
 // checkSecrets(env, venue)                 -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
@@ -14,6 +15,7 @@
 
 import { hostDraftAction, draftBoard } from "./drafts_api.js";
 import { hostRequests, hostRequestAction } from "./requests_api.js";
+import { hostSongbookAction, songbookConfig } from "./songbook_api.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.js";
 
 const SCHEMA = [
@@ -150,6 +152,11 @@ export async function isHost(env, given, venue = DEFAULT_VENUE) {
   return !!cfg.key_hash && same(await sha256(cfg.key_salt + ":" + String(given || "").trim()), cfg.key_hash);
 }
 
+async function catalogCount(env) {
+  const r = await env.DB.prepare("SELECT v FROM catalog_meta WHERE k = 'count'").first().catch(() => null);
+  return r ? Number(r.v) || 0 : 0;
+}
+
 export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const cfg = await config(env, venue);
   const K = (k) => cfgKey(venue, k);
@@ -211,6 +218,10 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (String(body.action || "").startsWith("draft_")) {
       const r = await hostDraftAction(env, body, venue); // crowd draft: remove a pick, block or unblock a singer
       if (r.error) return json(r, 400);
+    } else if (String(body.action || "").startsWith("songbook_")) {
+      const r = await hostSongbookAction(env, body, venue); // the host's own songbook: upload, pick which list, clear
+      if (r.error) return json(r, 400);
+      if (body.action === "songbook_upload") return json(r);
     } else if (String(body.action || "").startsWith("request_")) {
       const r = await hostRequestAction(env, body, venue); // song requests: mark added / not available, or remove
       if (r.error) return json(r, 400);
@@ -224,5 +235,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.venue = ? ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").bind(venue.slug).all();
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
-  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
