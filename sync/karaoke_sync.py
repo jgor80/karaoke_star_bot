@@ -26,7 +26,8 @@ in your Downloads folder for new karaoke files (.cdg/.kfn, an .mp3 with a matchi
 those, or a video or audio file with "karaoke" in its name), moves them into your karaoke songs folder,
 and marks any open song request (from the site's "Request a song") whose title is in the file name
 as added, so the person who asked sees it on their phone.
-Config keys (optional): "venue" (the bar's slug on okenight.com, default "wbl"); "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
+Config keys (optional): "venue" (the bar's slug on okenight.com, default "wbl": plays, the queue, the heartbeat,
+the crowd mic and requests are all filed under it); "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
 "karaoke_dir" (default ~/Music/Karaoke Songs), the folder your karaoke player reads local songs from.
 
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
@@ -36,6 +37,7 @@ import json
 import re
 import unicodedata
 import zipfile
+import zlib
 import math
 import datetime as dt
 import os
@@ -258,6 +260,25 @@ def local_times(ts):
     return t.isoformat(sep=" ", timespec="seconds"), night
 
 
+DEFAULT_VENUE = "wbl"  # the first bar on okenight.com; rows written before venues existed belong to it
+
+
+def venue_of(cfg):
+    """The bar this laptop syncs for: "venue" in the config (its slug on okenight.com), default wbl."""
+    return str(cfg.get("venue") or DEFAULT_VENUE).strip().lower()
+
+
+def with_venue(send_with, send_without):
+    """Write with the venue column; on a database the site hasn't given that column yet, write without it
+    (the site adds it on its first request, defaulting old rows to the first bar)."""
+    try:
+        return send_with()
+    except Exception as e:
+        if "venue" not in str(e).lower():
+            raise
+        return send_without()
+
+
 def d1_query(cfg, sql, params):
     url = ("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query"
            % (cfg["account_id"], cfg["database_id"]))
@@ -305,22 +326,21 @@ def upload(target, cfg):
     if sessions:
         upsert_rows(cfg, "sessions", ["session_start", "session_end", "name"], "session_start",
                     ["session_end", "name"], sessions)
-    upsert_rows(cfg, "plays", D1_PLAY_COLS, "uuid", D1_PLAY_COLS[2:], rows)
+    # Each play is filed under this laptop's bar. A play's venue never changes once uploaded.
+    venue = venue_of(cfg)
+    with_venue(lambda: upsert_rows(cfg, "plays", D1_PLAY_COLS + ["venue"], "uuid", D1_PLAY_COLS[2:],
+                                   [r + [venue] for r in rows]),
+               lambda: upsert_rows(cfg, "plays", D1_PLAY_COLS, "uuid", D1_PLAY_COLS[2:], rows))
     now = dt.datetime.now().isoformat(timespec="seconds")
     with db:
         db.executemany("insert or replace into d1_uploaded values (?,?)", [(r[0], now) for r in rows])
     # Name the columns: the Worker adds a venue column to sync_runs (site/src/venues.js), so a
-    # positional insert fails on every run and the site thinks the sync has stopped. On a brand-new
-    # database the site may not have added that column yet, so fall back to the original four.
+    # positional insert fails on every run and the site thinks the sync has stopped.
     beat = [now, os.environ.get("COMPUTERNAME", ""), len(plays), len(rows)]
-    try:
-        d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded, venue)"
-                 " values (?,?,?,?,?)", beat + [cfg.get("venue") or "wbl"])
-    except Exception as e:
-        if "venue" not in str(e).lower():
-            raise
-        d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded)"
-                 " values (?,?,?,?)", beat)
+    with_venue(lambda: d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded, venue)"
+                                " values (?,?,?,?,?)", beat + [venue]),
+               lambda: d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded)"
+                                " values (?,?,?,?)", beat))
     db.close()
     return len(rows)
 
@@ -337,8 +357,14 @@ def upload_queue(cfg, queue):
     if _queue_sent is None:
         d1_query(cfg, "create table if not exists live_queue"
                  " (id integer primary key, updated_at integer not null, items text not null)", [])
-    d1_query(cfg, "insert or replace into live_queue (id, updated_at, items) values (1, ?, ?)",
-             [int(time.time()), items])
+    # One row per bar: the first bar keeps id 1 (written before venues existed), others get a fixed id
+    # from their slug. The site reads the newest row for its venue (site/src/worker.js QUEUE_SQL).
+    venue = venue_of(cfg)
+    row_id = 1 if venue == DEFAULT_VENUE else 1000 + zlib.crc32(venue.encode()) % 1000000
+    with_venue(lambda: d1_query(cfg, "insert or replace into live_queue (id, updated_at, items, venue) values (?, ?, ?, ?)",
+                                [row_id, int(time.time()), items, venue]),
+               lambda: d1_query(cfg, "insert or replace into live_queue (id, updated_at, items) values (?, ?, ?)",
+                                [row_id, int(time.time()), items]))
     _queue_sent = items
     return True
 
@@ -501,9 +527,12 @@ def crowd_meter(a, log):
                     created = True
                 while out:
                     chunk = out[:30]
+                    # Same src naming as site/src/crowd_api.js srcFor: "laptop" at the first bar, "<slug>:laptop" elsewhere.
+                    venue = venue_of(cfg)
+                    src = "laptop" if venue == DEFAULT_VENUE else venue + ":laptop"
                     sql = ("insert or ignore into crowd_levels (ts, src, db) values "
-                           + ",".join(["(?,'laptop',?)"] * len(chunk)))
-                    d1_query(cfg, sql, [v for row in chunk for v in row])
+                           + ",".join(["(?,?,?)"] * len(chunk)))
+                    d1_query(cfg, sql, [v for ts, db in chunk for v in (ts, src, db)])
                     del out[:len(chunk)]
                 fails = 0
             except Exception as e:
@@ -637,7 +666,7 @@ def request_filer(a, log):
                 try:
                     # Only this bar's requests ("venue" in the config is the bar's slug on okenight.com).
                     body = d1_query(cfg, "SELECT id, title, artist FROM song_requests WHERE status = 'open' AND venue = ?",
-                                    [cfg.get("venue") or "wbl"])
+                                    [venue_of(cfg)])
                     requests = body["result"][0]["results"]
                 except Exception:
                     pass  # offline, or nobody has requested anything yet (no table)

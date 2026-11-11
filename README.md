@@ -33,7 +33,8 @@ whether each one is on tonight) for the picker and the app. Old links (`/tv`, `/
 
 Each bar's data is kept apart by a `venue` column (see the end of `schema/d1_schema.sql`). To add a bar: add an
 entry to `venues.js` (the slug never changes once it's on a QR code), deploy, set its host key on `/<slug>/host`,
-and give its laptop sync the venue slug (the sync script still writes Welcome Back Lounge only; venue support there comes with the second bar).
+and put its slug in that laptop's `karaoke_sync_config.json` as `"venue": "<slug>"`. The sync files that bar's plays, queue,
+heartbeat and crowd mic under its slug; a laptop with no `venue` is Welcome Back Lounge (`wbl`).
 
 ## Folders
 
