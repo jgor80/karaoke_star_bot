@@ -7,25 +7,26 @@
 // POST /api/host {action:"tips", venmo, menu}              (header x-host-key) Venmo handle + tip menu (menu null = default)
 // POST /api/host {action:"request_done", id, status} | {action:"request_remove", id}  song requests (requests_api.js)
 // POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
-// checkSecrets(env)                   -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
-// publicSecrets(env)                  -> {secrets_found: [...], secrets_left: n, host, tips} folded into /api/plays
+// checkSecrets(env, venue)                 -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
+// publicSecrets(env, venue)                -> {secrets_found: [...], secrets_left: n, host, tips} folded into /api/plays
 //
 // Unfound secrets (titles and rewards) are only ever returned to the host key.
 
 import { hostDraftAction, draftBoard } from "./drafts_api.js";
 import { hostRequests, hostRequestAction } from "./requests_api.js";
+import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
     id integer primary key autoincrement,
     title text not null, artist text, reward text,
     created_at integer not null,     -- only songs sung after this count
-    found_uuid text, found_at integer, notified_at integer)`,
+    found_uuid text, found_at integer, notified_at integer, venue text not null default 'wbl')`,
   "CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null)",
 ];
 let ready = null;
 function ensure(env) {
-  if (!ready) ready = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s))).catch((e) => { ready = null; throw e; });
+  if (!ready) ready = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s))).then(() => ensureVenueColumn(env, "secret_songs")).catch((e) => { ready = null; throw e; });
   return ready;
 }
 
@@ -47,10 +48,9 @@ async function sha256(s) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-async function config(env) {
+async function config(env, venue) {
   await ensure(env);
-  const { results } = await env.DB.prepare("SELECT k, v FROM host_config").all();
-  return Object.fromEntries(results.map((r) => [r.k, r.v]));
+  return venueConfig(env, venue);
 }
 function randomId(n) {
   const a = "abcdefghjkmnpqrstuvwxyz23456789", b = crypto.getRandomValues(new Uint8Array(n));
@@ -60,12 +60,12 @@ function randomId(n) {
 function same(a, b) { if (!a || !b || a.length !== b.length) return false; let x = 0; for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i); return x === 0; }
 
 // Mark secrets found by the first matching song sung after they were hidden; push an alert once per secret.
-export async function checkSecrets(env) {
+export async function checkSecrets(env, venue = DEFAULT_VENUE) {
   await ensure(env);
-  const open = (await env.DB.prepare("SELECT id, title, artist, created_at FROM secret_songs WHERE found_uuid IS NULL").all()).results;
+  const open = (await env.DB.prepare("SELECT id, title, artist, created_at FROM secret_songs WHERE found_uuid IS NULL AND venue = ?").bind(venue.slug).all()).results;
   if (open.length) {
     const since = Math.min(...open.map((s) => s.created_at));
-    const plays = (await env.DB.prepare("SELECT uuid, played_at, title, artist FROM plays WHERE played_at >= ? ORDER BY played_at").bind(since).all()).results;
+    const plays = (await env.DB.prepare("SELECT uuid, played_at, title, artist FROM plays WHERE played_at >= ? AND venue = ? ORDER BY played_at").bind(since, venue.slug).all()).results;
     const upd = [];
     open.forEach((s) => { const p = plays.find((p) => p.played_at >= s.created_at && matches(s, p));
       if (p) upd.push(env.DB.prepare("UPDATE secret_songs SET found_uuid = ?, found_at = ? WHERE id = ? AND found_uuid IS NULL").bind(p.uuid, p.played_at, s.id)); });
@@ -78,10 +78,10 @@ export async function checkSecrets(env) {
   const todo = (await env.DB.prepare(
     `SELECT s.id, s.title, s.artist, s.reward, s.notified_at, p.singer, p.title AS sung_title, p.artist AS sung_artist
      FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid
-     WHERE s.found_uuid IS NOT NULL AND s.found_at > ?1
-       AND (s.notified_at IS NULL OR (s.notified_at < 0 AND -s.notified_at < ?2))`).bind(t - 3600, t - 120).all()).results;
+     WHERE s.found_uuid IS NOT NULL AND s.found_at > ?1 AND s.venue = ?3
+       AND (s.notified_at IS NULL OR (s.notified_at < 0 AND -s.notified_at < ?2))`).bind(t - 3600, t - 120, venue.slug).all()).results;
   if (!todo.length) return;
-  const cfg = await config(env);
+  const cfg = await config(env, venue);
   for (const s of todo) {
     // Claim it first so two overlapping runs don't both push.
     const claim = await env.DB.prepare("UPDATE secret_songs SET notified_at = ?1 WHERE id = ?2 AND notified_at IS ?3")
@@ -92,7 +92,7 @@ export async function checkSecrets(env) {
     let sent = false;
     try {
       const r = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body,
-        headers: { Title: "Secret song found!", Priority: "high", Tags: "shushing_face,microphone", Click: "https://okenight.com/host" } });
+        headers: { Title: "Secret song found!", Priority: "high", Tags: "shushing_face,microphone", Click: "https://okenight.com/" + venue.slug + "/host" } });
       sent = r.ok;
     } catch (e) { /* retried on the next run; the host page still alerts */ }
     await env.DB.prepare("UPDATE secret_songs SET notified_at = ?1 WHERE id = ?2 AND notified_at = ?3")
@@ -101,7 +101,8 @@ export async function checkSecrets(env) {
 }
 
 // The host's singer name, shown with a host tag on the phone site and the TV. Set on /host.
-export const DEFAULT_HOST = "Bleacher Jeff";
+export const DEFAULT_HOST = DEFAULT_VENUE.host_default;
+const hostDefault = (venue) => venue.host_default || "";
 function cleanHostName(s) { return String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); }
 
 // Tip menu: the host's Venmo handle and the menu shown behind the Tip button. Both set on /host.
@@ -131,26 +132,27 @@ function tipsFrom(cfg) {
 }
 
 // Found secrets (with who sang them) and how many are still hidden. Never includes unfound titles.
-export async function publicSecrets(env) {
+export async function publicSecrets(env, venue = DEFAULT_VENUE) {
   try {
     await ensure(env);
     const [found, left] = await env.DB.batch([
-      env.DB.prepare("SELECT s.id, s.title, s.artist, s.reward, s.found_uuid, s.found_at, p.singer, p.night FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.found_uuid IS NOT NULL ORDER BY s.found_at"),
-      env.DB.prepare("SELECT count(*) AS n FROM secret_songs WHERE found_uuid IS NULL"),
+      env.DB.prepare("SELECT s.id, s.title, s.artist, s.reward, s.found_uuid, s.found_at, p.singer, p.night FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.found_uuid IS NOT NULL AND s.venue = ?1 ORDER BY s.found_at").bind(venue.slug),
+      env.DB.prepare("SELECT count(*) AS n FROM secret_songs WHERE found_uuid IS NULL AND venue = ?1").bind(venue.slug),
     ]);
-    const cfg = await config(env);
-    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: cfg.host_name === undefined ? DEFAULT_HOST : cfg.host_name, tips: tipsFrom(cfg) };
-  } catch (e) { return { secrets_found: [], secrets_left: 0, host: DEFAULT_HOST, tips: { venmo: DEFAULT_VENMO, menu: DEFAULT_TIPS } }; }
+    const cfg = await config(env, venue);
+    return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: cfg.host_name === undefined ? hostDefault(venue) : cfg.host_name, tips: tipsFrom(cfg) };
+  } catch (e) { return { secrets_found: [], secrets_left: 0, host: hostDefault(venue), tips: { venmo: DEFAULT_VENMO, menu: DEFAULT_TIPS } }; }
 }
 
 // True when `given` is the host key. Used by other host-only endpoints (the crowd meter's /api/crowd).
-export async function isHost(env, given) {
-  const cfg = await config(env);
+export async function isHost(env, given, venue = DEFAULT_VENUE) {
+  const cfg = await config(env, venue);
   return !!cfg.key_hash && same(await sha256(cfg.key_salt + ":" + String(given || "").trim()), cfg.key_hash);
 }
 
-export async function handleHost(req, env) {
-  const cfg = await config(env);
+export async function handleHost(req, env, venue = DEFAULT_VENUE) {
+  const cfg = await config(env, venue);
+  const K = (k) => cfgKey(venue, k);
   const given = req.headers.get("x-host-key") || "";
   let body = {};
   if (req.method === "POST") { try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); } }
@@ -167,13 +169,13 @@ export async function handleHost(req, env) {
     if (key.length < 6) return json({ error: "Use at least 6 characters.", needs_setup: true }, 400);
     const salt = randomId(16);
     const stmts = [
-      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('key_salt', ?)").bind(salt),
-      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('key_hash', ?)").bind(await sha256(salt + ":" + key)),
+      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("key_salt"), salt),
+      env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("key_hash"), await sha256(salt + ":" + key)),
       // Keep the push topic across key resets so the host's phone stays subscribed.
-      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES ('ntfy_topic', ?)").bind("okenight-" + randomId(16)),
+      env.DB.prepare("INSERT OR IGNORE INTO host_config (k, v) VALUES (?, ?)").bind(K("ntfy_topic"), "okenight-" + randomId(16)),
     ];
     const name = cleanHostName(body.host_name);
-    if (name) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('host_name', ?)").bind(name));
+    if (name) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("host_name"), name));
     await env.DB.batch(stmts);
     return json({ ok: true });
   }
@@ -188,39 +190,39 @@ export async function handleHost(req, env) {
     const t = (s, n) => String(s || "").trim().slice(0, n);
     if (body.action === "add") {
       const title = t(body.title, 120); if (!title) return json({ error: "Song title is required." }, 400);
-      await env.DB.prepare("INSERT INTO secret_songs (title, artist, reward, created_at) VALUES (?, ?, ?, ?)").bind(title, t(body.artist, 120) || null, t(body.reward, 160) || null, now()).run();
+      await env.DB.prepare("INSERT INTO secret_songs (title, artist, reward, created_at, venue) VALUES (?, ?, ?, ?, ?)").bind(title, t(body.artist, 120) || null, t(body.reward, 160) || null, now(), venue.slug).run();
     } else if (body.action === "remove") {
-      await env.DB.prepare("DELETE FROM secret_songs WHERE id = ?").bind(id).run();
+      await env.DB.prepare("DELETE FROM secret_songs WHERE id = ? AND venue = ?").bind(id, venue.slug).run();
     } else if (body.action === "reset") {
       // Hide it again: only songs sung from now on count.
-      await env.DB.prepare("UPDATE secret_songs SET found_uuid = NULL, found_at = NULL, notified_at = NULL, created_at = ? WHERE id = ?").bind(now(), id).run();
+      await env.DB.prepare("UPDATE secret_songs SET found_uuid = NULL, found_at = NULL, notified_at = NULL, created_at = ? WHERE id = ? AND venue = ?").bind(now(), id, venue.slug).run();
     } else if (body.action === "host_name") {
       const name = cleanHostName(body.host_name);
-      if (name) await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('host_name', ?)").bind(name).run();
-      else await env.DB.prepare("DELETE FROM host_config WHERE k = 'host_name'").run();
+      if (name) await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("host_name"), name).run();
+      else await env.DB.prepare("DELETE FROM host_config WHERE k = ?").bind(K("host_name")).run();
     } else if (body.action === "tips") {
       const menu = body.menu == null ? null : cleanTips(body.menu);
       if (body.menu != null && !menu) return json({ error: "Bad tip menu." }, 400);
       await env.DB.batch([
-        env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('venmo', ?)").bind(cleanVenmo(body.venmo)),
-        menu ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('tip_menu', ?)").bind(JSON.stringify(menu))
-             : env.DB.prepare("DELETE FROM host_config WHERE k = 'tip_menu'"),
+        env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("venmo"), cleanVenmo(body.venmo)),
+        menu ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("tip_menu"), JSON.stringify(menu))
+             : env.DB.prepare("DELETE FROM host_config WHERE k = ?").bind(K("tip_menu")),
       ]);
     } else if (String(body.action || "").startsWith("draft_")) {
-      const r = await hostDraftAction(env, body); // crowd draft: remove a pick, block or unblock a singer
+      const r = await hostDraftAction(env, body, venue); // crowd draft: remove a pick, block or unblock a singer
       if (r.error) return json(r, 400);
     } else if (String(body.action || "").startsWith("request_")) {
-      const r = await hostRequestAction(env, body); // song requests: mark added / not available, or remove
+      const r = await hostRequestAction(env, body, venue); // song requests: mark added / not available, or remove
       if (r.error) return json(r, 400);
     } else if (body.action === "test") {
       if (cfg.ntfy_topic) await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } }).catch(() => {});
       return json({ ok: true });
     } else return json({ error: "unknown action" }, 400);
   }
-  await checkSecrets(env);
+  await checkSecrets(env, venue);
   const { results } = await env.DB.prepare(
-    "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").all();
-  const fresh = await config(env);
+    "SELECT s.id, s.title, s.artist, s.reward, s.created_at, s.found_uuid, s.found_at, p.singer, p.title AS sung_title FROM secret_songs s LEFT JOIN plays p ON p.uuid = s.found_uuid WHERE s.venue = ? ORDER BY s.found_at IS NULL DESC, s.found_at DESC, s.id DESC").bind(venue.slug).all();
+  const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
-  return json({ ...(await draftBoard(env)), ...(await hostRequests(env)), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? DEFAULT_HOST : fresh.host_name, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await hostRequests(env, venue)), draft_blocked: cfgBlocked, secrets: results, ntfy_topic: cfg.ntfy_topic || null, host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

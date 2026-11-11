@@ -1,10 +1,11 @@
-// Sunday reminders for the crowd: a calendar invite (/sunday.ics), a Google Calendar link,
-// and a push to a public ntfy topic 2 hours before each session (sent by the every-minute cron).
+// Weekly reminders for each venue's crowd: a calendar invite (/<slug>/sunday.ics), a Google Calendar link,
+// and a push to the venue's public ntfy topic 2 hours before each session (sent by the every-minute cron).
 import { SCHEDULE, scheduleStatus } from "./schedule.js";
+import { cfgKey } from "./venues.js";
 
 // Public on purpose: anyone can subscribe. ntfy topics have no password, so anyone who knows the name
 // could also post to it; keep the name here so it can be changed if that ever happens.
-export const CROWD_TOPIC = "okenight-sundays";
+export const CROWD_TOPIC = SCHEDULE.crowd_topic; // the default venue's; each venue has crowd_topic in venues.js
 const SITE = "https://okenight.com";
 const LEAD_S = 2 * 3600; // push this long before the start
 
@@ -25,36 +26,47 @@ function nextSession(nowTs, sch = SCHEDULE) {
   return { start, end: start + sch.hours * 3600 };
 }
 
+const siteOf = (sch) => SITE + "/" + sch.slug + "/";
+
 export function reminderLinks(nowTs, sch = SCHEDULE) {
   const { start, end } = nextSession(nowTs, sch);
   const q = new URLSearchParams({
     action: "TEMPLATE", text: "Karaoke at " + sch.venue,
     dates: wallStamp(start, sch.tz) + "/" + wallStamp(end, sch.tz), ctz: sch.tz,
     recur: "RRULE:FREQ=WEEKLY;BYDAY=" + DAYS[sch.weekday], location: sch.venue,
-    details: "Live stats, bingo and badges on your phone: " + SITE,
+    details: "Live stats, bingo and badges on your phone: " + siteOf(sch),
   });
-  return { ics: "/sunday.ics", gcal: "https://calendar.google.com/calendar/render?" + q.toString(), ntfy: "https://ntfy.sh/" + CROWD_TOPIC };
+  return { ics: "/" + sch.slug + "/sunday.ics", gcal: "https://calendar.google.com/calendar/render?" + q.toString(), ntfy: "https://ntfy.sh/" + sch.crowd_topic };
 }
+
+// Time zone blocks for the calendar file. Calendar apps know the IANA names anyway; these are for the strict ones.
+// Add one when a venue in a new time zone is added to venues.js.
+const US_RULES = (std, dst, so, doff) => [
+  "BEGIN:DAYLIGHT", "TZOFFSETFROM:" + so, "TZOFFSETTO:" + doff, "TZNAME:" + dst, "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU", "END:DAYLIGHT",
+  "BEGIN:STANDARD", "TZOFFSETFROM:" + doff, "TZOFFSETTO:" + so, "TZNAME:" + std, "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU", "END:STANDARD"];
+const VTIMEZONES = {
+  "America/Chicago": ["BEGIN:VTIMEZONE", "TZID:America/Chicago", ...US_RULES("CST", "CDT", "-0600", "-0500"), "END:VTIMEZONE"],
+  "America/New_York": ["BEGIN:VTIMEZONE", "TZID:America/New_York", ...US_RULES("EST", "EDT", "-0500", "-0400"), "END:VTIMEZONE"],
+  "America/Denver": ["BEGIN:VTIMEZONE", "TZID:America/Denver", ...US_RULES("MST", "MDT", "-0700", "-0600"), "END:VTIMEZONE"],
+  "America/Los_Angeles": ["BEGIN:VTIMEZONE", "TZID:America/Los_Angeles", ...US_RULES("PST", "PDT", "-0800", "-0700"), "END:VTIMEZONE"],
+};
 
 // Folded long lines aren't needed: every line here is short.
 export function sundayIcs(nowTs, sch = SCHEDULE) {
   const { start, end } = nextSession(nowTs, sch);
   const lines = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Oke Night//Sunday karaoke//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    "BEGIN:VTIMEZONE", "TZID:America/Chicago",
-    "BEGIN:DAYLIGHT", "TZOFFSETFROM:-0600", "TZOFFSETTO:-0500", "TZNAME:CDT", "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU", "END:DAYLIGHT",
-    "BEGIN:STANDARD", "TZOFFSETFROM:-0500", "TZOFFSETTO:-0600", "TZNAME:CST", "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU", "END:STANDARD",
-    "END:VTIMEZONE",
+    ...(VTIMEZONES[sch.tz] || []),
     "BEGIN:VEVENT",
-    "UID:sunday-karaoke@okenight.com",
+    "UID:" + (sch.slug === "wbl" ? "sunday" : sch.slug) + "-karaoke@okenight.com",
     "DTSTAMP:" + utcStamp(nowTs),
     "DTSTART;TZID=" + sch.tz + ":" + wallStamp(start, sch.tz),
     "DTEND;TZID=" + sch.tz + ":" + wallStamp(end, sch.tz),
     "RRULE:FREQ=WEEKLY;BYDAY=" + DAYS[sch.weekday],
     "SUMMARY:Karaoke at " + sch.venue,
     "LOCATION:" + sch.venue,
-    "URL:" + SITE,
-    "DESCRIPTION:Live stats\\, bingo and badges on your phone: " + SITE,
+    "URL:" + siteOf(sch),
+    "DESCRIPTION:Live stats\\, bingo and badges on your phone: " + siteOf(sch),
     "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Karaoke tonight at " + sch.venue, "TRIGGER:-PT2H", "END:VALARM",
     "END:VEVENT", "END:VCALENDAR",
   ];
@@ -69,18 +81,19 @@ export async function sendCrowdReminder(env, nowTs = Math.floor(Date.now() / 100
   const start = st.next_start, until = start - nowTs;
   if (until > LEAD_S || until <= 0) return;
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null)").run();
+  const key = cfgKey(sch, "crowd_reminded");
   const claim = await env.DB.prepare(
-    "INSERT INTO host_config (k, v) VALUES ('crowd_reminded', ?1) ON CONFLICT(k) DO UPDATE SET v = ?1 WHERE CAST(v AS integer) < ?1"
-  ).bind(String(start)).run();
+    "INSERT INTO host_config (k, v) VALUES (?2, ?1) ON CONFLICT(k) DO UPDATE SET v = ?1 WHERE CAST(v AS integer) < ?1"
+  ).bind(String(start), key).run();
   if (!claim.meta.changes) return;
   const time = new Date(start * 1000).toLocaleTimeString("en-US", { timeZone: sch.tz, hour: "numeric", minute: "2-digit" }).replace(":00", "");
   try {
-    const r = await fetch("https://ntfy.sh/" + CROWD_TOPIC, { method: "POST",
+    const r = await fetch("https://ntfy.sh/" + sch.crowd_topic, { method: "POST",
       body: "Karaoke tonight at " + time + " at " + sch.venue + ". Get there early, the first spots on the list go fast.",
-      headers: { Title: "Oke Night tonight 🎤", Tags: "microphone", Click: SITE } });
+      headers: { Title: "Oke Night tonight 🎤", Tags: "microphone", Click: siteOf(sch) } });
     if (!r.ok) throw new Error("ntfy " + r.status);
   } catch (e) {
     // Let the next minute's run try again.
-    await env.DB.prepare("DELETE FROM host_config WHERE k = 'crowd_reminded' AND v = ?").bind(String(start)).run();
+    await env.DB.prepare("DELETE FROM host_config WHERE k = ? AND v = ?").bind(key, String(start)).run();
   }
 }

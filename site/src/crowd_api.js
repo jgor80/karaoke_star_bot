@@ -12,6 +12,10 @@
 // publicCrowd(env)  -> {crowd: [{play, db, at}]} folded into /api/plays
 
 import { isHost } from "./secrets_api.js";
+import { DEFAULT_VENUE, DEFAULT_SLUG } from "./venues.js";
+// crowd_levels is keyed (ts, src), so other venues store src as "<slug>:laptop" / "<slug>:phone";
+// the default venue keeps plain "laptop" / "phone" (what the laptop sync writes).
+const srcFor = (venue, s) => (venue.slug === DEFAULT_SLUG ? s : venue.slug + ":" + s);
 
 // Keep the crowd_levels table in sync with CROWD_TABLE in sync/karaoke_sync.py (the laptop creates it too).
 const SCHEMA = [
@@ -67,12 +71,12 @@ export function scoreWindow(samples, w) {
 }
 
 // Score every recent song whose applause window has closed and that has no score yet.
-export async function scoreCrowd(env) {
+export async function scoreCrowd(env, venue = DEFAULT_VENUE) {
   await ensure(env);
   const t = now();
   const plays = (await env.DB.prepare(
-    "SELECT p.uuid, p.played_at, p.length_s, s.uuid AS scored FROM plays p LEFT JOIN crowd_scores s ON s.uuid = p.uuid WHERE p.played_at > ? ORDER BY p.played_at"
-  ).bind(t - 12 * 3600).all()).results;
+    "SELECT p.uuid, p.played_at, p.length_s, s.uuid AS scored FROM plays p LEFT JOIN crowd_scores s ON s.uuid = p.uuid WHERE p.played_at > ? AND p.venue = ? ORDER BY p.played_at"
+  ).bind(t - 12 * 3600, venue.slug).all()).results;
   const todo = [];
   plays.forEach((p, i) => {
     if (p.scored) return;
@@ -83,7 +87,8 @@ export async function scoreCrowd(env) {
   const from = Math.min(...todo.map((x) => x.w.start)) - CROWD.baseS, to = Math.max(...todo.map((x) => x.w.end));
   const rows = (await env.DB.prepare("SELECT ts, src, db FROM crowd_levels WHERE ts BETWEEN ? AND ? ORDER BY ts").bind(from, to).all()).results;
   const bySrc = new Map(CROWD.sources.map((s) => [s, []]));
-  rows.forEach((r) => { if (bySrc.has(r.src)) bySrc.get(r.src).push({ ts: r.ts, db: Number(r.db) }); });
+  const srcOf = new Map(CROWD.sources.map((s) => [srcFor(venue, s), s]));
+  rows.forEach((r) => { const s = srcOf.get(r.src); if (s) bySrc.get(s).push({ ts: r.ts, db: Number(r.db) }); });
   const stmts = [];
   todo.forEach(({ p, w }) => {
     let best = null, src = null;
@@ -97,18 +102,18 @@ export async function scoreCrowd(env) {
   return stmts.length;
 }
 
-export async function publicCrowd(env) {
+export async function publicCrowd(env, venue = DEFAULT_VENUE) {
   try {
     await ensure(env);
-    const { results } = await env.DB.prepare("SELECT uuid AS play, over AS db, scored_at AS at FROM crowd_scores WHERE over IS NOT NULL").all();
+    const { results } = await env.DB.prepare("SELECT s.uuid AS play, s.over AS db, s.scored_at AS at FROM crowd_scores s JOIN plays p ON p.uuid = s.uuid WHERE s.over IS NOT NULL AND p.venue = ?").bind(venue.slug).all();
     return { crowd: results };
   } catch (e) { return { crowd: [] }; }
 }
 
 // The /host phone's mic: a batch of per-second levels every ~10 seconds.
-export async function handleCrowd(req, env) {
+export async function handleCrowd(req, env, venue = DEFAULT_VENUE) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  if (!(await isHost(env, req.headers.get("x-host-key")))) { await new Promise((r) => setTimeout(r, 400)); return json({ error: "Wrong host key." }, 403); }
+  if (!(await isHost(env, req.headers.get("x-host-key"), venue))) { await new Promise((r) => setTimeout(r, 400)); return json({ error: "Wrong host key." }, 403); }
   let body; try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const t = now();
   const samples = (Array.isArray(body.samples) ? body.samples : []).slice(0, 120)
@@ -119,7 +124,7 @@ export async function handleCrowd(req, env) {
     const stmts = [];
     for (let i = 0; i < samples.length; i += 30) {
       const chunk = samples.slice(i, i + 30);
-      stmts.push(env.DB.prepare("INSERT OR IGNORE INTO crowd_levels (ts, src, db) VALUES " + chunk.map(() => "(?, 'phone', ?)").join(", ")).bind(...chunk.flat()));
+      stmts.push(env.DB.prepare("INSERT OR IGNORE INTO crowd_levels (ts, src, db) VALUES " + chunk.map(() => "(?, ?, ?)").join(", ")).bind(...chunk.flatMap(([ts, db]) => [ts, srcFor(venue, "phone"), db])));
     }
     await env.DB.batch(stmts);
   }

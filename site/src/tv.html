@@ -183,6 +183,9 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 <script src="/drafts.js"></script>
 <script src="/art.js"></script>
 <script>
+  // Which bar this screen is for (set by the Worker, see venues.js).
+  const VENUE = window.OKE_VENUE || { slug: "wbl", path: "/wbl/" };
+  const SHOW_URL = (location.host || "okenight.com").replace(/^www\./, "") + VENUE.path.replace(/\/$/, "");
 (function () {
   // Options: ?night=YYYY-MM-DD shows that night instead of the latest one; ?speed=2 scrolls twice as fast (0.2 to 5).
   const qs = new URLSearchParams(location.search);
@@ -315,7 +318,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const g1 = el("div", "grid"); v.awards.forEach((a) => g1.append(awardCard(a)));
     if (v.awards.length) box.append(h1, g1);
     if (v.drafts.length) {
-      box.append(heading(v.draftLabel, "Draft someone at " + (location.host || "okenight.com")));
+      box.append(heading(v.draftLabel, "Draft someone at " + SHOW_URL));
       box.append(twoCols(v.drafts, (e) => e.sub, (e) => (e.done ? "✅ Sung!" : "👍 " + e.votes)));
     }
     if (v.singers.length) {
@@ -329,7 +332,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       if (v.topReacted.length) { const c = el("div"); c.append(el("h3", null, "Most-reacted songs"), rankList(v.topReacted, (e) => e.sub, (e) => e.top)); cols.append(c); }
       box.append(cols);
     } else if (v.tonight) {
-      box.append(heading("React from your phone"), el("p", "rxnote", "Open " + (location.host || "okenight.com") + " and tap 🔥 🎤 🍅 😴 on whoever is singing. The crowd’s reactions decide some of tonight’s awards."));
+      box.append(heading("React from your phone"), el("p", "rxnote", "Open " + SHOW_URL + " and tap 🔥 🎤 🍅 😴 on whoever is singing. The crowd’s reactions decide some of tonight’s awards."));
     }
     if (v.badges.length) {
       const h2 = el("h2", null, v.tonight ? "Badges unlocked tonight" : "Badges unlocked"); h2.append(el("small", null, plural(v.nBadges, "badge") + " earned"));
@@ -409,7 +412,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   function setStatus(msg, bad) { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); }
   async function refresh() {
     try {
-      const r = await fetch("/api/plays", { cache: "no-store" });
+      const r = await fetch("api/plays", { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const text = await r.text(); const data = JSON.parse(text);
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
@@ -471,7 +474,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   async function pollRx() {
     const play = rxPlay; if (!play) return;
     try {
-      const r = await fetch("/api/reactions?play=" + encodeURIComponent(play));
+      const r = await fetch("api/reactions?play=" + encodeURIComponent(play));
       if (r.ok && play === rxPlay) {
         const c = (await r.json()).counts || {};
         if (rxSeen) { const burst = []; Object.entries(c).forEach(([k, n]) => { for (let i = (rxSeen[k] || 0); i < n && burst.length < 14; i++) burst.push(k); }); burst.forEach((k, i) => setTimeout(() => flyRx(k), i * 180)); }
@@ -488,8 +491,8 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   }
 
   // ---------- QR so the crowd can open the site on their phones ----------
-  $("host").textContent = location.host || "okenight.com";
-  function qr() { if (window.QRCode) new QRCode($("qr"), { text: location.origin + "/", width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M }); else $("qr").hidden = true; }
+  $("host").textContent = SHOW_URL;
+  function qr() { if (window.QRCode) new QRCode($("qr"), { text: location.origin + VENUE.path, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M }); else $("qr").hidden = true; }
   if (document.readyState === "complete") qr(); else window.addEventListener("load", qr);
 
   // ---------- full screen ----------
