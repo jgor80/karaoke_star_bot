@@ -124,7 +124,20 @@ CREATE TABLE IF NOT EXISTS song_request_asks (
 CREATE INDEX IF NOT EXISTS song_request_asks_dev ON song_request_asks (device_id, day);
 CREATE INDEX IF NOT EXISTS song_request_asks_ip ON song_request_asks (ip_hash, day);
 
--- The host's own songbook (uploaded on /host; site/src/songbook_api.js). Same columns as catalog, ids from 1,000,000,000.
--- host_config: songbook_source = catalog | mine | both (which list the Songbook tab searches), songbook_count, songbook_updated.
+-- Venues (site/src/venues.js). Each bar lives at okenight.com/<slug>/. The Worker adds
+--   venue text not null default 'wbl'
+-- (plus an index <table>_venue) to plays, sync_runs, live_queue, reactions, drafts, secret_songs and
+-- song_requests by itself, so rows from before venues existed, and anything the laptop sync writes without a
+-- venue, belong to Welcome Back Lounge ("wbl"). Per-bar settings in host_config use the plain key for "wbl" and
+-- "<slug>:<key>" for other venues. crowd_levels keeps its (ts, src) key: other venues write src "<slug>:laptop".
+
+-- "Bring Oke Night to your bar" form on okenight.com (site/src/leads_api.js). Never shown publicly.
+CREATE TABLE IF NOT EXISTS leads (
+  id integer primary key autoincrement, name text, bar text not null, city text, contact text not null,
+  role text, note text, ip_hash text, day text not null, created_at integer not null);
+CREATE INDEX IF NOT EXISTS leads_ip ON leads (ip_hash, day);
+
+-- The host's own songbook, per venue (uploaded on /host; site/src/songbook_api.js). Same columns as catalog, ids from 1,000,000,000.
+-- host_config (via cfgKey): songbook_source = catalog | mine | both (which list the Songbook tab searches), songbook_count, songbook_updated.
 CREATE VIRTUAL TABLE IF NOT EXISTS songbook USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED, explicit UNINDEXED,
-  styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
+  styles UNINDEXED, languages UNINDEXED, added UNINDEXED, pop UNINDEXED, venue UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');

@@ -72,7 +72,7 @@
     }
 
     async function post(body) {
-      const r = await fetch("/api/draft", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, dev: opts.deviceId }) });
+      const r = await fetch("api/draft", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, dev: opts.deviceId }) });
       const d = await r.json().catch(() => ({}));
       // /api/plays is cached for a few seconds, so keep this fresher board until the cache catches up.
       if (Array.isArray(d.board)) { drafts = d.board; holdUntil = Date.now() + 20000; }
@@ -167,7 +167,7 @@
         return;
       }
       try {
-        const r = await fetch("/api/catalog?q=" + encodeURIComponent(q), { signal: me.signal });
+        const r = await fetch("api/catalog?q=" + encodeURIComponent(q), { signal: me.signal });
         const d = await r.json();
         if (me !== ctrl) return;
         let songs = d.songs || [];

@@ -1,4 +1,5 @@
 import { songbookConfig } from "./songbook_api.js";
+import { DEFAULT_VENUE } from "./venues.js";
 import { ensureVoiceTables } from "./voice_import.js";
 
 // Search KaraFun's song catalog:
@@ -41,7 +42,7 @@ const SORTS = {
 };
 
 // source: "catalog" (the full song list), "mine" (the host's uploaded songbook, see songbook_api.js) or "both".
-export function catalogQuery(params, source = "catalog", version = "") {
+export function catalogQuery(params, source = "catalog", version = "", venueSlug = DEFAULT_VENUE.slug) {
   const tokens = toTokens(params.get("q"));
   const f = {
     duo: params.get("duo") === "1",
@@ -62,28 +63,30 @@ export function catalogQuery(params, source = "catalog", version = "") {
   if (f.lang) { where.push("(',' || languages || ',') LIKE ?"); bind.push("%," + f.lang + ",%"); }
   if (f.decade === 1900) where.push("CAST(year AS INTEGER) BETWEEN 1 AND 1949");
   else if (f.decade) { where.push("CAST(year AS INTEGER) BETWEEN ? AND ?"); bind.push(f.decade, f.decade + 9); }
-  const whereSql = (t) => (where.length ? " WHERE " + where.join(" AND ").replace("{T}", t) : "");
+  // The songbook table holds every venue's own list, so it's also filtered by venue (bound last).
+  const whereSql = (t) => { const w = where.map((x) => x.replace("{T}", t)).concat(t === "songbook" ? ["venue = ?"] : []); return w.length ? " WHERE " + w.join(" AND ") : ""; };
   const tail = " ORDER BY " + SORTS[f.sort] + " LIMIT " + (PAGE + 1) + " OFFSET " + f.page * PAGE;
   let sql, allBind = bind;
   if (source === "both") {
     // Both lists, with a song that's in both shown once (the copy with the better rank).
     const part = (t) => "SELECT rowid AS id, title, artist, k, year, duo, explicit, styles, added, pop FROM " + t + whereSql(t);
     sql = "SELECT id, title, artist, year, duo, explicit, styles, added, min(pop) AS pop FROM (" + part("catalog") + " UNION ALL " + part("songbook") + ") GROUP BY k" + tail;
-    allBind = bind.concat(bind);
+    allBind = bind.concat(bind, [venueSlug]);
   } else {
     const t = source === "mine" ? "songbook" : "catalog";
     sql = "SELECT rowid AS id, title, artist, year, duo, explicit, styles FROM " + t + whereSql(t) + tail;
+    if (t === "songbook") allBind = bind.concat([venueSlug]);
   }
   const key = "q=" + encodeURIComponent(tokens.join(" ")) + "&duo=" + +f.duo + "&hits=" + +f.hits + "&genre=" + encodeURIComponent(f.genre) +
     "&lang=" + encodeURIComponent(f.lang) + "&decade=" + f.decade + "&voice=" + f.voice + "&sort=" + f.sort + "&page=" + f.page +
-    (source !== "catalog" ? "&src=" + source + "&v=" + encodeURIComponent(version) : "");
+    (source !== "catalog" ? "&src=" + source + "&venue=" + encodeURIComponent(venueSlug) + "&v=" + encodeURIComponent(version) : "");
   return { sql, bind: allBind, key, page: f.page, voice: f.voice, filtered: tokens.length > 0 || where.length > 0 };
 }
 
-export async function handleCatalog(req, env, ctx) {
+export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
   const url = new URL(req.url);
-  const sb = await songbookConfig(env);
-  const cq = catalogQuery(url.searchParams, sb.source, sb.updated || "");
+  const sb = await songbookConfig(env, venue);
+  const cq = catalogQuery(url.searchParams, sb.source, sb.updated || "", venue.slug);
   const key = new Request(url.origin + "/api/catalog?" + cq.key);
   const cache = caches.default;
   const hit = await cache.match(key);

@@ -75,7 +75,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 </head>
 <body>
 <main>
-  <h1>🎤 Host page<small>Oke Night. Secret songs, tips and host settings. Only the host can open this page.</small></h1>
+  <h1>🎤 Host page<small>Oke Night. Secret songs, tips and host settings. Only the host can open this page.<br><span id="venue-name"></span></small></h1>
 
   <section class="card" id="login" hidden>
     <h2 id="login-h">Host key</h2>
@@ -189,6 +189,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 </div>
 
 <script>
+  if (window.OKE_VENUE) document.getElementById("venue-name").textContent = "📍 " + window.OKE_VENUE.name;
 (function () {
   const $ = (id) => document.getElementById(id);
   const KEY = "okenight-host-key", SEEN = "okenight-host-seen";
@@ -200,7 +201,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   const when = (ts) => new Date(ts * 1000).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
   async function api(method, body) {
-    const r = await fetch("/api/host", { method, headers: { "content-type": "application/json", "x-host-key": key || "" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const r = await fetch("api/host", { method, headers: { "content-type": "application/json", "x-host-key": key || "" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
     const d = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, d };
   }
@@ -443,7 +444,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   $("test-btn").addEventListener("click", async () => { const r = await api("POST", { action: "test" }); $("test-btn").textContent = r.ok ? "Test sent ✓" : "Test failed"; });
 
   // Title/artist suggestions from songs sung here
-  fetch("/api/plays").then((r) => r.json()).then((d) => {
+  fetch("api/plays").then((r) => r.json()).then((d) => {
     const t = new Set(), a = new Set();
     (d.plays || []).forEach((p) => { if (p.title) t.add(p.title); if (p.artist) a.add(p.artist); });
     $("titles").replaceChildren(...[...t].sort().map((x) => { const o = document.createElement("option"); o.value = x; return o; }));
@@ -490,7 +491,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     if (!mic || !mic.out.length) return;
     const batch = mic.out.splice(0, 120), m = mic;
     try {
-      const r = await fetch("/api/crowd", { method: "POST", headers: { "content-type": "application/json", "x-host-key": key || "" }, body: JSON.stringify({ samples: batch }) });
+      const r = await fetch("api/crowd", { method: "POST", headers: { "content-type": "application/json", "x-host-key": key || "" }, body: JSON.stringify({ samples: batch }) });
       if (!r.ok) throw new Error("HTTP " + r.status);
       m.sent += batch.length; m.fails = 0;
       if (mic === m) $("mic-state").textContent = "Listening. " + Math.round(m.sent / 60) + " min sent. Keep this page open and the phone plugged in.";

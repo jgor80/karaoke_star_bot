@@ -79,7 +79,8 @@ export async function updateVoices(env, now = Date.now()) {
   await ensureVoiceTables(env);
   // New artists from the latest weekly catalog import join the queue (once per import).
   const meta = Object.fromEntries((await env.DB.prepare("SELECT k, v FROM catalog_meta WHERE k IN ('updated', 'voice_seeded')").all()).results.map((r) => [r.k, r.v]));
-  const own = await env.DB.prepare("SELECT v FROM host_config WHERE k = 'songbook_updated'").first().catch(() => null);
+  // Any venue's songbook upload (keys are "songbook_updated" or "<slug>:songbook_updated").
+  const own = await env.DB.prepare("SELECT max(v) AS v FROM host_config WHERE k = 'songbook_updated' OR k LIKE '%:songbook_updated'").first().catch(() => null);
   const stamp = (meta.updated || "") + "|" + ((own && own.v) || "");
   if (stamp === "|") return null;
   if (meta.voice_seeded !== stamp) {

@@ -26,7 +26,7 @@
   const idOf = (song) => Number(song && (song.song_id != null ? song.song_id : song.id)) || 0;
   const titleOf = (song) => (song && (song.title || song.t)) || "";
   function src(song, big) {
-    return "/api/art?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
+    return "api/art?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
   }
 
   function el(song, opts) {
