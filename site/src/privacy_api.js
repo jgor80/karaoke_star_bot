@@ -12,8 +12,8 @@
 // GET /api/host lists the removed names as erased_singers so the host can see who has asked.
 //
 // dailyCleanup(env) runs once a day from the cron. Device IDs and IP hashes are only for rate limits,
-// so after RETAIN_DAYS they are blanked. Seconds and request asks keep their row (they are counted)
-// with the device ID swapped for a meaningless "old<rowid>". Bar leads are deleted after LEAD_DAYS.
+// so after RETAIN_DAYS they are blanked. Seconds, request asks and reactions keep their row (they are
+// counted) with the device ID swapped for a meaningless "old<n>". Bar leads are deleted after LEAD_DAYS.
 import { cfgKey } from "./venues.js";
 import { singerKey } from "./drafts_api.js";
 
@@ -82,7 +82,11 @@ export async function dailyCleanup(env, when = Date.now()) {
   if (d.getUTCHours() !== 11 || d.getUTCMinutes() !== 7) return false; // 5 or 6am in Chicago, after any night
   const now = Math.floor(when / 1000), cut = now - RETAIN_DAYS * 86400, leadCut = now - LEAD_DAYS * 86400;
   const stmts = [
-    ["UPDATE reactions SET device_id = '', ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL)", cut],
+    // Reactions are counted as "how many phones" per song (count DISTINCT device_id), so each phone's ID is
+    // swapped for a meaningless one that is only shared by that phone's taps on that one song.
+    ["UPDATE reactions SET device_id = 'old' || m.first, ip_hash = NULL FROM (SELECT play_uuid AS p, device_id AS d, min(id) AS first" +
+      " FROM reactions WHERE created_at < ?1 AND device_id NOT LIKE 'old%' GROUP BY play_uuid, device_id) AS m" +
+      " WHERE reactions.play_uuid = m.p AND reactions.device_id = m.d AND reactions.created_at < ?1", cut],
     ["UPDATE drafts SET device_id = '', ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL)", cut],
     ["UPDATE draft_votes SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
     ["UPDATE song_request_asks SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
