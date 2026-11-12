@@ -819,7 +819,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   // ICON, awards and tally live in /awards.js so the TV screen (/tv) shares them.
   const icon = OkeAwards.icon;
   // Adds a "🎤 Host" tag after a name element when that name is the host's.
-  function tagHost(e, name) { if (hostKey && key(clean(name)) === hostKey) { const t = el("span", "host-tag", "🎤 Host"); t.title = "Tonight’s host"; e.append(t); } return e; }
+  function tagHost(e, name) { if (hostKey && OkeAwards.isHost(clean(name))) { const t = el("span", "host-tag", "🎤 Host"); t.title = "Tonight’s host"; e.append(t); } return e; }
   function isTonightNight(n) { const last = plays[plays.length - 1]; return !!(n && last && n === currentNight() && now() - last.played_at < TONIGHT_WINDOW_S); }
   function songLine(p) { return p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song"; }
   const localDate = (ts) => { const d = new Date(ts * 1000); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
