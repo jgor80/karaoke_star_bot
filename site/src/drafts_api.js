@@ -92,9 +92,9 @@ export async function draftBoard(env, venue = DEFAULT_VENUE) {
   }
 }
 
-async function lookupSong(env, id) {
+async function lookupSong(env, id, venue) {
   // KaraFun's catalog first (rowid = KaraFun song id), then songs sung here in case the catalog isn't loaded.
-  const c = await listSongById(env, id); // the full song list, or the host's own songbook
+  const c = await listSongById(env, id, venue); // the full song list, or this bar's own songbook
   if (c) return c;
   const p = await env.DB.prepare("SELECT song_id AS id, title, artist FROM plays WHERE song_id = ?1 AND title IS NOT NULL LIMIT 1").bind(id).first();
   return p && p.title ? p : null;
@@ -152,7 +152,7 @@ export async function handleDraft(req, env, venue = DEFAULT_VENUE) {
   if ((await blockedKeys(env, venue)).has(key)) return json({ error: "That singer can’t be drafted. Pick someone else!" }, 403);
   const singer = await knownSinger(env, venue, key);
   if (!singer) return json({ error: "Only people who’ve sung here can be drafted." }, 400);
-  const song = await lookupSong(env, songId);
+  const song = await lookupSong(env, songId, venue);
   if (!song) return json({ error: "Couldn’t find that song." }, 400);
 
   // Already drafted? Then this counts as a second for it instead of a new pick.
