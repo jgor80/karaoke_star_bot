@@ -38,12 +38,17 @@
     return "api/art?a=1&id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))) + (big ? "&s=big" : "");
   }
 
+  // Covers that just failed (no cover, or the server said "busy"). Re-renders skip them for a while
+  // instead of asking again every few seconds.
+  const failed = new Map();
+  const RETRY_MS = 10 * 60 * 1000;
   function el(song, opts) {
     opts = opts || {};
     const box = document.createElement("span");
     box.className = "art" + (opts.cls ? " " + opts.cls : "");
     box.setAttribute("aria-hidden", "true");
-    if (idOf(song) > 0 && titleOf(song)) {
+    const key = idOf(song) + "|" + normTitle(titleOf(song)) + (opts.big ? "|b" : "");
+    if (idOf(song) > 0 && titleOf(song) && !(Date.now() - (failed.get(key) || 0) < RETRY_MS)) {
       const img = new Image();
       img.alt = ""; img.loading = "lazy"; img.decoding = "async"; img.referrerPolicy = "no-referrer";
       img.onload = () => {
@@ -56,7 +61,7 @@
         window.open("api/listen?id=" + idOf(song) + "&t=" + encodeURIComponent(normTitle(titleOf(song))), "_blank", "noopener"); };
       box.addEventListener("click", open);
       box.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") open(e); });
-      img.onerror = () => img.remove();
+      img.onerror = () => { failed.set(key, Date.now()); img.remove(); };
       img.src = src(song, opts.big);
       box.append(img);
     }

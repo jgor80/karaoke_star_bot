@@ -22,7 +22,7 @@ import { handleHost, checkSecrets, publicSecrets } from "./secrets_api.js";
 import HOST from "./host.html";
 import SONGS from "./songs.js";
 import { handleCatalog } from "./catalog_api.js";
-import { handleArt, handleListen } from "./art_api.js";
+import { handleArt, handleListen, warmArt } from "./art_api.js";
 import ART from "./art.js";
 import { maybeImportCatalog } from "./catalog_import.js";
 import { updateVoices } from "./voice_import.js";
@@ -191,5 +191,7 @@ export default {
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
     // Songbook voice filters: look up a few more singers on MusicBrainz (see voice_import.js).
     ctx.waitUntil(updateVoices(env).catch(() => {}));
+    // Album covers: look a few up ahead of phones, inside Apple's rate budget (see art_api.js).
+    ctx.waitUntil(warmArt(env).catch(() => {}));
   },
 };

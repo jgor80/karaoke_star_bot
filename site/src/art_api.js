@@ -156,6 +156,57 @@ async function image(to) {
   return redirect(to, 3600);
 }
 
+// Apple's search API allows roughly 20 calls a minute from one address, and every Worker shares
+// Cloudflare's addresses, so the budget is counted in D1 across all isolates. Going over it, or an
+// Apple 403/429, used to turn into a burst of retries from every phone that kept the limit tripped.
+const APPLE_PER_MIN = 12; // leaves room for the cron warm-up below and for other Workers on the same IP
+const COOLDOWN_S = 5 * 60; // after Apple refuses us, leave it alone this long
+const RATE_TABLE = "CREATE TABLE IF NOT EXISTS art_rate (m integer primary key, n integer not null)";
+let rateReady = null;
+// true when one more Apple call fits this minute. m = -1 holds "cool down until" (unix seconds).
+async function takeAppleSlot(env, now) {
+  if (!rateReady) rateReady = env.DB.prepare(RATE_TABLE).run().catch((e) => { rateReady = null; throw e; });
+  await rateReady;
+  const minute = Math.floor(now / 60);
+  const [cool, row] = await env.DB.batch([
+    env.DB.prepare("SELECT n FROM art_rate WHERE m = -1"),
+    env.DB.prepare("INSERT INTO art_rate (m, n) VALUES (?, 1) ON CONFLICT(m) DO UPDATE SET n = n + 1 RETURNING n").bind(minute),
+  ]);
+  if (cool.results[0] && cool.results[0].n > now) return false;
+  if (Math.random() < 0.02) await env.DB.prepare("DELETE FROM art_rate WHERE m >= 0 AND m < ?").bind(minute - 10).run().catch(() => {});
+  return (row.results[0] ? row.results[0].n : 1) <= APPLE_PER_MIN;
+}
+async function coolDown(env, now) {
+  await env.DB.prepare("INSERT INTO art_rate (m, n) VALUES (-1, ?) ON CONFLICT(m) DO UPDATE SET n = excluded.n").bind(now + COOLDOWN_S).run().catch(() => {});
+}
+class Busy extends Error {}
+
+// Looks a song's cover up and saves the answer in song_art.
+// -> {cover, link} | {cover: null} (no cover anywhere) | throws Busy (over budget or a source failed; try later).
+async function lookUp(env, id, tk, sources, now) {
+  const song = await findSong(env, id, tk);
+  if (!song || !song.title) return { cover: null, unknown: true };
+  let cover = null, src = null, link = null, failed = 0;
+  for (const name of sources) {
+    if (name === "itunes" && !(await takeAppleSlot(env, now))) throw new Busy("apple budget");
+    let got;
+    try { got = await SOURCES[name](song.artist || "", song.title); } catch (e) {
+      failed++; console.log("album art: " + name + " failed: " + e.message);
+      if (name === "itunes" && /HTTP (403|429|503)/.test(e.message)) await coolDown(env, now);
+      continue;
+    }
+    if (got) { cover = got.url; link = got.link; src = name; break; }
+  }
+  // Only remember "no cover" when every source answered.
+  if (!cover && failed) throw new Busy("source failed");
+  await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked, link) VALUES (?, ?, ?, ?, ?, ?)").bind(id, tk, cover, src, now, link).run();
+  return { cover, link };
+}
+
+// A row needs a (new) lookup when it is missing, came from a source that's switched off, or is an old "no cover".
+const needsLookup = (row, sources, now) =>
+  !row || (row.url ? !sources.includes(row.src) : !(now - row.checked < NO_COVER_RETRY_S && row.checked >= MISSES_BEFORE));
+
 export async function handleArt(req, env, ctx) {
   const url = new URL(req.url);
   const id = Number(url.searchParams.get("id"));
@@ -174,31 +225,42 @@ export async function handleArt(req, env, ctx) {
   try {
     await ensureTable(env);
     const now = Math.floor(Date.now() / 1000);
-    const row = await env.DB.prepare("SELECT url, src, checked FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
-    // A saved cover from a source that has since been switched off is looked up again.
-    if (row && row.url && sources.includes(row.src)) res = await image(sized(row.url, big));
-    else if (row && !row.url && now - row.checked < NO_COVER_RETRY_S && row.checked >= MISSES_BEFORE) res = none(404, 86400);
-    else {
-      const song = await findSong(env, id, tk);
-      if (!song || !song.title) return none(404, 3600); // not a song we know: nothing saved, nothing looked up
-      let cover = null, src = null, link = null; const failed = [];
-      for (const name of sources) {
-        const fn = SOURCES[name];
-        let got;
-        try { got = await fn(song.artist || "", song.title); } catch (e) { failed.push(name); console.log("album art: " + name + " failed: " + e.message); continue; }
-        if (got) { cover = got.url; link = got.link; src = name; break; }
-      }
-      // Only remember "no cover" when every source answered. If one was down or rate limited, the next view tries again.
-      if (!cover && failed.length === sources.length) return none(503, 60);
-      if (!cover && failed.length) return none(404, 3600);
-      await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked, link) VALUES (?, ?, ?, ?, ?, ?)").bind(id, tk, cover, src, now, link).run();
-      res = cover ? await image(sized(cover, big)) : none(404, 86400);
+    let row = await env.DB.prepare("SELECT url, src, checked FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
+    if (needsLookup(row, sources, now)) {
+      const got = await lookUp(env, id, tk, sources, now);
+      row = got.unknown ? null : { url: got.cover };
+      if (got.unknown) res = none(404, 3600); // not a song we know: nothing saved, nothing looked up
     }
+    if (!res) res = row && row.url ? await image(sized(row.url, big)) : none(404, 86400);
   } catch (e) {
-    return none(503, 60);
+    // Busy or down: every phone gets the same short "try later" from the edge instead of each one
+    // reaching the Worker (and Apple) again. Jitter spreads the retries out.
+    if (!(e instanceof Busy)) console.log("album art: " + e.message);
+    res = none(503, 120 + Math.floor(Math.random() * 180));
   }
   ctx.waitUntil(cache.put(cacheKey, res.clone()).catch(() => {}));
   return res;
+}
+
+// Cron: look up a few covers ahead of time, inside Apple's budget, so phones mostly find them saved.
+// Tonight's and recent songs first, then the most popular catalog songs.
+export async function warmArt(env, limit = 4) {
+  await ensureTable(env);
+  const sources = artSources(env);
+  const now = Math.floor(Date.now() / 1000);
+  const { results } = await env.DB.prepare(
+    "SELECT p.song_id AS id, p.title FROM plays p WHERE p.song_id > 0 AND p.title IS NOT NULL" +
+    " GROUP BY p.song_id ORDER BY max(p.played_at) DESC LIMIT 400").all();
+  let done = 0;
+  for (const s of results) {
+    if (done >= limit) break;
+    const tk = norm(s.title);
+    const row = await env.DB.prepare("SELECT url, src, checked FROM song_art WHERE id = ? AND tk = ?").bind(s.id, tk).first();
+    if (!needsLookup(row, sources, now)) continue;
+    done++;
+    try { await lookUp(env, s.id, tk, sources, now); } catch (e) { if (e instanceof Busy) break; }
+  }
+  return done;
 }
 
 // Tapping a cover: GET /api/listen?id=<song id>&t=<title> -> the song's page where the cover came from
