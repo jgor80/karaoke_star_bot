@@ -562,13 +562,28 @@ def norm_title(s):
     return norm_text(re.sub(r"^\s*the\s+", "", s, flags=re.I))
 
 
-def karaoke_files(folder, now):
-    """Finished, recent karaoke-looking files in the downloads folder: [(path, kind)]."""
+MEDIA = (".cdg", ".kfn", ".mp3", ".mp4")
+
+
+def words(s):
+    """'Don't Stop Believin' (Karaoke)' -> ['dont', 'stop', 'believin', 'karaoke']"""
+    s = unicodedata.normalize("NFKD", str(s or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c)).replace("'", "").replace("\u2019", "")
+    return re.findall(r"[a-z0-9]+", s)
+
+
+def karaoke_files(folder, now, dest_dir=None):
+    """Finished, recent karaoke-looking files in the downloads folder: [(path, kind, partner)].
+
+    An .mp3 that goes with a .cdg is filed together with it (kind "pair", partner = the .mp3), so the two
+    always land under the same name. An .mp3 whose .cdg was already filed (it finished downloading first)
+    is filed next to that .cdg.
+    """
     try:
         names = os.listdir(folder)
     except OSError:
         return []
-    lower = {n.lower() for n in names}
+    by_lower = {n.lower(): n for n in names}
     out = []
     for n in names:
         path = os.path.join(folder, n)
@@ -582,42 +597,59 @@ def karaoke_files(folder, now):
         except OSError:
             continue
         has_k = "karaoke" in n.lower()
-        if ext in (".cdg", ".kfn"):
-            out.append((path, "track"))
-        elif ext == ".mp3" and (stem + ".cdg").lower() in lower:
-            out.append((path, "track"))
+        if ext == ".cdg":
+            mp3 = by_lower.get((stem + ".mp3").lower())
+            out.append((path, "pair", os.path.join(folder, mp3) if mp3 else None))
+        elif ext == ".kfn":
+            out.append((path, "track", None))
+        elif ext == ".mp3" and (stem + ".cdg").lower() in by_lower:
+            continue  # filed with its .cdg
+        elif ext == ".mp3" and dest_dir and os.path.exists(os.path.join(dest_dir, stem + ".cdg")):
+            out.append((path, "track", None))  # its .cdg was filed already; same name lines them up
         elif ext == ".zip":
             try:
                 with zipfile.ZipFile(path) as z:
-                    inner = [m for m in z.namelist() if os.path.splitext(m)[1].lower() in (".cdg", ".kfn", ".mp3", ".mp4")]
-                if has_k or any(m.lower().endswith((".cdg", ".kfn")) for m in inner):
-                    out.append((path, "zip"))
+                    entries = [m for m in z.namelist() if not m.endswith("/")]
+                inner = [m for m in entries if os.path.splitext(m)[1].lower() in MEDIA]
+                has_cdg = any(m.lower().endswith((".cdg", ".kfn")) for m in inner)
+                # "karaoke" in the name alone isn't enough (this project's own code zip has it): the zip must
+                # be mostly songs.
+                if has_cdg or (has_k and inner and len(inner) * 2 >= len(entries)):
+                    out.append((path, "zip", None))
             except (OSError, zipfile.BadZipFile):
                 pass  # still downloading or not a zip
         elif ext in VIDEO_AUDIO and has_k:
-            out.append((path, "track"))
+            out.append((path, "track", None))
     return out
 
 
-def free_name(folder, name):
+def free_name(folder, name, *also_ext):
+    """A name in folder that's free, for this file and (for a .cdg) its partner extensions too."""
     stem, ext = os.path.splitext(name)
-    dest, i = os.path.join(folder, name), 2
-    while os.path.exists(dest):
-        dest, i = os.path.join(folder, f"{stem} ({i}){ext}"), i + 1
-    return dest
+    cand, i = stem, 2
+    while any(os.path.exists(os.path.join(folder, cand + e)) for e in (ext,) + also_ext):
+        cand, i = f"{stem} ({i})", i + 1
+    return os.path.join(folder, cand + ext)
 
 
-def file_one(path, kind, dest_dir):
+def file_one(path, kind, dest_dir, partner=None):
     """Move (or unzip) one download into the karaoke folder. Returns the file names that landed there."""
     os.makedirs(dest_dir, exist_ok=True)
     if kind == "zip":
         landed = []
         with zipfile.ZipFile(path) as z:
-            for m in z.infolist():
+            members = [m for m in z.infolist() if os.path.basename(m.filename) and os.path.splitext(m.filename)[1].lower() in MEDIA]
+            # Keep .cdg/.mp3 pairs together: pick one free name per stem.
+            stems = {}
+            for m in members:
+                st = os.path.splitext(os.path.basename(m.filename))[0]
+                if st not in stems:
+                    exts = [os.path.splitext(x.filename)[1].lower() for x in members if os.path.splitext(os.path.basename(x.filename))[0] == st]
+                    stems[st] = os.path.splitext(os.path.basename(free_name(dest_dir, st + exts[0], *exts[1:])))[0]
+            for m in members:
                 base = os.path.basename(m.filename)
-                if not base or os.path.splitext(base)[1].lower() not in (".cdg", ".kfn", ".mp3", ".mp4"):
-                    continue
-                dest = free_name(dest_dir, base)
+                st, ext = os.path.splitext(base)
+                dest = os.path.join(dest_dir, stems[st] + ext)
                 with z.open(m) as src, open(dest, "wb") as out:
                     shutil.copyfileobj(src, out)
                 landed.append(os.path.basename(dest))
@@ -625,23 +657,62 @@ def file_one(path, kind, dest_dir):
         os.makedirs(done, exist_ok=True)
         shutil.move(path, free_name(done, os.path.basename(path)))
         return landed
-    dest = free_name(dest_dir, os.path.basename(path))
+    if kind == "pair":
+        dest = free_name(dest_dir, os.path.basename(path), ".mp3")
+        shutil.move(path, dest)
+        landed = [os.path.basename(dest)]
+        if partner and os.path.exists(partner):
+            mp3 = os.path.splitext(dest)[0] + ".mp3"
+            shutil.move(partner, mp3)
+            landed.append(os.path.basename(mp3))
+        return landed
+    if os.path.splitext(path)[1].lower() == ".mp3" and os.path.exists(os.path.join(dest_dir, os.path.splitext(os.path.basename(path))[0] + ".cdg")) \
+            and not os.path.exists(os.path.join(dest_dir, os.path.basename(path))):
+        dest = os.path.join(dest_dir, os.path.basename(path))  # next to its .cdg, same name
+    else:
+        dest = free_name(dest_dir, os.path.basename(path))
     shutil.move(path, dest)
     return [os.path.basename(dest)]
 
 
+# Words in a download's name that say nothing about which song it is.
+NOISE = {"karaoke", "version", "instrumental", "lyrics", "lyric", "video", "official", "with", "backing", "vocals",
+         "track", "cdg", "mp3", "mp4", "hd", "in", "the", "style", "of", "made", "famous", "by", "originally", "performed"}
+
+
+def _contains(hay, needle):
+    """needle's words appear in hay as a whole-word run."""
+    n = len(needle)
+    return n > 0 and any(hay[i:i + n] == needle for i in range(len(hay) - n + 1))
+
+
 def match_requests(names, requests):
-    """Open requests whose title (and artist, when given) appear in one of the file names."""
+    """Open requests whose title (and artist, when given) appear as whole words in one of the file names.
+
+    "Hello" no longer matches "Hello Goodbye", and "One" no longer matches "Someone Like You". A request
+    without an artist only matches when one " - " part of the file name is just the title (apart from noise
+    words like "karaoke version"), so it can't match a different song that happens to contain the title.
+    """
     hits = []
     for r in requests:
-        t, ar = norm_title(r.get("title")), norm_text(re.sub(r"^\s*the\s+", "", str(r.get("artist") or ""), flags=re.I))
-        if len(t) < 3:
-            continue
+        t = words(re.sub(r"\s*[(\[].*?[)\]]", " ", str(r.get("title") or "")))
+        ar = [w for w in words(re.sub(r"\s+(feat\.?|ft\.?|featuring)\s+.*$", "", str(r.get("artist") or ""), flags=re.I)) if w != "the"]
+        if len("".join(t)) < 3 or not [w for w in t if w not in NOISE]:
+            continue  # "karaoke", "a", ...: too vague to match anything
         for n in names:
-            k = norm_text(os.path.splitext(n)[0])
-            if t in k and (not ar or ar in k):
-                hits.append(r)
-                break
+            k = words(os.path.splitext(n)[0])
+            if not _contains(k, t):
+                continue
+            if ar:
+                if _contains(k, ar):
+                    hits.append(r)
+                    break
+            else:
+                # "Adele - Hello (Karaoke Version)": one " - " part must be just the title.
+                parts = re.split(r"\s+[-\u2013\u2014]\s+|_-_", os.path.splitext(n)[0])
+                if any([w for w in words(p) if w not in NOISE or w in t] == t for p in parts):
+                    hits.append(r)
+                    break
     return hits
 
 
@@ -671,14 +742,14 @@ def request_filer(a, log):
                 except Exception:
                     pass  # offline, or nobody has requested anything yet (no table)
                 last_req = time.monotonic()
-            for path, kind in karaoke_files(downloads, now):
-                # Wait until the size stops changing, so a download in progress isn't moved.
-                size = os.path.getsize(path)
+            for path, kind, partner in karaoke_files(downloads, now, dest_dir):
+                # Wait until the size stops changing (for a pair, both files), so a download in progress isn't moved.
+                size = (os.path.getsize(path), os.path.getsize(partner) if partner else 0)
                 if sizes.get(path) != size:
                     sizes[path] = size
                     continue
                 sizes.pop(path, None)
-                landed = file_one(path, kind, dest_dir)
+                landed = file_one(path, kind, dest_dir, partner)
                 msg = f"auto-file: {os.path.basename(path)} -> {dest_dir}"
                 hits = match_requests(landed + [os.path.basename(path)], requests)
                 for r in hits:
