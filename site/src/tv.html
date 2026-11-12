@@ -160,6 +160,9 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
 @media (max-aspect-ratio: 4/3) { :root { --u: .75vw; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cols { grid-template-columns: minmax(0, 1fr); } header { grid-template-columns: minmax(0, 1fr) auto; } .tally { display: none; } }
+/* The clock (bottom right) is read from across the bar; longer warnings stay a bit smaller so they fit on one line. */
+.status { font-size: calc(2.6 * var(--u)); opacity: .85; }
+.status.bad { font-size: calc(1.9 * var(--u)); }
 </style>
 </head>
 <body>
