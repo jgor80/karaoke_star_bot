@@ -32,6 +32,10 @@ export const VENUES = [
   },
 ];
 
+// Every bar needs a host_default (the host's singer name) so the host is left out of the most-songs and
+// mic-time awards from the first night, before anyone sets a name on /host. Fail the deploy loudly if one is missing.
+for (const v of VENUES) if (!String(v.host_default || "").trim()) throw new Error("venues.js: " + v.slug + " needs host_default (the host's singer name)");
+
 export const DEFAULT_SLUG = VENUES[0].slug;
 export const DEFAULT_VENUE = VENUES[0];
 const BY_SLUG = new Map(VENUES.map((v) => [v.slug, v]));
