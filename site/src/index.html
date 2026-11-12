@@ -1563,7 +1563,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); }
   // The whole history loads once; after that each refresh asks only for the newest night on ("?since="),
   // and the answer replaces that part of what we have. Every 10 minutes it reloads everything, so a fix
-  // to an older night (a singer's name corrected in KaraFun, say) still shows up.
+  // to an older night (a singer's name corrected in the karaoke app, say) still shows up.
   const FULL_RELOAD_MS = 10 * 60 * 1000;
   let base = null, baseAt = 0;
   function newestNight(d) { let n = ""; d.plays.forEach((p) => { if (p.night && p.night > n) n = p.night; }); return n; }
