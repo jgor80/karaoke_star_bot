@@ -1590,7 +1590,10 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
-      if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
+      // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions or host changed.
+      // The response also carries served_at, the schedule and the sync time, which change every poll.
+      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.host]);
+      if (sig !== lastJson) { lastJson = sig; load(data); } else renderTonight();
       if (draft) draft.update(data);
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {

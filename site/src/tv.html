@@ -415,11 +415,26 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 
   // ---------- refresh ----------
   function setStatus(msg, bad) { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); }
+  // Like the phones: the whole history once (and every 10 minutes), otherwise only tonight's songs (?since=).
+  const FULL_RELOAD_MS = 10 * 60 * 1000;
+  let base = null, baseAt = 0;
+  function newestNight(d) { let n = ""; (d.plays || []).forEach((p) => { if (p.night && p.night > n) n = p.night; }); return n; }
+  function mergeSince(b, d) {
+    const keep = b.plays.filter((p) => !(p.night && p.night >= d.since));
+    const kept = new Set(keep.map((p) => p.uuid));
+    return { ...d,
+      plays: keep.concat(d.plays),
+      reactions: (b.reactions || []).filter((x) => kept.has(x.play)).concat(d.reactions || []),
+      reactors: (b.reactors || []).filter((x) => !(x.night && x.night >= d.since)).concat(d.reactors || []) };
+  }
   async function refresh() {
     try {
-      const r = await fetch("api/plays", { cache: "no-store" });
+      const since = base && Date.now() - baseAt < FULL_RELOAD_MS ? newestNight(base) : "";
+      const r = await fetch("api/plays" + (since ? "?since=" + since : ""), { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const text = await r.text(); const data = JSON.parse(text);
+      let data = JSON.parse(await r.text());
+      if (data.since && base) data = mergeSince(base, data); else baseAt = Date.now();
+      base = data;
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       const v = build(data);
       if (!v) { $("title").textContent = "No karaoke nights yet"; return setStatus(""); }
