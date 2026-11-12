@@ -150,9 +150,42 @@ export async function publicSecrets(env, venue = DEFAULT_VENUE) {
 }
 
 // True when `given` is the host key. Used by other host-only endpoints (the crowd meter's /api/crowd).
-export async function isHost(env, given, venue = DEFAULT_VENUE) {
+// Wrong host keys and setup codes are counted per network and per bar, so the key can't be guessed by
+// sending many tries at once (the old 400 ms delay only slowed one try at a time).
+const FAIL_PER_NET_HOUR = 10, FAIL_PER_VENUE_HOUR = 60;
+let failsReady = null;
+async function failNet(req) { return (await sha256("fail|" + (req && req.headers.get("cf-connecting-ip") || "") + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24); }
+async function lockedOut(env, venue, req) {
+  if (!failsReady) failsReady = env.DB.prepare("CREATE TABLE IF NOT EXISTS host_fails (venue text not null, net text not null, at integer not null)").run()
+    .then(() => env.DB.prepare("CREATE INDEX IF NOT EXISTS host_fails_venue ON host_fails (venue, at)").run()).catch((e) => { failsReady = null; throw e; });
+  await failsReady;
+  const since = Math.floor(Date.now() / 1000) - 3600, net = await failNet(req);
+  const r = await env.DB.prepare("SELECT count(*) AS v, sum(net = ?3) AS n FROM host_fails WHERE venue = ?1 AND at > ?2").bind(venue.slug, since, net).first();
+  return !!r && ((r.n || 0) >= FAIL_PER_NET_HOUR || (r.v || 0) >= FAIL_PER_VENUE_HOUR);
+}
+async function noteFail(env, venue, req) {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO host_fails (venue, net, at) VALUES (?, ?, ?)").bind(venue.slug, await failNet(req), now),
+    env.DB.prepare("DELETE FROM host_fails WHERE at < ?").bind(now - 86400),
+  ]).catch(() => {});
+  await new Promise((r) => setTimeout(r, 400));
+}
+const LOCKED = () => json({ error: "Too many wrong tries. Wait an hour and try again." }, 429);
+
+export async function isHost(env, given, venue = DEFAULT_VENUE, req = null) {
   const cfg = await config(env, venue);
-  return !!cfg.key_hash && same(await sha256(cfg.key_salt + ":" + String(given || "").trim()), cfg.key_hash);
+  if (req && (await lockedOut(env, venue, req))) return false;
+  const ok = !!cfg.key_hash && same(await sha256(cfg.key_salt + ":" + String(given || "").trim()), cfg.key_hash);
+  if (!ok && req) await noteFail(env, venue, req);
+  return ok;
+}
+
+// This bar's own setup code (HOST_SETUP_CODE_<SLUG>, e.g. HOST_SETUP_CODE_WBL) when it has one, so a code
+// handed to one bar's host can't reset another bar's key. HOST_SETUP_CODE is the site owner's code and works for every bar.
+function setupCodes(env, venue) {
+  const own = env["HOST_SETUP_CODE_" + venue.slug.toUpperCase().replace(/[^A-Z0-9]/g, "_")];
+  return [own, env.HOST_SETUP_CODE].filter(Boolean).map(String);
 }
 
 async function catalogCount(env) {
@@ -171,12 +204,16 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     // Setting (or resetting) the host key needs the setup code, a Worker secret only the owner can set:
     //   npx wrangler secret put HOST_SETUP_CODE
     // So nobody who stumbles on /host can claim it, and a forgotten key can be replaced.
-    if (!env.HOST_SETUP_CODE) return json({ error: "Setup is locked. Set the HOST_SETUP_CODE secret on the Worker first (see the README)." }, 403);
+    //   (or HOST_SETUP_CODE_<SLUG> for just one bar, see setupCodes)
+    const codes = setupCodes(env, venue);
+    if (!codes.length) return json({ error: "Setup isn’t open yet. Ask the site owner for a setup code." }, 403);
+    if (await lockedOut(env, venue, req)) return LOCKED();
     const code = String(body.code || "");
-    const codeOk = same(await sha256("code:" + code), await sha256("code:" + env.HOST_SETUP_CODE));
-    if (!codeOk) { await new Promise((r) => setTimeout(r, 400)); return json({ error: "That setup code isn’t right.", needs_setup: true }, 403); }
+    let codeOk = false;
+    for (const c of codes) if (same(await sha256("code:" + code), await sha256("code:" + c))) codeOk = true;
+    if (!codeOk) { await noteFail(env, venue, req); return json({ error: "That setup code isn’t right.", needs_setup: true }, 403); }
     const key = String(body.key || "").trim();
-    if (key.length < 6) return json({ error: "Use at least 6 characters.", needs_setup: true }, 400);
+    if (key.length < 10) return json({ error: "Use at least 10 characters.", needs_setup: true }, 400);
     const salt = randomId(16);
     const stmts = [
       env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("key_salt"), salt),
@@ -190,8 +227,9 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     return json({ ok: true });
   }
   if (!cfg.key_hash) return json({ error: "setup", needs_setup: true }, 401);
+  if (await lockedOut(env, venue, req)) return LOCKED();
   if (!same(await sha256(cfg.key_salt + ":" + given.trim()), cfg.key_hash)) {
-    await new Promise((r) => setTimeout(r, 400)); // slow down guessing
+    await noteFail(env, venue, req); // counts toward the lock-out and slows down guessing
     return json({ error: "Wrong host key." }, 403);
   }
 
