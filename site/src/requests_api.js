@@ -9,6 +9,7 @@
 // shown to the crowd, so there's nothing to moderate in public. Limits per phone and per network keep it sane.
 import { cleanName } from "./reactions_api.js";
 import { DEFAULT_VENUE, cfgKey, ensureVenueColumn } from "./venues.js";
+import { networkHash } from "./net.js";
 
 export const REQ_LIMITS = { perPhone: 5, perIp: 40 }; // per day
 const STATUSES = ["open", "added", "unavailable"];
@@ -31,13 +32,10 @@ function ensure(env) {
   return ready;
 }
 
+const PUSHES_PER_HOUR = 20;
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const nowS = () => Math.floor(Date.now() / 1000);
-async function sha(s) {
-  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
-}
 export function cleanText(s, n) {
   return String(s || "").normalize("NFC").replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, "")
     .replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, n).trim();
@@ -56,15 +54,19 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
     return json({ requests: results });
   }
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  // Same as reactions, picks and leads: only this site's own pages may post (stops other sites making
+  // their visitors' browsers send requests).
+  const origin = req.headers.get("origin");
+  if (origin && origin !== "null" && new URL(origin).host !== url.host) return json({ error: "Wrong site" }, 403);
+  if (origin === "null") return json({ error: "Wrong site" }, 403);
   let b;
   try { b = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const title = cleanText(b.title, 100), artist = cleanText(b.artist, 80), name = cleanName(b.name);
   const dev = String(b.dev || "");
   if (title.length < 2) return json({ error: "Type the song’s title." }, 400);
   if (!/^[a-f0-9]{32}$/.test(dev)) return json({ error: "bad device" }, 400);
-  const ip = req.headers.get("cf-connecting-ip") || "";
   const day = new Date(Date.now() - 6 * 3600e3).toISOString().slice(0, 10); // close enough to a Central "night"
-  const ipHash = ip ? (await sha("oke-night|" + ip + "|" + day)).slice(0, 24) : null;
+  const ipHash = await networkHash(env, req, "request", day);
   const now = nowS();
 
   // Create-or-merge and the limit checks run as one batch (D1 runs a batch as a single transaction), so
@@ -106,6 +108,9 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
   ctx.waitUntil((async () => {
     const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(venue, "ntfy_topic")).first().catch(() => null);
     if (!t || !t.v) return;
+    // At most PUSHES_PER_HOUR request alerts an hour, so a flood of requests can't flood the host's phone.
+    const recent = await env.DB.prepare("SELECT count(*) AS n FROM song_requests WHERE venue = ? AND created_at > ?").bind(venue.slug, now - 3600).first();
+    if (recent && recent.n > PUSHES_PER_HOUR) return;
     await fetch("https://ntfy.sh/" + t.v, { method: "POST", body: "“" + title + "”" + (artist ? " by " + artist : "") + (name ? "\nFrom " + name : "") + "\nSee okenight.com/" + venue.slug + "/host",
       headers: { Title: "Song request", Tags: "musical_note" } });
   })().catch(() => {}));
