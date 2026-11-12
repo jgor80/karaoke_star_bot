@@ -81,7 +81,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     <h2 id="login-h">Host key</h2>
     <p class="hint" id="login-hint">Enter your host key.</p>
     <form class="card" id="login-form" style="padding:0;border:0;background:none">
-      <label id="code-l" hidden>Setup code (the HOST_SETUP_CODE secret on the Worker)<input id="code" type="password" autocomplete="off" placeholder="Setup code"></label>
+      <label id="code-l" hidden>Setup code (from the site owner)<input id="code" type="password" autocomplete="off" placeholder="Setup code"></label>
       <label id="key-l">Host key<input id="key" type="password" autocomplete="current-password" placeholder="Host key" required></label>
       <label id="name-l" hidden>Your singer name (gets the host tag on the site)<input id="setup-name" maxlength="40" placeholder="e.g. Bleacher Jeff" autocomplete="off"></label>
       <button type="submit" id="login-btn">Open</button>
@@ -208,8 +208,11 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   if (window.OKE_VENUE) document.getElementById("venue-name").textContent = "📍 " + window.OKE_VENUE.name;
 (function () {
   const $ = (id) => document.getElementById(id);
-  const KEY = "okenight-host-key", SEEN = "okenight-host-seen";
+  // One saved key per bar, so a host of two bars doesn't overwrite one key with the other.
+  const SLUG = (window.OKE_VENUE && window.OKE_VENUE.slug) || "wbl", KEY = "okenight-host-key:" + SLUG, SEEN = "okenight-host-seen";
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
+  // Keys saved before this were shared by every bar; the first bar (wbl) keeps the old one.
+  if (!store.get(KEY) && SLUG === "wbl" && store.get("okenight-host-key")) { store.set(KEY, store.get("okenight-host-key")); store.set("okenight-host-key", null); }
   let key = store.get(KEY), seen = new Set(JSON.parse(store.get(SEEN) || "[]")), first = true, alertsOn = false, audio = null, beepT = 0, pollT = 0;
   // Older versions saved bare ids. Start fresh then, so this first load doesn't re-alarm old finds.
   if ([...seen].some((x) => !String(x).includes("@"))) seen = new Set();
@@ -228,7 +231,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     setupMode = !!needsSetup;
     $("app").hidden = true; $("login").hidden = false;
     $("login-h").textContent = setupMode ? "Set up your host key" : "Host key";
-    $("login-hint").textContent = setupMode ? "Enter the setup code, then pick a host key (6+ characters). You’ll use the key to open this page on any phone." : "Enter your host key.";
+    $("login-hint").textContent = setupMode ? "Enter the setup code, then pick a host key (10+ characters). You’ll use the key to open this page on any phone." : "Enter your host key.";
     $("code-l").hidden = $("name-l").hidden = !setupMode; $("code").required = setupMode; $("forgot").hidden = setupMode;
     $("key-l").firstChild.textContent = setupMode ? "New host key" : "Host key";
     $("login-btn").textContent = setupMode ? "Set key" : "Open";

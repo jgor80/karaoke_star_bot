@@ -91,6 +91,11 @@ npx wrangler secret put HOST_SETUP_CODE
 Then open `/host`, tap "Forgot the key? Reset it with the setup code", and enter the setup
 code and a new host key. Without the secret, nobody can set or reset the key.
 
+`HOST_SETUP_CODE` is the owner's code and works for every bar. To give another bar's host a code
+that only works for their bar, set `HOST_SETUP_CODE_<SLUG>` instead (for example
+`HOST_SETUP_CODE_WBL`). After 10 wrong keys or codes from one network in an hour (or 60 for the
+bar overall), the host page waits an hour.
+
 ## Crowd meter
 
 The crowd meter scores the applause after each song (the PA drowns out the crowd during
