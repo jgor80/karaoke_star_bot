@@ -65,7 +65,10 @@ async function liveQueue(env, venue) {
 }
 
 // Tables the laptop sync writes, made before venues existed: give them the venue column (default = first venue).
-const ensureCore = (env) => ensureVenueColumns(env, ["plays", "sync_runs"]);
+// plays (song_id): album covers look songs up by id when they aren't in the catalog (art_api.js findSong).
+let songIdIndex = null;
+const ensureCore = (env) => Promise.all([ensureVenueColumns(env, ["plays", "sync_runs"]),
+  songIdIndex || (songIdIndex = env.DB.prepare("CREATE INDEX IF NOT EXISTS plays_song_id ON plays (song_id)").run().catch(() => { songIdIndex = null; }))]);
 
 const html = (body, cache = "public, max-age=60", extra = {}) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, ...extra } });
@@ -107,7 +110,9 @@ async function handleApi(name, req, env, ctx, venue, url) {
     // During the scheduled session the cache is shorter so new songs show up fast.
     const now = Math.floor(Date.now() / 1000);
     const schedule = { ...scheduleStatus(now, venue), reminder: reminderLinks(now, venue) };
-    const maxAge = schedule.status === "off" ? 15 : 5;
+    // The whole history (no ?since) is loaded once per phone, then phones poll ?since=tonight, so it can be
+    // cached longer: 60 s during the night instead of 5 s means far fewer full-history reads.
+    const maxAge = (schedule.status === "off" ? 15 : 5) * (since ? 1 : 12);
     const since = url.searchParams.get("since");
     const delta = since && NIGHT_RE.test(since) ? since : null;
     const cache = caches.default;
