@@ -188,8 +188,9 @@
       root.replaceChildren();
       const head = el("div", "kb-head");
       const live = night === tonight();
-      head.append(el("div", "kb-night", live ? "Tonight" : "Replay: " + new Date(night + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })),
-        el("div", "kb-count", res.count + " of 24 · " + res.rows.length + " songs " + (since ? "since your card" : "so far")));
+      head.append(el("div", "kb-night", live ? "Tonight" : "Replay of " + new Date(night + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })),
+        el("div", "kb-count", live ? res.count + " of 24 · " + res.rows.length + " songs " + (since ? "since your card" : "so far")
+          : "This card would have hit " + res.count + " of 24 · " + res.rows.length + " songs that night"));
       root.append(head);
       const winSet = new Set(res.won.flat());
       const grid = el("div", "kb-grid"); grid.setAttribute("role", "grid");
@@ -205,11 +206,13 @@
         grid.append(sq);
       });
       root.append(grid);
-      // A word wider than its square ("Margaritaville") shrinks that square's text until it fits.
+      // A word wider than its square ("Margaritaville") shrinks that square's text a little, but never below
+      // 10px (unreadable in a dark bar): past that the word is hyphenated onto two lines instead (squares grow taller).
       // The card can be drawn while its tab is hidden, so fit whenever the grid gets (or changes) a size.
       const fit = () => { if (!grid.clientWidth) return; grid.querySelectorAll(".kb-t").forEach((t) => {
-        t.style.fontSize = ""; let size = parseFloat(getComputedStyle(t).fontSize), n = 0;
-        while (t.scrollWidth > t.clientWidth + 1 && size > 8 && n++ < 24) { size -= 0.5; t.style.fontSize = size + "px"; }
+        t.style.fontSize = ""; t.classList.remove("kb-break"); let size = parseFloat(getComputedStyle(t).fontSize), n = 0;
+        while (t.scrollWidth > t.clientWidth + 1 && size - 0.5 >= 10 && n++ < 24) { size -= 0.5; t.style.fontSize = size + "px"; }
+        if (t.scrollWidth > t.clientWidth + 1) t.classList.add("kb-break");
       }); };
       if (window.ResizeObserver) { let w = 0; new ResizeObserver(() => { if (grid.clientWidth !== w) { w = grid.clientWidth; fit(); } }).observe(grid); }
       else requestAnimationFrame(fit);
