@@ -1,0 +1,16 @@
+# Fails a pull request if the karaoke app's brand name shows up in anything sent to browsers.
+# Server-only Worker modules (site/src/*_api.js, catalog_import.js, worker.js) and the laptop sync may name it.
+name: Brand check
+on: [pull_request, push]
+jobs:
+  brand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No brand name in browser files
+        run: |
+          files=$(ls site/src/*.html site/src/bingo.js site/src/fun.js site/src/songs.js site/src/drafts.js site/src/art.js site/src/awards.js bingo/* awards/* 2>/dev/null)
+          if grep -niE 'kara ?fun|\bkfn\b' $files; then
+            echo "::error::The karaoke app's name must not appear in files that browsers download (project rule)."
+            exit 1
+          fi
