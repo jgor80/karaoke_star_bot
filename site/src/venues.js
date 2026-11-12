@@ -59,12 +59,30 @@ export async function venueConfig(env, v) {
 
 // Adds the venue column to a table made before venues existed. Once per table per Worker instance;
 // "duplicate column" just means it's already there.
+//
+// Indexes start with venue and then the column queries range or sort on, e.g. plays (venue, night). A
+// venue-only index matched every row (one bar) and made "tonight's songs" read the whole history, so it is dropped.
+const INDEXES = {
+  plays: [["night"], ["played_at"]],
+  sync_runs: [["ran_at"]],
+  reactions: [["night"]],
+  drafts: [["night"]],
+  song_requests: [["status", "updated_at"]],
+  secret_songs: [[]],
+  live_queue: [[]],
+};
+function indexStatements(table) {
+  const list = INDEXES[table] || [[]];
+  const out = list.map((cols) => "CREATE INDEX IF NOT EXISTS " + table + "_venue_" + (cols.join("_") || "only") + " ON " + table + " (" + ["venue", ...cols].join(", ") + ")");
+  if (list.every((c) => c.length)) out.push("DROP INDEX IF EXISTS " + table + "_venue");
+  return out;
+}
 const added = {};
 export function ensureVenueColumn(env, table) {
   if (!added[table]) {
     added[table] = env.DB.prepare("ALTER TABLE " + table + " ADD COLUMN venue text not null default '" + DEFAULT_SLUG + "'").run()
       .catch((e) => { if (!/duplicate column/i.test(String(e && e.message || e))) { added[table] = null; throw e; } })
-      .then(() => env.DB.prepare("CREATE INDEX IF NOT EXISTS " + table + "_venue ON " + table + " (venue)").run());
+      .then(() => env.DB.batch(indexStatements(table).map((s) => env.DB.prepare(s))));
   }
   return added[table];
 }
