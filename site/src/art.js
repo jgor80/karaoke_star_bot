@@ -70,7 +70,11 @@
     return !!k;
   }
   // Keep in step with ART_SOURCES in wrangler.toml.
-  const CREDIT = "Album covers from Apple Music. Tap a cover to hear the song.";
-  function credit() { const p = document.createElement("p"); p.className = "art-credit"; p.textContent = CREDIT; return p; }
+  function credit() {
+    const p = document.createElement("p"); p.className = "art-credit";
+    const a = document.createElement("a"); a.href = "https://music.apple.com/"; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Apple Music";
+    p.append("Album covers from ", a, ". Tap a cover to hear the song.");
+    return p;
+  }
   window.OkeArt = { el, row, put, src, credit };
 })();
