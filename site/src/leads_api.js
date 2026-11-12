@@ -5,6 +5,7 @@
 // details stay in D1. Nothing here is ever shown publicly. Limited per network per day so the form can't be used to flood the owner's phone.
 import { DEFAULT_VENUE, cfgKey } from "./venues.js";
 import { cleanText } from "./requests_api.js";
+import { networkHash } from "./net.js";
 
 const PER_IP_PER_DAY = 5;
 const SCHEMA = [
@@ -20,10 +21,6 @@ function ensure(env) {
 }
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
-async function sha(s) {
-  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
-}
 
 export async function handleLead(req, env, ctx) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -41,8 +38,7 @@ export async function handleLead(req, env, ctx) {
 
   await ensure(env);
   const day = new Date().toISOString().slice(0, 10), now = Math.floor(Date.now() / 1000);
-  const ip = req.headers.get("cf-connecting-ip") || "";
-  const ipHash = ip ? (await sha("oke-lead|" + ip + "|" + day)).slice(0, 24) : null;
+  const ipHash = await networkHash(env, req, "lead", day);
   const ins = await env.DB.prepare(`INSERT INTO leads (name, bar, city, contact, role, note, ip_hash, day, created_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
       WHERE ?7 IS NULL OR (SELECT count(*) FROM leads WHERE ip_hash = ?7 AND day = ?8) < ?10`)
