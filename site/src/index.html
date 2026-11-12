@@ -608,6 +608,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <div class="sec night-sec">
       <h2 id="feed-h">Earlier tonight</h2>
       <ol class="list feed" id="feed"></ol>
+      <div id="feed-credit"></div>
     </div>
     <div class="sec" id="unlocked-sec" hidden>
       <h2>Badges unlocked tonight</h2>
@@ -725,7 +726,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </section>
 
   <div class="status" id="status"></div>
-  <p class="muted small" style="text-align:center;margin:18px 0 0"><a href="/privacy">Privacy and name removal</a></p>
+  <p class="muted small" style="text-align:center;margin:18px 0 0">Album covers from <a href="https://music.apple.com/" target="_blank" rel="noopener">Apple Music</a>, tap one to hear the song · <a href="/privacy">Privacy and name removal</a></p>
 </main>
 
 <nav class="tabs" aria-label="Sections">
@@ -931,6 +932,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
     // feed (the newest song is already in the hero)
     const feed = $("feed"); feed.replaceChildren();
+    if (window.OkeArt && !$("feed-credit").firstChild) $("feed-credit").append(OkeArt.credit());
     const older = rows.slice(0, -1).reverse(), shown = feedOpen ? older.slice(0, 20) : older.slice(0, 5);
     if (!older.length) feed.append(el("li", "empty", "Nothing before this one yet."));
     shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null); if (p.singer) li.dataset.who = clean(p.singer);

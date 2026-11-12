@@ -131,6 +131,7 @@ body.awake { cursor: default; }
 body.awake .fs { opacity: 1; pointer-events: auto; }
 
 .empty { font-size: calc(3.4 * var(--u)); color: var(--muted); text-align: center; padding: calc(20 * var(--u)) calc(6 * var(--u)); }
+.art-credit-tv { position: fixed; left: 50%; bottom: calc(1.4 * var(--u)); transform: translateX(-50%); font-size: calc(1.5 * var(--u)); color: var(--muted); opacity: .8; }
 .status { position: fixed; right: calc(2 * var(--u)); bottom: calc(1.4 * var(--u)); font-family: var(--f-mono); font-size: calc(1.5 * var(--u)); color: var(--muted); opacity: .7; }
 .secret-tv { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(23, 13, 28, .9); }
 .secret-tv .st-in { background: var(--gold); color: #1a0710; border-radius: calc(4 * var(--u)); padding: calc(6 * var(--u)) calc(8 * var(--u)); text-align: center; display: grid; gap: calc(2.5 * var(--u)); max-width: 80vw; box-shadow: 0 0 calc(12 * var(--u)) rgba(245, 184, 74, .6); }
@@ -174,6 +175,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 </header>
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
 <div class="status" id="status"></div>
+<div class="art-credit-tv">Album covers from Apple Music</div>
 <div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
 <div class="secret-tv" id="secret-tv" hidden role="alert"><div class="st-in"><div class="st-big">🤫 Secret song found!</div><div class="st-who" id="st-who"></div><div class="st-rw" id="st-rw"></div></div></div>
 <div class="clap-tv" id="clap-tv" hidden role="status"><div class="ct-k">👏 Crowd meter</div><div class="ct-top"><div class="ct-who" id="ct-who"></div><div class="ct-n" id="ct-n"></div></div><div class="ct-bar"><i id="ct-bar"></i></div></div>
