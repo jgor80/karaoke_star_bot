@@ -72,8 +72,12 @@ let schemaDone = false;
 export async function ensureVoiceTables(env) {
   if (schemaDone) return;
   await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
+  // fails: lookups of this artist that errored (not "slow down"); added after the table existed.
+  await env.DB.prepare("ALTER TABLE artist_voice ADD COLUMN fails integer not null default 0").run().catch(() => {});
   schemaDone = true;
 }
+
+const MAX_FAILS = 3;
 
 export async function updateVoices(env, now = Date.now()) {
   await ensureVoiceTables(env);
@@ -89,7 +93,8 @@ export async function updateVoices(env, now = Date.now()) {
     if (own && own.v) await env.DB.prepare("INSERT OR IGNORE INTO artist_voice (artist, pop) SELECT artist, min(pop) FROM songbook WHERE artist != '' GROUP BY artist").run().catch(() => {});
     await env.DB.prepare("INSERT OR REPLACE INTO catalog_meta (k, v) VALUES ('voice_seeded', ?)").bind(stamp).run();
   }
-  const { results: todo } = await env.DB.prepare("SELECT artist FROM artist_voice WHERE voice IS NULL ORDER BY pop LIMIT ?").bind(PER_RUN).all();
+  // Artists whose lookups keep erroring go to the back of the queue, so one odd name can't block the rest.
+  const { results: todo } = await env.DB.prepare("SELECT artist FROM artist_voice WHERE voice IS NULL ORDER BY fails, pop LIMIT ?").bind(PER_RUN).all();
   if (!todo.length) return 0;
 
   // What we already know, for every name these artists need.
@@ -101,7 +106,7 @@ export async function updateVoices(env, now = Date.now()) {
     const { results } = await env.DB.prepare("SELECT nk, kind, gender FROM mb_person WHERE nk IN (" + chunk.map(() => "?").join(",") + ")").bind(...chunk).all();
     results.forEach((r) => known.set(r.nk, r));
   }
-  let budget = PER_RUN, stop = false, done = 0, slowdowns = 0;
+  let budget = PER_RUN, stop = false, done = 0, slowdowns = 0, errored = false;
   const ask = async (name) => {
     const nk = norm(name);
     if (!nk) return { kind: "none", gender: "" };
@@ -112,7 +117,8 @@ export async function updateVoices(env, now = Date.now()) {
       if (stop || budget <= 0) return undefined;
       if (budget < PER_RUN) await sleep(slowdowns ? 2500 : GAP_MS);
       budget--;
-      r = await lookup(name).catch(() => undefined);
+      // A 4xx error is about this name (a bad query); network trouble or 5xx just ends this run as before.
+      r = await lookup(name).catch((e) => { errored = /HTTP 4\d\d/.test(String(e && e.message)); return undefined; });
       if (r === null && ++slowdowns >= MAX_SLOWDOWNS) stop = true;
     }
     if (!r) return undefined;
@@ -120,13 +126,21 @@ export async function updateVoices(env, now = Date.now()) {
     await env.DB.prepare("INSERT OR REPLACE INTO mb_person (nk, kind, gender, checked) VALUES (?, ?, ?, ?)").bind(nk, r.kind, r.gender, Math.floor(now / 1000)).run();
     return r;
   };
+  // An artist whose lookup gets a 4xx error (not "slow down") is skipped this run, and after MAX_FAILS
+  // errors marked '?' (unknown) for good, instead of stopping the whole run at the same artist every minute.
+  const skip = async (artist) => {
+    errored = false;
+    await env.DB.prepare("UPDATE artist_voice SET fails = fails + 1, voice = CASE WHEN fails + 1 >= ? THEN '?' ELSE voice END, checked = ? WHERE artist = ?")
+      .bind(MAX_FAILS, Math.floor(now / 1000), artist).run();
+  };
   for (const n of need) {
+    errored = false;
     const whole = await ask(n.w);
-    if (whole === undefined) break;
+    if (whole === undefined) { if (errored && !stop && budget > 0) { await skip(n.artist); continue; } break; }
     let parts = [];
     if (n.parts.length && whole.kind === "none") {
       for (const p of n.parts) { const r = await ask(p); if (r === undefined) { parts = null; break; } parts.push(r); }
-      if (parts === null) break;
+      if (parts === null) { if (errored && !stop && budget > 0) { await skip(n.artist); continue; } break; }
     }
     await env.DB.prepare("UPDATE artist_voice SET voice = ?, checked = ? WHERE artist = ?").bind(voiceOf(whole, parts), Math.floor(now / 1000), n.artist).run();
     done++;
