@@ -1,6 +1,6 @@
 // Singer voice (male / female / guy + girl duet) for the Songbook's voice filters.
 //
-// KaraFun's catalog doesn't say who sings, so the Worker's every-minute cron looks the artists up
+// The karaoke app's catalog doesn't say who sings, so the Worker's every-minute cron looks the artists up
 // on MusicBrainz, a few at a time, most popular artists first, and saves the answer in D1:
 //   artist_voice(artist, pop, voice, checked)   one row per catalog artist string
 //     voice: 'm' or 'f' (solo singer), 'mix' (duet credit with a man and a woman), 'band', '?' (unknown), NULL = not looked up yet

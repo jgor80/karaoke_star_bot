@@ -2,15 +2,15 @@ import { songbookConfig } from "./songbook_api.js";
 import { DEFAULT_VENUE } from "./venues.js";
 import { ensureVoiceTables } from "./voice_import.js";
 
-// Search KaraFun's song catalog:
+// Search the karaoke app's song catalog:
 //   GET /api/catalog?q=<words>&duo=1&hits=1&genre=<style>&lang=<language>&decade=<1980>&voice=m|f|mix&sort=pop|new|recent|old&page=<n>
 //   -> {ready, songs: [{id, title, artist, year, duo, explicit, styles}], more, count, updated[, voice: {done, total}]}
 // voice filters on the singer (male / female / guy + girl duet), looked up on MusicBrainz by the cron
 // (voice_import.js); voice.done/total says how many artists have been looked up so far.
 //
-// The catalog is KaraFun's own published song list (CSV), loaded into the D1 full-text table
-// `catalog` once a week by the Worker's cron (catalog_import.js). rowid is KaraFun's song id, the same id as
-// plays.song_id. Results are ordered by KaraFun's popularity rank and cached at the edge, so a
+// The catalog is the karaoke app's own published song list (CSV), loaded into the D1 full-text table
+// `catalog` once a week by the Worker's cron (catalog_import.js). rowid is the karaoke app's song id, the same id as
+// plays.song_id. Results are ordered by the karaoke app's popularity rank and cached at the edge, so a
 // bar full of phones searching costs few D1 reads.
 //
 // Read only. The search words are turned into a quoted FTS prefix query, so visitors can't send
@@ -31,12 +31,12 @@ const json = (body, maxAge) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge },
   });
 
-// Filters. genre and lang must look like one of KaraFun's style or language names (they're bound
+// Filters. genre and lang must look like one of the karaoke app's style or language names (they're bound
 // as LIKE parameters, never put in the SQL). decade: 1950..2020, or 1900 for "before 1950".
 const NAME_RE = /^[\p{L}0-9 &'\/-]{2,30}$/u;
 const SORTS = {
   pop: "pop",
-  new: "added DESC, pop",                                            // newest on KaraFun
+  new: "added DESC, pop",                                            // newest in the catalog
   recent: "CAST(year AS INTEGER) DESC, pop",                        // newest songs
   old: "year IS NULL OR year = '', CAST(year AS INTEGER), pop",    // oldest songs
 };

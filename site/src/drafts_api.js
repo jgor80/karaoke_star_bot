@@ -1,8 +1,8 @@
 // Crowd draft: anyone can draft a singer to sing a song, and the crowd seconds the picks it wants most.
-// The site can't touch KaraFun's queue, so a draft is a public request. The host or the singer makes it happen,
+// The site can't touch the karaoke app's queue, so a draft is a public request. The host or the singer makes it happen,
 // and once the drafted singer sings that song it shows as delivered (worked out on the page from plays).
 //
-// POST /api/draft {action: "pick", singer, song, dev, name}  -> {ok, draft_id, board}  (song = KaraFun song id)
+// POST /api/draft {action: "pick", singer, song, dev, name}  -> {ok, draft_id, board}  (song = the app's song id)
 // POST /api/draft {action: "vote" | "unvote", id, dev}       -> {ok, board}
 // draftBoard(env, venue)                                     -> {draft_night, drafts} folded into /api/plays
 // hostDraftAction(env, body, venue)                          -> remove a pick / block a name (from /api/host, host key checked there)
@@ -10,7 +10,7 @@
 // Rules that keep it friendly:
 // - Only people who have sung here before can be drafted (no typing a stranger's name), and the host can
 //   block a name from being drafted at all.
-// - The song comes from KaraFun's catalog (or songs sung here) by id, so nobody types free text into a pick.
+// - The song comes from the karaoke app's catalog (or songs sung here) by id, so nobody types free text into a pick.
 // - Limits per phone, per network and per singer (see LIMITS). Device ids and IP hashes are only used for limits.
 import { scheduleStatus, SCHEDULE } from "./schedule.js";
 import { cleanName } from "./reactions_api.js";
@@ -94,7 +94,7 @@ export async function draftBoard(env, venue = DEFAULT_VENUE) {
 }
 
 async function lookupSong(env, id, venue) {
-  // KaraFun's catalog first (rowid = KaraFun song id), then songs sung here in case the catalog isn't loaded.
+  // The karaoke app's catalog first (rowid = the app's song id), then songs sung here in case the catalog isn't loaded.
   const c = await listSongById(env, id, venue); // the full song list, or this bar's own songbook
   if (c) return c;
   const p = await env.DB.prepare("SELECT song_id AS id, title, artist FROM plays WHERE song_id = ?1 AND title IS NOT NULL LIMIT 1").bind(id).first();
@@ -102,7 +102,7 @@ async function lookupSong(env, id, venue) {
 }
 
 async function knownSinger(env, venue, key) {
-  // Every name ever typed into KaraFun, matched loosely, so "bleacher jeff" finds "Bleacher Jeff".
+  // Every name ever typed into the karaoke app, matched loosely, so "bleacher jeff" finds "Bleacher Jeff".
   const { results } = await env.DB.prepare("SELECT singer, count(*) AS n FROM plays WHERE singer IS NOT NULL AND venue = ?1 GROUP BY singer").bind(venue.slug).all();
   const hits = results.filter((r) => singerKey(r.singer) === key).sort((a, b) => b.n - a.n);
   return hits.length ? cleanName(hits[0].singer) : null;

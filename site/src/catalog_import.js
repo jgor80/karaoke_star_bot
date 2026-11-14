@@ -1,6 +1,6 @@
-// Weekly import of KaraFun's song catalog into D1, for the Songbook (catalog_api.js serves it).
+// Weekly import of the karaoke app's song catalog into D1, for the Songbook (catalog_api.js serves it).
 //
-// KaraFun publishes its whole catalog as a CSV on https://www.karafun.com/karaoke-song-list.html
+// The karaoke app publishes its whole catalog as a CSV, linked from its song list page (LIST_PAGE below)
 // (about 90,000 songs: Id;Title;Artist;Year;Duo;Explicit;Date Added;Styles;Languages, most popular
 // first). The every-minute cron calls maybeImportCatalog(); it does nothing unless the catalog is
 // missing or over a week old, and tries at most once an hour. Each song row keeps a hash (h) of
@@ -17,7 +17,7 @@ const MIN_SONGS = 10000;     // a broken download must never wipe the catalog
 const VERSION = "2";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
 
 const SCHEMA = [
-  // rowid = KaraFun song id (same as plays.song_id). Only title, artist and k are searchable.
+  // rowid = the app's song id (same as plays.song_id). Only title, artist and k are searchable.
   // k is title + artist without apostrophes, dots and slashes, so "dont stop" finds "Don't Stop
   // Believin'" and "acdc" finds AC/DC (catalog_api.js strips the same from searches).
   "CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED," +
@@ -103,7 +103,7 @@ export function songsFromCsv(text) {
   return out;
 }
 
-// SQL literal. Values come from KaraFun's CSV; strings are quoted with '' escaping.
+// SQL literal. Values come from the karaoke app's CSV; strings are quoted with '' escaping.
 const lit = (v) => v == null ? "NULL" : typeof v === "number" ? String(v) : "'" + String(v).replace(/\u0000/g, "").replace(/'/g, "''") + "'";
 const COLS = ["rowid", "title", "artist", "k", "year", "duo", "explicit", "styles", "languages", "added", "pop", "h"];
 const enc = new TextEncoder();

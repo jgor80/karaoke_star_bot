@@ -1,7 +1,7 @@
 @echo off
 setlocal
 rem Keeps the karaoke stats site live: starts a background sync at every
-rem sign-in that uploads each new KaraFun song within seconds.
+rem sign-in that uploads each new karaoke song within seconds.
 rem Put this file next to karaoke_sync.py and karaoke_sync_config.json.
 
 set "SCRIPT=%~dp0karaoke_sync.py"
@@ -51,7 +51,7 @@ if errorlevel 1 (
 
 echo.
 echo Done. The live sync is running now and starts by itself every time you sign in.
-echo New songs reach the website within about 10 seconds while KaraFun is open.
+echo New songs reach the website within about 10 seconds while the karaoke app is open.
 echo The crowd meter listens to this laptop's mic during karaoke (loudness numbers only).
 echo For honest readings, turn off audio enhancements for the mic: Settings, System, Sound,
 echo your microphone, Audio enhancements: Off. See the README for more.
