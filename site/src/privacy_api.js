@@ -140,10 +140,15 @@ export async function sweepErased(env, venue) {
   await relabelColumn(env, venue, list, "reactions", "singer", null, since).catch(() => {});
 }
 
-// Once a day (the cron calls it every minute; it only does work in one minute of the day).
+// Once a day (the cron calls it every minute). It runs in the first minute of 11:00-11:59 UTC (5 or 6am in
+// Chicago, after any night) that finds it hasn't run yet today, so one failed or skipped minute doesn't lose the day.
 export async function dailyCleanup(env, when = Date.now()) {
   const d = new Date(when);
-  if (d.getUTCHours() !== 11 || d.getUTCMinutes() !== 7) return false; // 5 or 6am in Chicago, after any night
+  if (d.getUTCHours() !== 11) return false;
+  const day = d.toISOString().slice(0, 10);
+  const last = await env.DB.prepare("SELECT v FROM host_config WHERE k = 'cleanup_day'").first().catch(() => null);
+  if (last && last.v === day) return false;
+  await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES ('cleanup_day', ?)").bind(day).run();
   const now = Math.floor(when / 1000), cut = now - RETAIN_DAYS * 86400, leadCut = now - LEAD_DAYS * 86400;
   const stmts = [
     // Reactions are counted as "how many phones" per song (count DISTINCT device_id), so each phone's ID is
@@ -156,6 +161,9 @@ export async function dailyCleanup(env, when = Date.now()) {
     ["UPDATE song_request_asks SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
     ["UPDATE duets SET device_id = '', partner_device = NULL, ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL OR partner_device IS NOT NULL)", cut],
     ["DELETE FROM leads WHERE created_at < ?", leadCut],
+    ["UPDATE leads SET ip_hash = NULL WHERE created_at < ? AND ip_hash IS NOT NULL", cut],
+    // Song requests stay counted, but the typed "from" names go once a request is 90 days old.
+    ["UPDATE song_requests SET names = NULL WHERE updated_at < ? AND names IS NOT NULL", cut],
   ];
   // One at a time: a table that doesn't exist yet (nothing ever posted to it) shouldn't stop the rest.
   for (const [sql, v] of stmts) await env.DB.prepare(sql).bind(v).run().catch(() => {});
