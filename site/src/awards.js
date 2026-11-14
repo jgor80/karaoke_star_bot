@@ -106,10 +106,17 @@
 
   // The host runs the show and is on the mic all night, so they never win the volume awards
   // (most songs, most mic time, most nights). Set from /api/plays "host"; empty means no host known.
+  // Matched loosely, like the site's name merging (fun.js canonicalize), so "Bleacher Jeff (fin)",
+  // "bleacherjeff", "Vincent Vega (Bleacher Jeff)" and accented spellings are still the host even when
+  // fun.js didn't load and names weren't merged first.
   let HOST = "";
-  const norm = (s) => key(String(s || "").replace(/\s+/g, " "));
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
   function setHost(name) { HOST = norm(name); }
-  function isHost(name) { return !!HOST && norm(name) === HOST; }
+  function isHost(name) {
+    if (!HOST || !name) return false;
+    const s = String(name), paren = /\(([^)]+)\)/.exec(s);
+    return norm(s) === HOST || norm(s.replace(/\([^)]*\)/g, " ")) === HOST || (!!paren && norm(paren[1]) === HOST);
+  }
 
   function groupSize(name) {
     const n = key(name);
