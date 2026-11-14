@@ -2,11 +2,11 @@ import { listSongById } from "./songbook_api.js";
 // Album covers for songs:
 //   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
-// KaraFun's catalog has no artwork, so covers come from free music search APIs: Apple's iTunes Search
-// API first, then Deezer, then MusicBrainz + the Cover Art Archive (catches songs Deezer lacks, like Kate Bush). Each song is looked up once, the first time a phone shows it, and the
-// answer (including "no cover") is saved in D1 table song_art. The image itself is fetched once and
-// served from okenight.com out of Cloudflare's cache (30 days, refetched if Cloudflare drops it), so
-// phones never talk to Deezer, Apple or the Cover Art Archive and a full bar costs them one download.
+// The song catalog has no artwork, so covers come from Apple's iTunes Search API (ART_SOURCES in
+// wrangler.toml; the Deezer and Cover Art Archive lookups below are switched off). Each song is looked up
+// once and the answer (including "no cover") is saved in D1 table song_art. The image itself is served
+// from okenight.com out of Cloudflare's cache for a few days (refetched after that), so phones never talk
+// to Apple directly, and every cover links back to Apple Music (see handleListen).
 // Only the cover's address is stored permanently, not the image: a cache is the low-risk way to reuse
 // cover art we don't own a license for.
 //
@@ -27,6 +27,8 @@ let ready = null;
 function ensureTable(env) {
   if (!ready) ready = env.DB.prepare(TABLE).run()
     .then(() => env.DB.prepare(ADD_LINK).run().catch(() => {})) // fails harmlessly once the column exists
+    // Forget covers saved from sources that are switched off (e.g. Deezer before Apple-only); they get looked up again.
+    .then(() => env.DB.prepare("DELETE FROM song_art WHERE url IS NOT NULL AND src NOT IN (SELECT value FROM json_each(?))").bind(JSON.stringify(artSources(env))).run().catch(() => {}))
     .catch((e) => { ready = null; throw e; });
   return ready;
 }
@@ -135,7 +137,10 @@ function artSources(env) {
   return list.length ? list : ["itunes"];
 }
 
-const IMAGE_TTL_S = 30 * 86400;
+// Covers are a short-lived cache, never an archive: Cloudflare keeps a copy up to 3 days, phones up to 1 day,
+// and both check back with Apple after that.
+const IMAGE_TTL_S = 3 * 86400;
+const BROWSER_TTL_S = 86400;
 const MAX_IMAGE_BYTES = 1024 * 1024;
 const redirect = (to, maxAge) => new Response(null, { status: 302, headers: { location: to, "cache-control": "public, max-age=" + maxAge } });
 const none = (status, maxAge) => new Response(null, { status, headers: { "cache-control": "public, max-age=" + maxAge } });
@@ -149,7 +154,7 @@ async function image(to) {
     if (r.ok && /^image\//.test(type)) {
       const body = await r.arrayBuffer();
       if (body.byteLength > 0 && body.byteLength <= MAX_IMAGE_BYTES) {
-        return new Response(body, { headers: { "content-type": type, "cache-control": "public, max-age=" + IMAGE_TTL_S + ", immutable", "x-content-type-options": "nosniff" } });
+        return new Response(body, { headers: { "content-type": type, "cache-control": "public, max-age=" + BROWSER_TTL_S, "x-content-type-options": "nosniff" } });
       }
     }
   } catch (e) {}
