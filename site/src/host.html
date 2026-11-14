@@ -529,7 +529,7 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     const mins = Math.round((Date.now() / 1000 - h.ts) / 60);
     const ok = mins <= 15;
     p.textContent = (ok ? "🟢 Online" : "🔴 Offline") + " · last check-in " + (mins < 1 ? "just now" : mins < 120 ? mins + " min ago" : when(h.ts)) +
-      (h.karafun === true ? " · karaoke app open" : h.karafun === false ? " · karaoke app closed" : "") +
+      (h.app_open === true ? " · karaoke app open" : h.app_open === false ? " · karaoke app closed" : "") +
       (h.up_to_date === true ? " · sync up to date" : h.up_to_date === false ? (h.version ? " · sync updating (it checks every 30 min between nights)" : " · old sync: copy the new karaoke_sync.py to the laptop once, and it updates itself after that") : "");
   }
   let ownerTopic = null;

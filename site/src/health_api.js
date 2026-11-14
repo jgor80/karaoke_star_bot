@@ -1,6 +1,6 @@
 // Laptop health: the host's "is the laptop ready?" alerts, and which copy of the sync script the laptop runs.
 //
-// syncHealth(env, venue)      -> {sync_health: {ts, version, current, up_to_date, karafun, device}} for /host
+// syncHealth(env, venue)      -> {sync_health: {ts, version, current, up_to_date, app_open, device}} for /host
 // checkSyncAlerts(env, venue) -> cron: push the host if the laptop or the karaoke app isn't ready before (or during) a night
 //
 // The laptop writes one row per bar to sync_health on every heartbeat (every 5 minutes, and after each song),
@@ -44,7 +44,7 @@ export async function syncHealth(env, venue) {
     const { row, ts } = await lastBeat(env, venue);
     const current = await currentVersion();
     return { sync_health: { ts: ts || null, version: row ? row.version : null, current, up_to_date: current ? !!row && row.version === current : null,
-      karafun: row && row.karafun != null ? !!row.karafun : null, device: row ? row.device : null } };
+      app_open: row && row.karafun != null ? !!row.karafun : null, device: row ? row.device : null } };
   } catch (e) { return { sync_health: null }; }
 }
 
