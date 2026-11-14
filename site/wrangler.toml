@@ -21,6 +21,9 @@ crons = ["* * * * *"]
 [vars]
 ART_SOURCES = "itunes"
 
+# Secrets (set in the Cloudflare dashboard, never in this file): HOST_SETUP_CODE, ANTHROPIC_API_KEY,
+# IP_SALT (any long random text; keeps rate-limit network hashes from being reversed, see src/net.js).
+
 [[d1_databases]]
 binding = "DB"
 database_name = "karaoke-stats"

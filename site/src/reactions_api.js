@@ -9,6 +9,7 @@
 export const REACTION_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange", "cringe", "offkey", "tomato", "snooze"];
 const KEYS = new Set(REACTION_KEYS);
 import { DEFAULT_VENUE, ensureVenueColumn } from "./venues.js";
+import { networkHash } from "./net.js";
 
 export const LIMITS = {
   burst: 8, burstWindowS: 10,     // one phone: at most 8 taps in 10 seconds
@@ -70,8 +71,7 @@ export async function handleReact(req, env, venue = DEFAULT_VENUE) {
 
   await ensureTable(env);
   const now = Math.floor(Date.now() / 1000);
-  const ip = req.headers.get("cf-connecting-ip") || "";
-  const ipHash = ip ? (await sha("oke-night|" + ip + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24) : null;
+  const ipHash = await networkHash(env, req, "react", new Date().toISOString().slice(0, 10));
   const pl = await env.DB.prepare("SELECT uuid, night, singer, played_at, length_s FROM plays WHERE uuid = ?1 AND venue = ?2").bind(play, venue.slug).all();
   const p = pl.results[0];
   if (!p) return json({ error: "Unknown song" }, 404);

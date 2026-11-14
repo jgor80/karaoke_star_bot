@@ -16,6 +16,7 @@ import { scheduleStatus, SCHEDULE } from "./schedule.js";
 import { cleanName } from "./reactions_api.js";
 import { listSongById } from "./songbook_api.js";
 import { DEFAULT_VENUE, cfgKey, ensureVenueColumn } from "./venues.js";
+import { networkHash } from "./net.js";
 
 export const LIMITS = {
   picksPerPhone: 3,     // drafts one phone can make per night
@@ -130,8 +131,7 @@ export async function handleDraft(req, env, venue = DEFAULT_VENUE) {
 
   await ensure(env);
   const now = nowS(), night = draftNight(now, venue);
-  const ip = req.headers.get("cf-connecting-ip") || "";
-  const ipHash = ip ? (await sha("oke-night|" + ip + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24) : null;
+  const ipHash = await networkHash(env, req, "draft", new Date().toISOString().slice(0, 10));
 
   if (body.action === "vote" || body.action === "unvote") {
     const id = Number(body.id) || 0;
