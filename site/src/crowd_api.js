@@ -113,7 +113,7 @@ export async function publicCrowd(env, venue = DEFAULT_VENUE) {
 // The /host phone's mic: a batch of per-second levels every ~10 seconds.
 export async function handleCrowd(req, env, venue = DEFAULT_VENUE) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  if (!(await isHost(env, req.headers.get("x-host-key"), venue))) { await new Promise((r) => setTimeout(r, 400)); return json({ error: "Wrong host key." }, 403); }
+  if (!(await isHost(env, req.headers.get("x-host-key"), venue, req))) return json({ error: "Wrong host key." }, 403);
   let body; try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const t = now();
   const samples = (Array.isArray(body.samples) ? body.samples : []).slice(0, 120)
