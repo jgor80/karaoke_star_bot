@@ -1,6 +1,6 @@
 import { listSongById } from "./songbook_api.js";
 // Album covers for songs:
-//   GET /api/art?id=<KaraFun song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
+//   GET /api/art?id=<the app's song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
 // The song catalog has no artwork, so covers come from Apple's iTunes Search API (ART_SOURCES in
 // wrangler.toml; the Deezer and Cover Art Archive lookups below are switched off). Each song is looked up
@@ -12,7 +12,7 @@ import { listSongById } from "./songbook_api.js";
 //
 // Visitors only send a song id and a title; the artist and title we search for come from our own
 // catalog/plays tables, so the endpoint can't be used to make arbitrary lookups. t is there because
-// KaraFun community songs share the id space with catalog songs: it picks the right one.
+// Community songs share the id space with catalog songs: it picks the right one.
 
 const TABLE =
   "CREATE TABLE IF NOT EXISTS song_art (id integer not null, tk text not null, url text, src text," +
@@ -39,7 +39,7 @@ export const norm = (s) =>
 
 // Drop "(Live)", "[Remastered]", "- Radio Edit" and featured artists so the search finds the original.
 const plainTitle = (t) => String(t || "").replace(/\s*[([].*?[)\]]/g, "").replace(/\s+-\s+.*$/, "").trim() || String(t || "");
-// KaraFun credits soundtrack songs like "A Star is Born (2018 film) (Lady Gaga & Bradley Cooper)":
+// The catalog credits soundtrack songs like "A Star is Born (2018 film) (Lady Gaga & Bradley Cooper)":
 // the singers are in the last brackets, so search for them.
 const searchArtist = (a) => { const m = String(a || "").match(/\(([^()]+)\)\s*$/); return m && !/\b(film|movie|musical|soundtrack|tv|series|version)\b/i.test(m[1]) ? m[1] : String(a || "").replace(/\s*\(.*?\)/g, "").trim() || String(a || ""); };
 const mainArtist = (a) => String(searchArtist(a)).split(/\s+(?:feat\.?|ft\.?|featuring|vs\.?)\s+|\s*[,&/;]\s*|\s+and\s+/i)[0].trim() || String(a || "");

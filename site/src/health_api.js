@@ -38,7 +38,7 @@ async function lastBeat(env, venue) {
   return { row, ts: Math.max(row ? Number(row.ts) : 0, runTs) };
 }
 
-// For the host page: is the laptop checking in, is KaraFun open, and is it on the newest script?
+// For the host page: is the laptop checking in, is the karaoke app open, and is it on the newest script?
 export async function syncHealth(env, venue) {
   try {
     const { row, ts } = await lastBeat(env, venue);
@@ -72,7 +72,7 @@ const sentFor = async (env, venue, kind, start) => {
 
 // Every minute from 30 minutes before the night. Alerts the host's phone (the same ntfy topic as secret songs):
 // - "offline": no heartbeat from the laptop for 15 minutes (laptop off, asleep, no wifi, or the sync isn't running)
-// - "karafun": the laptop is checking in but KaraFun isn't open, from 15 minutes before the start
+// - "karafun": the laptop is checking in but the karaoke app isn't open, from 15 minutes before the start
 // - "back": the laptop came back after an "offline" alert
 // During the night it only keeps watching while songs are still coming, so packing up at 1am doesn't page anyone.
 export async function checkSyncAlerts(env, venue, nowTs = Math.floor(Date.now() / 1000)) {

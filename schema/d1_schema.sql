@@ -3,7 +3,7 @@
 -- (sync/karaoke_sync.py) uploads plays here; the site reads from it.
 
 CREATE TABLE plays (
-  uuid text primary key,          -- KaraFun's id for this play
+  uuid text primary key,          -- the karaoke app's id for this play
   played_at integer not null,     -- unix seconds (UTC)
   played_at_local text,
   night text,                     -- karaoke night, 6am to 6am local
@@ -30,7 +30,7 @@ CREATE TABLE sessions (session_start integer primary key, session_end integer, n
 
 CREATE TABLE sync_runs (ran_at text primary key, device text, source_rows integer, uploaded integer);
 
--- KaraFun's song queue, so the phone site can show how many are waiting and the rough wait.
+-- The karaoke app's song queue, so the phone site can show how many are waiting and the rough wait.
 -- One row (id = 1) replaced by sync/karaoke_sync.py whenever the queue changes; the Worker also
 -- creates the table itself (site/src/worker.js). items is JSON: [{id: song id, singer, len: seconds}],
 -- in queue order, with the song on the mic first once it has started.
@@ -73,9 +73,9 @@ CREATE TABLE IF NOT EXISTS secret_songs (
 -- key_salt + key_hash (sha256 of the host key), ntfy_topic (random, for push alerts)
 CREATE TABLE IF NOT EXISTS host_config (k text primary key, v text not null);
 
--- KaraFun's song catalog for the site's Songbook (GET /api/catalog, site/src/catalog_api.js).
--- The Worker's cron downloads KaraFun's published CSV weekly and creates/updates these itself
--- (site/src/catalog_import.js). rowid = KaraFun song id (= plays.song_id); pop = popularity rank
+-- The karaoke app's song catalog for the site's Songbook (GET /api/catalog, site/src/catalog_api.js).
+-- The Worker's cron downloads the app's published CSV weekly and creates/updates these itself
+-- (site/src/catalog_import.js). rowid = the app's song id (= plays.song_id); pop = popularity rank
 -- (1 = top); h = hash of what was sent, so refreshes only rewrite changed songs.
 -- k = title + artist without apostrophes, dots and slashes, so "dont stop" finds "Don't Stop Believin'".
 CREATE VIRTUAL TABLE IF NOT EXISTS catalog USING fts5(title, artist, k, year UNINDEXED, duo UNINDEXED,
@@ -90,7 +90,7 @@ CREATE INDEX IF NOT EXISTS artist_voice_todo ON artist_voice (voice, pop);
 CREATE INDEX IF NOT EXISTS artist_voice_v ON artist_voice (voice, artist);
 CREATE TABLE IF NOT EXISTS mb_person (nk text primary key, kind text, gender text, checked integer);  -- MusicBrainz answer by normalized name
 
--- Crowd draft (POST /api/draft): the crowd drafts someone who has sung here to sing a KaraFun song,
+-- Crowd draft (POST /api/draft): the crowd drafts someone who has sung here to sing a song from the catalog,
 -- and seconds the picks they like. The Worker creates these tables itself (site/src/drafts_api.js).
 -- night is the karaoke night the pick is for; device_id/ip_hash are only for rate limits and never returned.
 -- Blocked singers (host page) live in host_config k = 'draft_blocked' as a JSON list of lowercase names.

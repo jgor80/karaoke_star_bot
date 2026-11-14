@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Sets up a daily task that copies KaraFun history into
+rem Sets up a daily task that copies karaoke app history into
 rem Documents\KaraokeStats\karaoke_stats.db, then runs it once now.
 
 set "SCRIPT=%~dp0karaoke_sync.py"

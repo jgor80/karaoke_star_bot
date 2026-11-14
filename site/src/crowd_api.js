@@ -1,7 +1,7 @@
 // Crowd meter: how loud the room cheers after each song.
 //
 // Loudness samples (one a second, in dBFS, never audio) come from two places:
-//   src "laptop": sync/karaoke_sync.py --watch reads the KaraFun laptop's mic and writes straight to D1.
+//   src "laptop": sync/karaoke_sync.py --watch reads the karaoke laptop's mic and writes straight to D1.
 //   src "phone":  okenight.com/host on a phone at the host table (browser mic), POST /api/crowd.
 // Songs are drowned out by the PA, so only the applause after each song is scored: the loudest
 // 3 seconds just after the song ends, minus the room's normal chatter (the quiet floor of the last 15 minutes).
