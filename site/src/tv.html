@@ -140,6 +140,13 @@ body.awake .fs { opacity: 1; pointer-events: auto; }
 @media (prefers-reduced-motion: no-preference) { .secret-tv .st-in { animation: stpop .6s cubic-bezier(.2, 1.6, .4, 1); } }
 @keyframes stpop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 /* crowd meter: a banner with the applause score after each song */
+.welcome-tv { position: fixed; left: 50%; top: calc(3 * var(--u)); z-index: 25; transform: translateX(-50%); background: var(--hot); color: #1a0710; border-radius: calc(3 * var(--u));
+  padding: calc(2.5 * var(--u)) calc(5 * var(--u)); text-align: center; display: grid; gap: calc(.8 * var(--u)); max-width: 86vw; box-shadow: 0 0 calc(8 * var(--u)) rgba(255, 61, 127, .5); }
+.welcome-tv .wl-k { font-family: var(--f-mono); font-size: calc(2 * var(--u)); letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+.welcome-tv .wl-who { font-family: var(--f-display); font-size: calc(6.5 * var(--u)); line-height: 1.05; overflow-wrap: anywhere; }
+.welcome-tv .wl-sub { font-size: calc(3 * var(--u)); font-weight: 700; }
+@keyframes wlpop { from { opacity: 0; transform: translateX(-50%) scale(.6); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+@media (prefers-reduced-motion: no-preference) { .welcome-tv:not([hidden]) { animation: wlpop .6s cubic-bezier(.2, 1.6, .4, 1); } }
 .clap-tv { position: fixed; left: 50%; bottom: calc(4 * var(--u)); z-index: 20; transform: translateX(-50%); background: var(--panel); border: 3px solid var(--gold);
   border-radius: calc(2.4 * var(--u)); padding: calc(1.8 * var(--u)) calc(3.4 * var(--u)); display: grid; gap: calc(1 * var(--u)); min-width: 44vw; max-width: 80vw;
   box-shadow: 0 0 calc(6 * var(--u)) rgba(245, 184, 74, .35); }
@@ -177,6 +184,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 <div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
 <div class="secret-tv" id="secret-tv" hidden role="alert"><div class="st-in"><div class="st-big">🤫 Secret song found!</div><div class="st-who" id="st-who"></div><div class="st-rw" id="st-rw"></div></div></div>
 <div class="clap-tv" id="clap-tv" hidden role="status"><div class="ct-k">👏 Crowd meter</div><div class="ct-top"><div class="ct-who" id="ct-who"></div><div class="ct-n" id="ct-n"></div></div><div class="ct-bar"><i id="ct-bar"></i></div></div>
+<div class="welcome-tv" id="welcome-tv" hidden role="status"><div class="wl-k">🎉 First time on the Oke Night mic</div><div class="wl-who" id="wl-who"></div><div class="wl-sub">Make some noise!</div></div>
 <button class="fs" id="fs" type="button" hidden>⛶ Full screen</button>
 
 <script src="/fun.js"></script>
@@ -265,9 +273,18 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       drafts = data.drafts.map((d) => ({ name: d.singer, sub: "“" + d.title + "”" + (d.artist ? " · " + d.artist : ""), votes: d.votes, done: done.has(d.id) }))
         .sort((a, b) => b.done - a.done || b.votes - a.votes).slice(0, 8);
     }
+    // Duet finder: who's looking for a partner, and the matches (latest night only).
+    const duets = isLatest && !PIN && Array.isArray(data.duets) ? data.duets.slice(0, 8).map((d) => ({ name: d.partner ? d.by + " + " + d.partner : d.by,
+      sub: "“" + d.title + "”" + (d.artist ? " · " + d.artist : ""), matched: !!d.partner })).sort((a, b) => a.matched - b.matched) : [];
+    // First-timer welcome: the song on the mic is someone's first song here.
+    let welcome = null;
+    if (people && live && now() - last.played_at < 4 * 60) {
+      const names = []; people.forEach((e) => { if (e.rows[0] === last) names.push(e.name); });
+      if (names.length) welcome = { uuid: last.uuid, names };
+    }
     const draftLabel = data.draft_night && data.draft_night !== night ? "Drafted for next karaoke" : "Crowd draft";
     return { night, missing, live, tonight, isLatest, tally: OkeAwards.tallyFor(rows), awards, badges, nBadges: [...groups.values()].reduce((a, g) => a + g.who.length, 0),
-      singers, songs, artists, decades, hours, dares, reactions, topReacted, drafts, draftLabel, current: singing ? last.uuid : null, schedule: data.schedule || null };
+      singers, songs, artists, decades, hours, dares, reactions, topReacted, drafts, draftLabel, duets, welcome, current: singing ? last.uuid : null, schedule: data.schedule || null };
   }
 
   // ---------- render ----------
@@ -318,6 +335,10 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const h1 = el("h2", null, v.tonight ? "Tonight's awards" : "The awards"); h1.append(el("small", null, plural(v.awards.length, "winner")));
     const g1 = el("div", "grid"); v.awards.forEach((a) => g1.append(awardCard(a)));
     if (v.awards.length) box.append(h1, g1);
+    if (v.duets.length) {
+      box.append(heading("Duet finder", "Find a partner at " + SHOW_URL));
+      box.append(twoCols(v.duets, (e) => e.sub, (e) => (e.matched ? "🤝 Matched" : "🎤 Needs a partner")));
+    }
     if (v.drafts.length) {
       box.append(heading(v.draftLabel, "Draft someone at " + SHOW_URL));
       box.append(twoCols(v.drafts, (e) => e.sub, (e) => (e.done ? "✅ Sung!" : "👍 " + e.votes)));
@@ -423,10 +444,11 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       const v = build(data);
       if (!v) { $("title").textContent = "No karaoke nights yet"; return setStatus(""); }
-      const sig = JSON.stringify(v); // only redraw when something on screen would change, so the scroll doesn't jump
+      const sig = JSON.stringify({ ...v, welcome: null }); // only redraw when something on screen would change, so the scroll doesn't jump
       if (sig !== lastView) { lastView = sig; render(v); }
       watchRx(v.current);
       secretMoment(data);
+      welcomeMoment(v);
       crowdMoment(data);
       // Same rule as the phone page: during the session, no word from the karaoke laptop for 15 minutes.
       const sc = data.schedule && data.schedule.status, sync = Number(data.last_sync_ts) || 0, quiet = sync ? Math.floor((now() - sync) / 60) : 0;
@@ -453,6 +475,19 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     $("st-rw").textContent = s.reward ? "🎁 " + s.reward : "";
     $("secret-tv").hidden = false; clearTimeout(secretT);
     secretT = setTimeout(() => { $("secret-tv").hidden = true; }, 20000);
+  }
+
+  // ---------- first-timer welcome ----------
+  // Someone's first song here: a banner across the top for 15 seconds, once per song per TV.
+  const welcomed = new Set(); let welcomeT = 0;
+  function welcomeMoment(v) {
+    const w = v.welcome;
+    if (!w || welcomed.has(w.uuid)) return;
+    welcomed.add(w.uuid);
+    const names = w.names.length > 1 ? w.names.slice(0, -1).join(", ") + " and " + w.names[w.names.length - 1] : w.names[0];
+    $("wl-who").textContent = "Welcome, " + names + "!";
+    $("welcome-tv").hidden = false; clearTimeout(welcomeT);
+    welcomeT = setTimeout(() => { $("welcome-tv").hidden = true; }, 15000);
   }
 
   // ---------- crowd meter ----------

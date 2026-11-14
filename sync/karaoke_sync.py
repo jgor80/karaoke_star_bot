@@ -30,9 +30,19 @@ Config keys (optional): "venue" (the bar's slug on okenight.com, default "wbl": 
 the crowd mic and requests are all filed under it); "auto_file": false turns it off; "downloads_dir" (default ~/Downloads);
 "karaoke_dir" (default ~/Music/Karaoke Songs), the folder your karaoke player reads local songs from.
 
+Updates itself: with --watch it checks the project's GitHub repo every 30 minutes (only while no karaoke is going on)
+for a newer copy of this script, checks it, swaps it in (the old one is kept as karaoke_sync.prev.py) and
+restarts. The daily run checks too. Config keys (optional): "auto_update": false turns it off;
+"update_url" (default: sync/karaoke_sync.py on main in github.com/jgor80/karaoke_star_bot).
+
+Health: each heartbeat also tells the site whether KaraFun is open and which version of this script runs,
+so the host gets a phone alert before the night if the laptop or KaraFun isn't ready (site/src/health_api.js).
+
 Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
 """
 import argparse
+import hashlib
+import subprocess
 import json
 import re
 import unicodedata
@@ -57,8 +67,13 @@ DEFAULT_TARGET = os.path.join(os.path.expanduser("~"), "Documents", "KaraokeStat
 DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "karaoke_sync_config.json")
 NIGHT_CUTOFF_HOURS = 6  # songs before 6am count toward the previous night
 WATCH_POLL_S = 5          # how often --watch looks at KaraFun's database files
-WATCH_HEARTBEAT_S = 600   # with no changes, still sync this often so the site knows we're alive
+WATCH_HEARTBEAT_S = 300   # with no changes, still sync this often so the site knows we're alive
 WATCH_LOCK_PORT = 47913   # a local port held while --watch runs, so only one copy runs
+
+# The newest copy of this file: main in the public GitHub repo (it deploys the site at the same time).
+UPDATE_URL = "https://raw.githubusercontent.com/jgor80/karaoke_star_bot/main/sync/karaoke_sync.py"
+UPDATE_EVERY_S = 30 * 60  # --watch checks for a new version this often (never during karaoke)
+SCRIPT_PATH = os.path.abspath(__file__)
 
 # Crowd meter (see crowd_meter below). Keep CROWD_TABLE in sync with site/src/crowd_api.js.
 CROWD_TABLE = ("create table if not exists crowd_levels (ts integer not null, src text not null,"
@@ -373,6 +388,94 @@ def upload_queue(cfg, queue):
 karaoke_state = {"newest_play": 0, "queue_len": 0}
 
 
+def script_hash(path=SCRIPT_PATH):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def karafun_running():
+    """True/False when we can tell whether KaraFun is open (Windows), None otherwise."""
+    if os.name != "nt":
+        return None
+    try:
+        out = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, timeout=15,
+                             creationflags=0x08000000).stdout  # CREATE_NO_WINDOW: no console flash
+        return "karafun" in out.lower()
+    except Exception:
+        return None
+
+
+_health_ready = False
+
+
+def send_health(cfg):
+    """One row per bar in D1 sync_health: when this laptop last checked in, whether KaraFun is open, and
+    which copy of this script it runs. The site uses it for the host's pre-show alert and the /host status."""
+    global _health_ready
+    if not _health_ready:
+        d1_query(cfg, "create table if not exists sync_health (venue text primary key, ts integer not null,"
+                 " version text, karafun integer, device text)", [])
+        _health_ready = True
+    kf = karafun_running()
+    d1_query(cfg, "insert or replace into sync_health (venue, ts, version, karafun, device) values (?, ?, ?, ?, ?)",
+             [venue_of(cfg), int(time.time()), script_hash()[:12], None if kf is None else int(kf),
+              os.environ.get("COMPUTERNAME", "")])
+
+
+def fetch(url, timeout=60):
+    req = urllib.request.Request(url, headers={"User-Agent": "oke-night-sync"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def check_update(cfg, log):
+    """Swap in a newer copy of this script. Returns True when the file on disk changed.
+    The new copy must compile and still be this script; the old one is kept
+    next to it as karaoke_sync.prev.py so it can be put back by hand."""
+    if cfg.get("auto_update") is False:
+        return False
+    url = str(cfg.get("update_url") or UPDATE_URL)
+    try:
+        body = fetch(url)
+        want = hashlib.sha256(body).hexdigest()
+        if want == script_hash():
+            return False
+        text = body.decode("utf-8")
+        if "def watch(" not in text or "def check_update(" not in text:
+            raise RuntimeError("download doesn't look like the sync script")
+        compile(text, SCRIPT_PATH, "exec")
+        folder = os.path.dirname(SCRIPT_PATH)
+        tmp = os.path.join(folder, "karaoke_sync.new.py")
+        with open(tmp, "wb") as f:
+            f.write(body)
+        shutil.copy2(SCRIPT_PATH, os.path.join(folder, "karaoke_sync.prev.py"))
+        os.replace(tmp, SCRIPT_PATH)
+        write_log(log, f"update: installed new version {want[:12]}")
+        return True
+    except Exception as e:
+        write_log(log, f"update: skipped ({e})")
+        return False
+
+
+def restart(lock):
+    """Start a fresh copy of the (updated) script with the same arguments, then end this one."""
+    try:
+        lock.close()  # free the single-instance port for the new copy
+    except OSError:
+        pass
+    flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, SCRIPT_PATH] + sys.argv[1:], creationflags=flags, close_fds=True,
+                     cwd=os.path.dirname(SCRIPT_PATH))
+    os._exit(0)
+
+
+def load_cfg(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def run_once(a):
     """One sync (and upload, when configured). Returns (ok, message)."""
     try:
@@ -399,6 +502,10 @@ def run_once(a):
                 upload_error = e
             if queue is not None and upload_queue(cfg, queue):
                 msg += f", queue now {len(queue)}"
+            try:
+                send_health(cfg)
+            except Exception:
+                pass  # the site still sees sync_runs; health is extra
             if upload_error is not None:
                 raise upload_error
         return True, msg
@@ -707,7 +814,14 @@ def watch(a, log):
     threading.Thread(target=crowd_meter, args=(a, log), daemon=True).start()
     threading.Thread(target=request_filer, args=(a, log), daemon=True).start()
     last_stamp, last_sync, failures = None, 0.0, 0
+    last_update = time.monotonic() - UPDATE_EVERY_S + 120  # first check 2 minutes after starting
     while True:
+        if time.monotonic() - last_update >= UPDATE_EVERY_S and not crowd_active():
+            last_update = time.monotonic()
+            cfg = load_cfg(a.config)
+            if cfg and check_update(cfg, log):
+                write_log(log, "watch: restarting with the new version")
+                restart(lock)
         stamp = source_stamp(a.source)
         due = time.monotonic() - last_sync >= WATCH_HEARTBEAT_S
         if stamp != last_stamp or due or failures:
@@ -740,6 +854,9 @@ def main():
         sys.exit(watch(a, log))
     ok, msg = run_once(a)
     write_log(log, msg)
+    cfg = load_cfg(a.config)
+    if cfg:
+        check_update(cfg, log)  # the next run (and the next --watch start) uses the new copy
     sys.exit(0 if ok else 1)
 
 

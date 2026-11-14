@@ -455,6 +455,13 @@ nav.tabs button[aria-selected="true"] svg { background: var(--hot-soft); border-
 nav.tabs button:active svg, .act:active, .seg button:active, .chip:active { transform: scale(.96); }
 button:focus-visible, summary:focus-visible, .search:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
+.league-link { display: block; text-align: center; text-decoration: none; margin-top: 12px; }
+/* song ideas (picker.js) */
+.pk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pk-head h2 { margin: 0; }
+.pk-again { padding: 7px 12px; font-size: 14px; }
+.pk-body { display: grid; gap: 12px; }
+.pk-group .list { margin-top: 6px; }
 /* crowd draft */
 .dr-go { justify-self: start; }
 .dr-msg:empty { display: none; }
@@ -595,6 +602,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
     </button>
     <div class="sec" id="draft"></div>
+    <div class="sec" id="duets"></div>
     <p class="hint" id="no-songs" hidden>No songs yet. The first song of the night shows up here.</p>
     <div class="sec night-sec">
       <h2 id="dares-h">Tonight's dares</h2>
@@ -621,6 +629,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
   <!-- SONGBOOK -->
   <section class="panel" id="p-songs" role="tabpanel" aria-labelledby="t-songs">
+    <section class="sec pk" id="picker" aria-label="Song ideas"></section>
     <div class="seg" role="tablist" aria-label="Songbook view" data-seg="sg">
       <button type="button" role="tab" aria-selected="true" data-sub="sg-find" id="sg-find-btn">Find a song</button>
       <button type="button" role="tab" aria-selected="false" data-sub="sg-mine" id="sg-mine-btn">My list</button>
@@ -696,6 +705,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <h2>Hall of fame</h2>
       <div class="records" id="records"></div>
     </div>
+    <a class="act ghost league-link" href="/league">🏆 This month’s Oke Night League</a>
     </div>
     <div class="sub" id="rec-badges">
     <div class="sec">
@@ -780,6 +790,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <script src="/songs.js"></script>
 <script src="/drafts.js"></script>
 <script src="/art.js"></script>
+<script src="/duets.js"></script>
+<script src="/picker.js"></script>
 <script>
 (function () {
   const REFRESH_MS = 30000;
@@ -1554,13 +1566,28 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     getName: reactName,
     setName: (n) => store.set(NAME_KEY, clean(n).slice(0, 24)),
   }) : null;
+  // Duet finder: post a duet you want to sing, or join someone's (duets.js). The board rides along on /api/plays.
+  const duets = window.OkeDuets ? OkeDuets.mount({
+    box: $("duets"), deviceId,
+    getName: reactName,
+    setName: (n) => store.set(NAME_KEY, clean(n).slice(0, 24)),
+  }) : null;
+  // "What should I sing?" ideas on the Songbook tab (picker.js).
+  const picker = window.OkePicker ? OkePicker.mount({
+    box: $("picker"),
+    getPlays: () => plays,
+    getReax: () => reax.bySong,
+    getCrowd: () => [...reax.crowd.entries()].map(([play, c]) => ({ play, db: c.db })),
+    getMe: () => { const k = getMe(); return (k && people.get(k)) || null; },
+    onAdded: () => { if (songbook && songbook.reload) songbook.reload(); },
+  }) : null;
   let bingo = null;
   function renderBingo() {
     if (!window.KaraokeBingo) return;
     if (!bingo) bingo = KaraokeBingo.mount($("bingo"), { getRows: async () => plays, onStatus: () => {} });
     bingo.refresh();
   }
-  function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); }
+  function renderAll() { renderTonight(); renderAwards(); renderBingo(); renderSingers(); renderRecords(); renderBadgeBook(); if (songbook) songbook.refresh(); if (picker) picker.refresh(); }
   // The whole history loads once; after that each refresh asks only for the newest night on ("?since="),
   // and the answer replaces that part of what we have. Every 10 minutes it reloads everything, so a fix
   // to an older night (a singer's name corrected in KaraFun, say) still shows up.
@@ -1592,6 +1619,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       queue = data.queue || null;
       if (text !== lastJson) { lastJson = text; load(data); } else renderTonight();
       if (draft) draft.update(data);
+      if (duets) duets.update(data);
       setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);

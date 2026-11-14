@@ -20,7 +20,7 @@
   const songLine = (p) => (p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song");
 
   const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", streak3: "🔥", streak5: "🔥", streak10: "🫁", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
-    duet: "👯", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
+    duet: "👯", plusone: "🫶", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
     mvp: "🎤", dejavu: "🔁", speed: "⚡", time: "🕰️", squad: "👯", open: "🚪", last: "🌙", artist: "🎸", decade: "📼",
     crowd: "👑", loud: "👏", "s-loud": "📢", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
     "b-crowd": "🔥", "b-drop": "🎤", "b-encore": "🔁", "b-tomato": "🍅", "s-crowd": "👑", "s-hype": "📣",

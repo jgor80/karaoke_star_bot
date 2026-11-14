@@ -63,6 +63,26 @@ KaraFun's 200-song history rolled over before a sync could copy it, `sync_log.tx
 During the night, the phone site shows a "stats paused" note when the laptop hasn't
 synced for 15 minutes.
 
+**It updates itself.** The live sync checks `sync/karaoke_sync.py` on `main` every 30 minutes
+(only when no karaoke is going on), checks the new copy compiles, swaps it in (keeping the old
+one as `karaoke_sync.prev.py`) and restarts. The daily run checks too. So a laptop only needs
+the files copied by hand once. Turn it off with `"auto_update": false` in the config.
+
+**Pre-show alert.** Each heartbeat (every 5 minutes) also reports whether the karaoke app is open.
+From 30 minutes before each night, the host's ntfy topic gets a push if the laptop stops checking
+in or the app isn't open, and another when it comes back (`site/src/health_api.js`). `/host` shows
+the laptop's status.
+
+## More pages
+
+- `/<slug>/report`: the bar owner's numbers for a night (songs, singers, first-timers, regulars,
+  busiest hour, applause, compared with the 4 nights before). No song titles or singer names.
+  Pushed to the host, and to an owner topic made on `/host`, at 11am the day after (`report_api.js`).
+- `/league`: a monthly points table across every bar (`league_api.js`, scored in `league.html`).
+- Duet finder on the Tonight tab (`duets.js`, `duets_api.js`), "What should I sing?" on the
+  Songbook tab (`picker.js`), a first-timer welcome banner on `/tv`, and a "Plus One" badge for
+  singing with someone on their first song.
+
 ## Deploying the site
 
 ```

@@ -115,6 +115,8 @@
     { id: "marathon", name: "Marathoner", desc: "Finished a song over 6 minutes", test: (r, i) => r[i].length_s > 360 },
     { id: "sprint", name: "Sprinter", desc: "Sang a song under 2 minutes", test: (r, i) => r[i].length_s && r[i].length_s < 120 },
     { id: "duet", name: "Duet Partner", desc: "Shared the mic with someone", test: (r, i) => isGroup(r[i].singer) },
+    // Brought someone new up: a group song that was someone else's first song here (and not yours).
+    { id: "plusone", name: "Plus One", desc: "Got a first-timer up on the mic with you", test: (r, i, ctx) => i > 0 && isGroup(r[i].singer) && ctx.debutRows.has(r[i]) },
     { id: "broken", name: "Broken Record", desc: "Same song twice in one night", test: (r, i) => r[i].title && r.slice(0, i).some((p) => p.night === r[i].night && key(p.title) === key(r[i].title)) },
     { id: "signature", name: "Signature Song", desc: "Same song on 2 different nights", test: (r, i) => r[i].title && r.slice(0, i).some((p) => p.night !== r[i].night && key(p.title) === key(r[i].title)) },
     { id: "loyal", name: "Superfan", desc: "Same artist 3 times", test: (r, i) => r[i].artist && r.slice(0, i + 1).filter((p) => key(p.artist) === key(r[i].artist)).length >= 3 },
@@ -165,7 +167,8 @@
     const none = {};
     const weeks = [...new Set(plays.map((p) => weekOf(p.night)))].sort((a, b) => a - b);
     const runAt = (r, i) => runEndingAt(weekOf(r[i].night), new Set(r.slice(0, i + 1).map((p) => weekOf(p.night))), weeks);
-    return { firstOf, lastOf, byTitle, liveNight, weeks, runAt, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
+    const debutRows = new Set(); people(plays).forEach((e) => { if (e.rows[0]) debutRows.add(e.rows[0]); }); // someone's first song here
+    return { firstOf, lastOf, byTitle, liveNight, weeks, runAt, debutRows, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
   }
 
   // -> Map(personKey -> {name, rows, badges: [{id, name, desc, at: row}]})

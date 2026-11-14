@@ -65,6 +65,8 @@ export async function eraseSinger(env, body, venue) {
     env.DB.prepare("UPDATE drafts SET by_name = 'Anon' WHERE venue = ? AND lower(by_name) = ?").bind(venue.slug, k),
     env.DB.prepare("UPDATE drafts SET singer = ?, singer_key = ?, removed_at = coalesce(removed_at, ?) WHERE venue = ? AND singer_key = ?")
       .bind(e.as, singerKey(e.as), now, venue.slug, singerKey(name)),
+    env.DB.prepare("UPDATE duets SET by_name = 'Anon' WHERE venue = ? AND lower(by_name) = ?").bind(venue.slug, k),
+    env.DB.prepare("UPDATE duets SET partner = 'Anon' WHERE venue = ? AND lower(partner) = ?").bind(venue.slug, k),
   ]) await st.run().catch(() => {});
   return { ok: true, label: e.as };
 }
@@ -86,6 +88,7 @@ export async function dailyCleanup(env, when = Date.now()) {
     ["UPDATE drafts SET device_id = '', ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL)", cut],
     ["UPDATE draft_votes SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
     ["UPDATE song_request_asks SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
+    ["UPDATE duets SET device_id = '', partner_device = NULL, ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL OR partner_device IS NOT NULL)", cut],
     ["DELETE FROM leads WHERE created_at < ?", leadCut],
   ];
   // One at a time: a table that doesn't exist yet (nothing ever posted to it) shouldn't stop the rest.
