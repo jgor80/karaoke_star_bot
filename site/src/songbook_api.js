@@ -47,10 +47,13 @@ export async function songbookConfig(env, venue = DEFAULT_VENUE) {
 export function forgetSongbookConfig(venue = DEFAULT_VENUE) { memo.delete(venue.slug); }
 
 // {title, artist} for a song id from whichever list it belongs to (null if neither has it).
-export async function listSongById(env, id) {
+// venue (optional): only that bar's own songbook. Half-uploaded (staging) songs never count.
+export async function listSongById(env, id, venue = null) {
   try {
-    const table = Number(id) >= OWN_BASE ? "songbook" : "catalog";
-    const r = await env.DB.prepare("SELECT rowid AS id, title, artist FROM " + table + " WHERE rowid = ?1").bind(Number(id)).first();
+    const own = Number(id) >= OWN_BASE;
+    const r = await env.DB.prepare(own
+      ? "SELECT rowid AS id, title, artist FROM songbook WHERE rowid = ?1 AND venue NOT LIKE '%~new'" + (venue ? " AND venue = ?2" : "")
+      : "SELECT rowid AS id, title, artist FROM catalog WHERE rowid = ?1").bind(...(own && venue ? [Number(id), venue.slug] : [Number(id)])).first();
     return r && r.title ? r : null;
   } catch (e) { return null; }
 }
@@ -74,8 +77,6 @@ export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
     const stage = staging(venue);
     if (body.start) await env.DB.prepare("DELETE FROM songbook WHERE venue = ?").bind(stage).run(); // a half-done earlier upload
     const have = body.start ? 0 : (await env.DB.prepare("SELECT count(*) AS n FROM songbook WHERE venue = ?").bind(stage).first()).n;
-    // Ids carry on after the highest one in the table (all venues share it).
-    const next = Number((await env.DB.prepare("SELECT max(rowid) AS m FROM songbook").first()).m || OWN_BASE - 1) + 1;
     if (have + rows.length > MAX_OWN) return { error: "That’s more than " + MAX_OWN.toLocaleString("en-US") + " songs." };
     const songs = [];
     rows.forEach((r, i) => {
@@ -83,15 +84,24 @@ export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
       const title = clean(r[0], 150), artist = clean(r[1], 150);
       if (!title) return;
       const y = parseInt(r[2], 10);
-      songs.push({ n: have + i, id: next + songs.length, title, artist, k: searchKey(title, artist), year: y >= 1900 && y <= 2100 ? y : null,
+      songs.push({ n: have + i, title, artist, k: searchKey(title, artist), year: y >= 1900 && y <= 2100 ? y : null,
         styles: clean(r[3], 120).split(/\s*[,/;|]\s*/).filter(Boolean).join(","), duo: truthy(r[4]) ? 1 : 0 });
     });
-    // Rank songs that are in the full catalog like the catalog does.
+    // Ids come from one counter shared by every bar, taken atomically, so two uploads at once can't pick the
+    // same ids and ids are never reused after a clear (saved lists, picks and covers keep pointing at the right song).
+    const top = Number((await env.DB.prepare("SELECT max(rowid) AS m FROM songbook").first()).m || OWN_BASE - 1) + 1;
+    const end = Number((await env.DB.prepare("INSERT INTO host_config (k, v) VALUES ('songbook_next_id', ?1 + ?2)" +
+      " ON CONFLICT(k) DO UPDATE SET v = max(CAST(v AS INTEGER), ?1) + ?2 RETURNING CAST(v AS INTEGER) AS v").bind(top, songs.length).first()).v);
+    songs.forEach((s, i) => { s.id = end - songs.length + i; });
+    // Rank songs that are in the full catalog like the catalog does (through catalog_order's index on k;
+    // the full-text table would be read in full for every 400 songs).
     const rank = new Map();
     for (let i = 0; i < songs.length; i += 400) {
       const ks = songs.slice(i, i + 400).map((s) => s.k);
       try {
-        const { results } = await env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog WHERE k IN (" + ks.map(lit).join(",") + ") GROUP BY k").all();
+        const inList = ks.map(lit).join(",");
+        const { results } = await env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog_order WHERE k IN (" + inList + ") GROUP BY k").all()
+          .catch(() => env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog WHERE k IN (" + inList + ") GROUP BY k").all());
         results.forEach((r) => rank.set(r.k, Number(r.pop)));
       } catch (e) { break; } // no catalog: file order it is
     }

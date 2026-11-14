@@ -26,6 +26,28 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS catalog_meta (k text primary key, v text)",
 ];
 
+// catalog_order: a plain copy of the columns the Songbook filters and sorts on, with real indexes. The FTS
+// table can only be searched by words or rowid, so browsing (no words typed) or a pill tap used to read and
+// sort all ~90,000 songs; through these indexes it stops after the first page. Rebuilt after each import.
+const ORDER_VERSION = "1";
+const ORDER_SCHEMA = [
+  "CREATE TABLE IF NOT EXISTS catalog_order (id integer primary key, pop integer, added text, year integer, duo integer," +
+    " styles text, languages text, artist text, k text)",
+  "CREATE INDEX IF NOT EXISTS catalog_order_pop ON catalog_order (pop)",
+  "CREATE INDEX IF NOT EXISTS catalog_order_added ON catalog_order (added, pop)",
+  "CREATE INDEX IF NOT EXISTS catalog_order_year ON catalog_order (year, pop)",
+  "CREATE INDEX IF NOT EXISTS catalog_order_k ON catalog_order (k)",
+];
+export async function rebuildOrder(env) {
+  for (const s of ORDER_SCHEMA) await env.DB.prepare(s).run();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM catalog_order"),
+    env.DB.prepare("INSERT INTO catalog_order (id, pop, added, year, duo, styles, languages, artist, k)" +
+      " SELECT rowid, CAST(pop AS INTEGER), added, CAST(NULLIF(year, '') AS INTEGER), CAST(duo AS INTEGER), styles, languages, artist, k FROM catalog"),
+    env.DB.prepare("INSERT OR REPLACE INTO catalog_meta (k, v) VALUES ('order_version', ?)").bind(ORDER_VERSION),
+  ]);
+}
+
 export const searchKey = (title, artist) => (title + " " + artist).replace(/['‘’`./]/g, "").toLowerCase();
 
 // Semicolon CSV with "quoted" fields and "" escapes -> array of rows (arrays of strings).
@@ -156,6 +178,7 @@ export async function importCatalog(env) {
   for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5).map((s) => env.DB.prepare(s)));
   const ids = new Set(songs.map((s) => s.id)), gone = [...have.keys()].filter((id) => !ids.has(id));
   for (let i = 0; i < gone.length; i += 500) await env.DB.prepare("DELETE FROM catalog WHERE rowid IN (" + gone.slice(i, i + 500).join(",") + ")").run();
+  if (todo.length || gone.length) await rebuildOrder(env);
   return { songs: songs.length, sent: todo.length, removed: gone.length };
 }
 
@@ -167,7 +190,11 @@ export async function maybeImportCatalog(env, now = Date.now()) {
     meta = Object.fromEntries(results.map((r) => [r.k, r.v]));
   } catch (e) { /* first run: no table yet */ }
   const updated = Date.parse(meta.updated || "") || 0, tried = Number(meta.last_attempt) || 0;
-  if (now - updated < REFRESH_MS || (now - tried < RETRY_MS && meta.version === VERSION)) return null;
+  if (now - updated < REFRESH_MS || (now - tried < RETRY_MS && meta.version === VERSION)) {
+    // The browse copy is missing or from an older layout (first run after a deploy): build it once.
+    if (Number(meta.count) > 0 && meta.order_version !== ORDER_VERSION) await rebuildOrder(env);
+    return null;
+  }
   await env.DB.prepare(SCHEMA[1]).run();
   await setMeta(env, { last_attempt: now, version: VERSION });
   try {

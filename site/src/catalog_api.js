@@ -77,10 +77,28 @@ export function catalogQuery(params, source = "catalog", version = "", venueSlug
     sql = "SELECT rowid AS id, title, artist, year, duo, explicit, styles FROM " + t + whereSql(t) + tail;
     if (t === "songbook") allBind = bind.concat([venueSlug]);
   }
+  // Browsing the full list (no words typed): filter and sort the indexed copy (catalog_import.js
+  // catalog_order), then fetch the page's songs from the catalog by rowid.
+  let fastSql = null, fastBind = null;
+  if (!tokens.length && source === "catalog") {
+    const w = [], b = [];
+    if (f.duo) w.push("o.duo = 1");
+    if (f.hits) w.push("o.pop <= 1000");
+    if (f.voice) { w.push("o.artist IN (SELECT artist FROM artist_voice WHERE voice = ?)"); b.push(f.voice); }
+    if (f.genre) { w.push("(',' || o.styles || ',') LIKE ?"); b.push("%," + f.genre + ",%"); }
+    if (f.lang) { w.push("(',' || o.languages || ',') LIKE ?"); b.push("%," + f.lang + ",%"); }
+    if (f.decade === 1900) w.push("o.year BETWEEN 1 AND 1949");
+    else if (f.decade) { w.push("o.year BETWEEN ? AND ?"); b.push(f.decade, f.decade + 9); }
+    const order = { pop: "o.pop", new: "o.added DESC, o.pop", recent: "o.year DESC, o.pop", old: "o.year IS NULL, o.year, o.pop" }[f.sort];
+    fastSql = "SELECT c.rowid AS id, c.title, c.artist, c.year, c.duo, c.explicit, c.styles FROM (SELECT o.id, o.pop, o.added, o.year FROM catalog_order o" +
+      (w.length ? " WHERE " + w.join(" AND ") : "") + " ORDER BY " + order + " LIMIT " + (PAGE + 1) + " OFFSET " + f.page * PAGE + ") AS o" +
+      " JOIN catalog c ON c.rowid = o.id ORDER BY " + order;
+    fastBind = b;
+  }
   const key = "q=" + encodeURIComponent(tokens.join(" ")) + "&duo=" + +f.duo + "&hits=" + +f.hits + "&genre=" + encodeURIComponent(f.genre) +
     "&lang=" + encodeURIComponent(f.lang) + "&decade=" + f.decade + "&voice=" + f.voice + "&sort=" + f.sort + "&page=" + f.page +
     (source !== "catalog" ? "&src=" + source + "&venue=" + encodeURIComponent(venueSlug) + "&v=" + encodeURIComponent(version) : "");
-  return { sql, bind: allBind, key, page: f.page, voice: f.voice, filtered: tokens.length > 0 || where.length > 0 };
+  return { sql, bind: allBind, fastSql, fastBind, key, page: f.page, voice: f.voice, filtered: tokens.length > 0 || where.length > 0 };
 }
 
 export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
@@ -95,8 +113,11 @@ export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
   let res;
   try {
     if (cq.voice) await ensureVoiceTables(env);
+    // The indexed browse copy when there is one; the full-text table otherwise (before its first build).
+    let main = env.DB.prepare(cq.sql).bind(...cq.bind);
+    if (cq.fastSql && (await env.DB.prepare("SELECT 1 FROM catalog_order LIMIT 1").first().catch(() => null))) main = env.DB.prepare(cq.fastSql).bind(...cq.fastBind);
     const [found, meta, vc] = await env.DB.batch([
-      env.DB.prepare(cq.sql).bind(...cq.bind),
+      main,
       env.DB.prepare("SELECT k, v FROM catalog_meta WHERE k IN ('count', 'updated')"),
       ...(cq.voice ? [env.DB.prepare("SELECT count(*) AS total, count(voice) AS done FROM artist_voice")] : []),
     ]);
