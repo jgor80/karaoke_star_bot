@@ -33,6 +33,14 @@ import PRIVACY from "./privacy.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
+import { checkSyncAlerts } from "./health_api.js";
+import { handleReport, sendReports } from "./report_api.js";
+import REPORT from "./report.html";
+import { handleDuet, duetBoard } from "./duets_api.js";
+import DUETS from "./duets.js";
+import PICKER from "./picker.js";
+import { handleLeague } from "./league_api.js";
+import LEAGUE from "./league.html";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
@@ -70,7 +78,7 @@ const ensureCore = (env) => ensureVenueColumns(env, ["plays", "sync_runs"]);
 const html = (body, cache = "public, max-age=60", extra = {}) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, ...extra } });
 const js = (body) => new Response(body, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" } });
-const STATIC_JS = { "/bingo.js": BINGO, "/fun.js": FUN, "/songs.js": SONGS, "/drafts.js": DRAFTS, "/art.js": ART, "/awards.js": AWARDS };
+const STATIC_JS = { "/bingo.js": BINGO, "/fun.js": FUN, "/songs.js": SONGS, "/drafts.js": DRAFTS, "/art.js": ART, "/awards.js": AWARDS, "/duets.js": DUETS, "/picker.js": PICKER };
 
 // Each venue page gets its venue as a global, so the page can say where it is before /api/plays loads.
 const withVenue = (page, venue) =>
@@ -94,6 +102,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
     await ensureCore(env);
     return handleDraft(req, env, venue);
   }
+  if (name === "duet") { await ensureCore(env); return handleDuet(req, env, venue); } // duet finder, see duets_api.js
   if (name === "host") { await ensureCore(env); return handleHost(req, env, venue); }
   if (name === "crowd") { await ensureCore(env); return handleCrowd(req, env, venue); } // the /host phone's crowd meter (host key only)
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
@@ -102,6 +111,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "catalog") return handleCatalog(req, env, ctx, venue); // the venue picks its songbook (songbook_api.js)
   if (name === "art") return handleArt(req, env, ctx); // album covers, see art_api.js
   if (name === "listen") return handleListen(req, env); // tap a cover: the song at its source
+  if (name === "report") { await ensureCore(env); return handleReport(req, env, venue, url); } // the bar owner's numbers, see report_api.js
   if (name === "plays") {
     // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
     // During the scheduled session the cache is shorter so new songs show up fast.
@@ -117,11 +127,11 @@ async function handleApi(name, req, env, ctx, venue, url) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
       const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
-      const [[plays, sync], reax, secrets, queue, drafts, crowd] = await Promise.all([
+      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets] = await Promise.all([
         env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
-        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue)]);
+        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue)]);
       res = new Response(
-        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd }),
+        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
       );
       ctx.waitUntil(cache.put(key, res.clone()));
@@ -135,6 +145,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
 function handleVenue(rest, req, env, ctx, venue, url) {
   if (rest === "" || rest === "index.html") return html(withVenue(PAGE, venue));
   if (rest === "tv" || rest === "tv/") return html(withVenue(TV, venue));
+  if (rest === "report" || rest === "report/") return html(withVenue(REPORT, venue), "public, max-age=300", { "x-robots-tag": "noindex" });
   if (rest === "host" || rest === "host/") return html(withVenue(HOST, venue), "no-store", { "x-robots-tag": "noindex" });
   if (rest === "sunday.ics" || rest === "calendar.ics") {
     return new Response(sundayIcs(Math.floor(Date.now() / 1000), venue), {
@@ -159,6 +170,8 @@ export default {
       });
     }
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
+    if (path === "/league" || path === "/league/") return html(LEAGUE, "public, max-age=300");
+    if (path === "/api/league") return handleLeague(req, env, ctx, url); // monthly table across every bar, see league_api.js
     if (path === "/api/lead") return handleLead(req, env, ctx); // "bring Oke Night to your bar" form on the intro page
     if (path.startsWith("/api/")) return handleApi(path.slice(5), req, env, ctx, DEFAULT_VENUE, url); // old links = first venue
     if (STATIC_JS[path]) return js(STATIC_JS[path]);
@@ -184,6 +197,8 @@ export default {
         await scoreCrowd(env, v).catch(() => {}); // crowd meter
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic
         await sweepErased(env, v).catch(() => {}); // new songs by singers who asked to be removed
+        await checkSyncAlerts(env, v).catch(() => {}); // host alert if the laptop or karaoke app isn't ready (health_api.js)
+        await sendReports(env, v).catch(() => {}); // the morning-after numbers for the host and bar owner (report_api.js)
       }
       await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
     })().catch(() => {}));

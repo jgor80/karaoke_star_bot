@@ -441,6 +441,7 @@
     return {
       // Called when the Songbook tab opens, so phones that never open it don't search.
       start() { if (!started) { started = true; search(false); } },
+      reload() { list = readList(); renderMine(); renderResults(); }, // another part of the page (picker.js) changed the list
       refresh() { renderMine(); if (started && ready === false) results = localSearch(q).filter((s) => !f.duo || s.duo); renderResults(); },
     };
   }

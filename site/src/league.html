@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oke Night League</title>
+<meta name="description" content="The monthly karaoke league across every Oke Night bar: points for showing up, singing and bringing the house down.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%86%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843; --hot: #ff5c9d; --gold: #f5b84a; --gold-soft: #3a2a14;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)); }
+a { color: var(--gold); }
+h1 { font-size: clamp(28px, 7vw, 42px); line-height: 1.1; margin: 8px 0 4px; }
+h2 { font-size: 15px; letter-spacing: .1em; text-transform: uppercase; margin: 28px 0 10px; color: var(--hot); }
+.muted { color: var(--muted); font-size: 15px; }
+.top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 44px; }
+ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+li { display: grid; grid-template-columns: 40px 1fr auto; gap: 2px 10px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+li .r { font-weight: 800; font-size: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+li .n { font-weight: 700; overflow-wrap: anywhere; }
+li .p { font-weight: 800; font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
+li .s { grid-column: 2 / 4; color: var(--muted); font-size: 14px; }
+li.lead { background: linear-gradient(90deg, var(--gold-soft), var(--panel) 80%); border-color: var(--gold); }
+li.mine { outline: 2px solid var(--hot); }
+.rules { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+.rules ul { margin: 6px 0 0; padding-left: 1.2em; }
+.rules li { display: list-item; background: none; border: 0; padding: 2px 0; }
+.more { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 8px; cursor: pointer; min-height: 44px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="/" id="back">← Oke Night</a><select id="month" aria-label="Pick a month"></select></div>
+  <h1>🏆 Oke Night League</h1>
+  <p class="muted" id="sub">One table for every Oke Night bar. Points reset each month.</p>
+
+  <h2 id="stand-h">Standings</h2>
+  <ol id="stand"></ol>
+  <button class="more" id="more" type="button" hidden>Show everyone</button>
+
+  <h2>Bars</h2>
+  <ol id="bars"></ol>
+
+  <h2>How points work</h2>
+  <div class="rules">
+    <ul>
+      <li><b>10</b> for every night you sing (at any bar)</li>
+      <li><b>3</b> per song, up to 4 songs a night</li>
+      <li>Up to <b>5</b> more per song for the applause (half the crowd meter score)</li>
+      <li>Up to <b>5</b> more per song for hype reactions from phones (half a point each)</li>
+      <li><b>15</b> bonus for each extra Oke Night bar you sing at in the month</li>
+    </ul>
+    <p class="muted" style="margin:8px 0 0">Duets count for everyone in them. Hosts don’t compete. Same name, same person, so sign up the same way every time.</p>
+  </div>
+</main>
+<script src="/fun.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const key = (s) => String(s || "").trim().toLowerCase();
+  const monthLabel = (m) => new Date(m + "-15T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  let showAll = false, last = null;
+  try { const v = localStorage.getItem("oke_venue"); if (v) $("back").href = "/" + v + "/"; } catch (e) {}
+  const me = (() => { try { return localStorage.getItem("karaoke-me"); } catch (e) { return null; } })();
+
+  function score(data) {
+    const rows = data.plays.map(([venue, night, singer, played_at, crowd, hype]) => ({ venue, night, singer, played_at, crowd, hype }));
+    if (window.KaraokeFun) KaraokeFun.canonicalize(rows);
+    const hosts = new Set(data.venues.map((v) => key(v.host)).filter(Boolean));
+    const ppl = window.KaraokeFun ? KaraokeFun.people(rows) : new Map(rows.map((p) => [key(p.singer), { key: key(p.singer), name: p.singer, rows: [] }]));
+    if (!window.KaraokeFun) rows.forEach((p) => ppl.get(key(p.singer)).rows.push(p));
+    const table = [];
+    ppl.forEach((e) => {
+      if (hosts.has(e.key) || !e.rows.length) return;
+      const nights = new Map(); // venue|night -> songs that night
+      let pts = 0, applause = 0, hype = 0;
+      e.rows.forEach((p) => { const k = p.venue + "|" + p.night; nights.set(k, (nights.get(k) || 0) + 1); });
+      pts += nights.size * 10;
+      nights.forEach((n) => { pts += Math.min(4, n) * 3; });
+      e.rows.forEach((p) => { if (p.crowd != null) { const a = Math.min(5, p.crowd / 2); applause += a; } hype += Math.min(5, (p.hype || 0) / 2); });
+      const bars = new Set(e.rows.map((p) => p.venue)).size;
+      pts += applause + hype + (bars - 1) * 15;
+      table.push({ key: e.key, name: e.name, pts: Math.round(pts), nights: nights.size, songs: e.rows.length, bars, applause: Math.round(applause + hype) });
+    });
+    table.sort((a, b) => b.pts - a.pts || b.nights - a.nights || a.name.localeCompare(b.name));
+    // Bars: songs, different singers and nights this month.
+    const bars = data.venues.map((v) => { const r = rows.filter((p) => p.venue === v.slug);
+      const sc = r.filter((p) => p.crowd != null).map((p) => p.crowd);
+      return { ...v, songs: r.length, nights: new Set(r.map((p) => p.night)).size, singers: new Set(r.map((p) => key(p.singer))).size,
+        applause: sc.length ? Math.round((sc.reduce((a, b) => a + b, 0) / sc.length) * 10) / 10 : null }; }).sort((a, b) => b.songs - a.songs);
+    return { table, bars };
+  }
+
+  function render() {
+    if (!last) return;
+    const { table, bars } = score(last);
+    $("stand-h").textContent = "Standings · " + monthLabel(last.month);
+    const ol = $("stand"); ol.replaceChildren();
+    if (!table.length) ol.append(el("li", null, "No songs yet this month. Get out there!"));
+    const shown = showAll ? table : table.slice(0, 25);
+    shown.forEach((e, i) => {
+      const li = el("li", (i === 0 ? "lead" : "") + (me && e.key === me ? " mine" : ""));
+      li.append(el("span", "r", i < 3 ? ["🥇", "🥈", "🥉"][i] : String(i + 1)), el("span", "n", e.name), el("span", "p", e.pts + " pts"),
+        el("span", "s", [e.nights + (e.nights === 1 ? " night" : " nights"), e.songs + (e.songs === 1 ? " song" : " songs"), e.applause ? e.applause + " crowd pts" : null, e.bars > 1 ? e.bars + " bars" : null].filter(Boolean).join(" · ")));
+      ol.append(li);
+    });
+    $("more").hidden = showAll || table.length <= 25;
+    const bl = $("bars"); bl.replaceChildren();
+    bars.forEach((b, i) => { const li = el("li"); const a = el("a", "n", b.name); a.href = "/" + b.slug + "/";
+      li.append(el("span", "r", String(i + 1)), a, el("span", "p", b.songs + " songs"),
+        el("span", "s", [b.neighborhood, b.nights + (b.nights === 1 ? " night" : " nights"), b.singers + " singers", b.applause != null ? "👏 " + b.applause + "/10 avg" : null].filter(Boolean).join(" · ")));
+      bl.append(li); });
+  }
+
+  async function load(month) {
+    const r = await fetch("/api/league" + (month ? "?month=" + month : ""));
+    last = await r.json();
+    const sel = $("month"); sel.replaceChildren(...last.months.map((m) => { const o = el("option", null, monthLabel(m)); o.value = m; o.selected = m === last.month; return o; }));
+    $("sub").textContent = last.venues.length > 1 ? "One table for all " + last.venues.length + " Oke Night bars. Points reset each month." : "Points reset each month. More bars join the league as Oke Night grows.";
+    render();
+  }
+  $("month").addEventListener("change", (e) => load(e.target.value).catch(() => {}));
+  $("more").addEventListener("click", () => { showAll = true; render(); });
+  load(new URLSearchParams(location.search).get("month")).catch(() => { $("sub").textContent = "Couldn’t load the league. Reload to try again."; });
+})();
+</script>
+</body>
+</html>

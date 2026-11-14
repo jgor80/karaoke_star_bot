@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Report · Oke Night</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="The numbers from a karaoke night: songs, singers, first-timers, busiest hour and how it compares.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
+<style>
+/* The bar owner's report: numbers only, no song titles and no singer names. System fonts, loads nothing else. */
+:root {
+  --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843; --hot: #ff5c9d; --gold: #f5b84a; --up: #6fe3a5; --down: #ff8a8a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)); }
+a { color: var(--gold); }
+h1 { font-size: clamp(26px, 6.5vw, 38px); line-height: 1.1; margin: 6px 0 4px; }
+h2 { font-size: 15px; letter-spacing: .1em; text-transform: uppercase; margin: 28px 0 10px; color: var(--hot); }
+.muted { color: var(--muted); font-size: 15px; }
+.top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+select, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 44px; }
+button { cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 2px; }
+.tile b { font-size: 32px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 14px; }
+.tile i { font-style: normal; font-size: 13px; font-weight: 700; }
+.up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+.hours { display: grid; gap: 6px; }
+.hr { display: grid; grid-template-columns: 52px 1fr 34px; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+.hr .b { height: 14px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.hr .b i { display: block; height: 100%; background: linear-gradient(90deg, var(--hot), var(--gold)); border-radius: 99px; }
+.hr.peak span:first-child { color: var(--gold); font-weight: 700; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin: 0; }
+footer { margin-top: 32px; }
+@media print { body { background: #fff; color: #111; } .tile, .note { background: #fff; border-color: #ccc; } .tile span, .muted { color: #555; } h2 { color: #b0004a; } .noprint { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <a href="./">← Oke Night</a>
+    <div class="noprint"><select id="pick" aria-label="Pick a night"></select> <button type="button" id="print">Print / PDF</button></div>
+  </div>
+  <h1 id="h">Karaoke report</h1>
+  <p class="muted" id="sub">Loading…</p>
+
+  <h2>The night</h2>
+  <div class="grid" id="night"></div>
+  <h2>The crowd</h2>
+  <div class="grid" id="crowd"></div>
+  <h2>Coming back</h2>
+  <div class="grid" id="back"></div>
+  <h2>Songs by hour</h2>
+  <div class="hours" id="hours"></div>
+  <h2>Season so far</h2>
+  <div class="grid" id="season"></div>
+  <footer class="muted">Numbers only. People are counted by the names they sign up with, so a nickname change can count twice. Arrows compare with the average of the <span id="cmpn">previous</span> nights. The host’s own songs aren’t counted as guest songs.</footer>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const VENUE = window.OKE_VENUE || { name: "Oke Night" };
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const dayLabel = (n) => new Date(n + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const hourLabel = (h) => (h % 12 || 12) + (h < 12 ? " am" : " pm");
+  // A number tile, with an arrow against the earlier average when there is one.
+  function tile(box, value, label, avg, fmt) {
+    const t = el("div", "tile");
+    t.append(el("b", null, value == null ? "–" : fmt ? fmt(value) : String(value)), el("span", null, label));
+    if (avg != null && value != null) {
+      const d = Math.round((value - avg) * 10) / 10, pct = avg ? Math.round((100 * (value - avg)) / avg) : null;
+      const cls = Math.abs(d) < 0.5 ? "flat" : d > 0 ? "up" : "down";
+      t.append(el("i", cls, (cls === "flat" ? "≈ " : d > 0 ? "▲ " : "▼ ") + (pct != null && cls !== "flat" ? Math.abs(pct) + "% " : "") + "vs avg " + avg));
+    }
+    box.append(t);
+  }
+  async function load(night) {
+    const r = await fetch("api/report" + (night ? "?night=" + night : ""), { cache: "no-store" });
+    const d = await r.json();
+    if (!d.stats) { $("sub").textContent = "No karaoke nights yet."; return; }
+    const s = d.stats, c = d.compare || {};
+    $("h").textContent = d.venue + " karaoke";
+    $("sub").textContent = dayLabel(d.night) + (s.start ? " · " + s.start + " to " + s.end : "");
+    document.title = d.venue + " · " + d.night + " · Karaoke Report";
+    const pick = $("pick"); pick.replaceChildren(...d.nights.slice().reverse().map((n) => { const o = el("option", null, dayLabel(n)); o.value = n; o.selected = n === d.night; return o; }));
+    $("cmpn").textContent = c.nights ? c.nights : "previous";
+
+    const nb = $("night"); nb.replaceChildren();
+    tile(nb, s.guest_songs, "Songs by guests", c.guest_songs);
+    tile(nb, s.singers, "Different singers", c.singers);
+    tile(nb, s.hours_singing, "Hours of singing", c.hours_singing);
+    tile(nb, s.songs_per_hour, "Songs per hour");
+    tile(nb, s.busiest_hour == null ? null : hourLabel(s.busiest_hour), "Busiest hour");
+    tile(nb, s.groups, "Duets and group songs");
+
+    const crowd = $("crowd"); crowd.replaceChildren();
+    tile(crowd, s.applause_avg, "Average applause (out of 10)");
+    tile(crowd, s.big_ovations, "Big ovations (7+ out of 10)");
+    tile(crowd, s.phones, "Phones using the site");
+    tile(crowd, s.reactions, "Live reactions sent");
+    if (s.draft_picks) tile(crowd, s.draft_picks, "Crowd draft picks");
+    if (s.duet_posts) tile(crowd, s.duet_matches + " of " + s.duet_posts, "Duet partners matched");
+
+    const back = $("back"); back.replaceChildren();
+    tile(back, s.first_timers, "First-time singers", c.first_timers);
+    tile(back, s.returning, "Returning singers");
+    tile(back, s.regulars ? s.regulars_came + " of " + s.regulars : null, "Regulars who came");
+    tile(back, s.last_week_back, "Last week’s singers back", null, (v) => v + "%");
+
+    const hours = $("hours"); hours.replaceChildren();
+    // Hours in the order the night ran (9 pm before 1 am).
+    const hs = Object.entries(s.by_hour).map(([h, n]) => [Number(h), n]).sort((a, b) => ((a[0] + 18) % 24) - ((b[0] + 18) % 24));
+    const max = Math.max(1, ...hs.map((x) => x[1]));
+    hs.forEach(([h, n]) => { const row = el("div", "hr" + (h === s.busiest_hour ? " peak" : "")); const b = el("span", "b"); const i = el("i"); i.style.width = (100 * n / max) + "%"; b.append(i);
+      row.append(el("span", null, hourLabel(h)), b, el("span", null, String(n))); hours.append(row); });
+
+    const season = $("season"); season.replaceChildren();
+    tile(season, d.season.nights, "Nights since " + new Date(d.season.since + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    tile(season, d.season.songs, "Songs sung");
+    tile(season, d.season.guests, "Different guests");
+    if (d.season.nights) tile(season, Math.round(d.season.songs / d.season.nights), "Songs per night");
+    if (location.search.indexOf(d.night) < 0) history.replaceState(null, "", "?night=" + d.night);
+  }
+  $("pick").addEventListener("change", (e) => load(e.target.value).catch(() => {}));
+  $("print").addEventListener("click", () => window.print());
+  load(new URLSearchParams(location.search).get("night")).catch(() => { $("sub").textContent = "Couldn’t load the report. Reload to try again."; });
+})();
+</script>
+</body>
+</html>

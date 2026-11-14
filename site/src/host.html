@@ -98,6 +98,20 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <p class="hint" id="ntfy">For alerts when this page is closed, install the free <b>ntfy</b> app, tap <b>+</b>, and subscribe to <code id="topic">…</code>. <a id="topic-link" href="#" target="_blank" rel="noopener" style="color:var(--hot)">Open it</a></p>
     </section>
 
+    <section class="card" id="laptop-card">
+      <h2>Karaoke laptop</h2>
+      <p class="hint" id="laptop-state">Checking…</p>
+      <p class="hint">From 30 minutes before each night, you get a push (same ntfy topic as above) if the laptop stops checking in or the karaoke app isn’t open. The laptop’s sync updates itself, so there are no files to copy.</p>
+    </section>
+
+    <section class="card">
+      <h2>Bar owner report</h2>
+      <p class="hint">Numbers from each night (songs, singers, first-timers, busiest hour, applause) compared with the weeks before. No song titles or singer names. It’s pushed to you the morning after each night.</p>
+      <div class="row"><a class="btn-link" id="report-link" href="report" target="_blank" rel="noopener">Open the latest report</a></div>
+      <p class="hint" id="owner-state"></p>
+      <div class="row"><button type="button" class="ghost small" id="owner-btn">Make an alert link for the owner</button><button type="button" class="ghost small" id="owner-off" hidden>Turn off owner alerts</button></div>
+    </section>
+
     <section>
       <h2 id="req-h">Song requests</h2>
       <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below. Bought a track? Download it on the karaoke laptop and the sync files it into your karaoke songs folder and marks the request added by itself.</p>
@@ -192,6 +206,11 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       <p class="hint" style="margin-bottom:8px">Picks the crowd made on their phones (a singer + a song), most seconded first. Remove anything that isn’t fun. Block someone who doesn’t want to be drafted and nobody can pick them again.</p>
       <ul class="list" id="draft-list"></ul>
       <p class="hint" id="draft-blocked" hidden></p>
+    </section>
+    <section>
+      <h2 id="duet-h">Duet finder</h2>
+      <p class="hint" style="margin-bottom:8px">People looking for a duet partner tonight, and the matches. Remove anything that isn’t fun.</p>
+      <ul class="list" id="duet-list"></ul>
     </section>
     <div class="row"><button type="button" class="ghost small" id="logout">Log out of this phone</button></div>
   </div>
@@ -407,6 +426,15 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
       if (s.reward) li.append(el("span", "rw", "🎁 " + s.reward));
       li.append(actions(s, true)); fl.append(li); });
     renderSongbook(d);
+    renderLaptop(d.sync_health);
+    renderOwner(d.owner_topic);
+    const du = d.duets || [], dul = $("duet-list"); dul.replaceChildren();
+    $("duet-h").textContent = "Duet finder (" + du.length + ")";
+    if (!du.length) dul.append(el("li", "s", "Nobody is looking for a duet partner right now."));
+    du.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", x.partner ? "🤝 " + x.by + " + " + x.partner : "🎤 " + x.by + " needs a partner"));
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "duet_remove", id: x.id });
+      const row = el("div", "row"); row.append(rm); li.append(row); dul.append(li); });
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
     $("req-h").textContent = "Song requests (" + rq.length + ")";
@@ -491,6 +519,32 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     if (r.ok) $("erase-name").value = "";
     setTimeout(() => { delete m.dataset.busy; }, 15000);
   };
+  // The laptop's last check-in, whether the karaoke app is open, and whether its sync script is the newest.
+  function renderLaptop(h) {
+    const p = $("laptop-state");
+    if (!h || !h.ts) { p.textContent = "The laptop hasn’t checked in yet."; return; }
+    const mins = Math.round((Date.now() / 1000 - h.ts) / 60);
+    const ok = mins <= 15;
+    p.textContent = (ok ? "🟢 Online" : "🔴 Offline") + " · last check-in " + (mins < 1 ? "just now" : mins < 120 ? mins + " min ago" : when(h.ts)) +
+      (h.karafun === true ? " · karaoke app open" : h.karafun === false ? " · karaoke app closed" : "") +
+      (h.up_to_date === true ? " · sync up to date" : h.up_to_date === false ? (h.version ? " · sync updating (it checks every 30 min between nights)" : " · old sync: copy the new karaoke_sync.py to the laptop once, and it updates itself after that") : "");
+  }
+  let ownerTopic = null;
+  function renderOwner(t) {
+    ownerTopic = t;
+    $("owner-off").hidden = !t;
+    $("owner-btn").textContent = t ? "Copy the owner’s alert link" : "Make an alert link for the owner";
+    $("owner-state").textContent = t ? "Send the owner this link. They open it in the free ntfy app and tap Subscribe: https://ntfy.sh/" + t : "Give the bar owner their own alert link, so the report reaches them too.";
+  }
+  $("owner-btn").addEventListener("click", async () => {
+    let t = ownerTopic;
+    if (!t) { const r = await api("POST", { action: "owner_topic", on: true }); if (!r.ok) return alert(r.d.error || "That didn’t work."); t = r.d.owner_topic; renderOwner(t); }
+    const link = "https://ntfy.sh/" + t;
+    if (navigator.share) { try { await navigator.share({ title: "Karaoke night report", text: "Subscribe in the ntfy app to get the karaoke report after each night:", url: link }); return; } catch (e) {} }
+    try { await navigator.clipboard.writeText(link); $("owner-btn").textContent = "Link copied"; } catch (e) {}
+  });
+  $("owner-off").addEventListener("click", async () => { if (confirm("Stop sending the report to the owner’s link?")) { await api("POST", { action: "owner_topic", on: false }); load(); } });
+
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {
