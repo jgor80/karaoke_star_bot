@@ -25,6 +25,7 @@ import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.
 import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
+import { networkOf } from "./net.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
@@ -159,14 +160,18 @@ export async function publicSecrets(env, venue = DEFAULT_VENUE) {
 // sending many tries at once (the old 400 ms delay only slowed one try at a time).
 const FAIL_PER_NET_HOUR = 10, FAIL_PER_VENUE_HOUR = 60;
 let failsReady = null;
-async function failNet(req) { return (await sha256("fail|" + (req && req.headers.get("cf-connecting-ip") || "") + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24); }
+// IPv6 phones can pick any address in their /64, so a network is the /64 (networkOf), not one address.
+async function failNet(req) { return (await sha256("fail|" + networkOf(req && req.headers.get("cf-connecting-ip") || "") + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24); }
 async function lockedOut(env, venue, req) {
   if (!failsReady) failsReady = env.DB.prepare("CREATE TABLE IF NOT EXISTS host_fails (venue text not null, net text not null, at integer not null)").run()
     .then(() => env.DB.prepare("CREATE INDEX IF NOT EXISTS host_fails_venue ON host_fails (venue, at)").run()).catch((e) => { failsReady = null; throw e; });
   await failsReady;
   const since = Math.floor(Date.now() / 1000) - 3600, net = await failNet(req);
   const r = await env.DB.prepare("SELECT count(*) AS v, sum(net = ?3) AS n FROM host_fails WHERE venue = ?1 AND at > ?2").bind(venue.slug, since, net).first();
-  return !!r && ((r.n || 0) >= FAIL_PER_NET_HOUR || (r.v || 0) >= FAIL_PER_VENUE_HOUR);
+  // Once the whole bar is over its limit, only networks with no wrong tries this hour still get a try. So a
+  // stranger sending wrong keys can't lock the host's own phone out of /host (and the crowd meter) mid-show:
+  // the host's phone has no fails, so its right key still works, while each guessing network gets one try.
+  return !!r && ((r.n || 0) >= FAIL_PER_NET_HOUR || ((r.v || 0) >= FAIL_PER_VENUE_HOUR && (r.n || 0) > 0));
 }
 async function noteFail(env, venue, req) {
   const now = Math.floor(Date.now() / 1000);

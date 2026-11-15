@@ -52,7 +52,20 @@ function nightStats(rows, before, host, tz) {
   };
 }
 
-export async function handleReport(req, env, venue, url) {
+// The report reads every play the bar ever had, so it's cached at the edge for a minute: reloading the page
+// (or someone hammering the link) costs one full read a minute instead of one per request.
+export async function handleReport(req, env, venue, url, ctx) {
+  const want0 = url.searchParams.get("night");
+  const cache = caches.default;
+  const key = new Request(url.origin + "/" + venue.slug + "/api/report" + (want0 && NIGHT_RE.test(want0) ? "?night=" + want0 : ""));
+  const hit = await cache.match(key).catch(() => null);
+  if (hit) return hit;
+  const res = await buildReport(env, venue, url);
+  if (ctx && res.status === 200) ctx.waitUntil(cache.put(key, res.clone()).catch(() => {}));
+  return res;
+}
+
+async function buildReport(env, venue, url) {
   const { results: all } = await env.DB.prepare("SELECT uuid, night, played_at, singer, length_s FROM plays WHERE venue = ?1 AND night IS NOT NULL ORDER BY played_at").bind(venue.slug).all();
   const byNight = new Map(); all.forEach((p) => { p.played_at = Number(p.played_at); (byNight.get(p.night) || byNight.set(p.night, []).get(p.night)).push(p); });
   const nights = [...byNight.keys()].sort();

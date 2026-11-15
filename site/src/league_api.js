@@ -10,6 +10,11 @@ const HYPE = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // s
 
 export async function handleLeague(req, env, ctx, url) {
   const cache = caches.default;
+  const asked = url.searchParams.get("month");
+  // No month = the latest one, cached under its own key so the page's first load doesn't scan every play either.
+  const firstKey = new Request(url.origin + "/api/league?month=" + (asked && MONTH_RE.test(asked) ? asked : "latest"));
+  const first = await cache.match(firstKey).catch(() => null);
+  if (first) return first;
   const months = (await env.DB.prepare("SELECT DISTINCT substr(night, 1, 7) AS m FROM plays WHERE night IS NOT NULL ORDER BY m DESC").all()).results.map((r) => r.m);
   const want = url.searchParams.get("month");
   const month = want && MONTH_RE.test(want) ? want : months[0] || new Date().toISOString().slice(0, 7);
@@ -32,5 +37,6 @@ export async function handleLeague(req, env, ctx, url) {
     plays: plays.filter((p) => p.singer).map((p) => [p.venue || VENUES[0].slug, p.night, p.singer, Number(p.played_at), cBy.get(p.uuid) ?? null, hBy.get(p.uuid) || 0]) };
   res = new Response(JSON.stringify(body), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=120" } });
   ctx.waitUntil(cache.put(key, res.clone()));
+  if (firstKey.url !== key.url) ctx.waitUntil(cache.put(firstKey, res.clone()));
   return res;
 }

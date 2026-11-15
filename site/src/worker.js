@@ -114,7 +114,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "catalog") return handleCatalog(req, env, ctx, venue); // the venue picks its songbook (songbook_api.js)
   if (name === "art") return handleArt(req, env, ctx); // album covers, see art_api.js
   if (name === "listen") return handleListen(req, env); // tap a cover: the song at its source
-  if (name === "report") { await ensureCore(env); return handleReport(req, env, venue, url); } // the bar owner's numbers, see report_api.js
+  if (name === "report") { await ensureCore(env); return handleReport(req, env, venue, url, ctx); } // the bar owner's numbers, see report_api.js
   if (name === "plays") {
     // Cached briefly at the edge so a full bar refreshing costs a few D1 reads a minute.
     // During the scheduled session the cache is shorter so new songs show up fast.

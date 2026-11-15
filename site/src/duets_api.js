@@ -13,6 +13,7 @@ import { cleanName } from "./reactions_api.js";
 import { listSongById } from "./songbook_api.js";
 import { draftNight } from "./drafts_api.js";
 import { DEFAULT_VENUE } from "./venues.js";
+import { networkHash } from "./net.js";
 
 export const DUET_LIMITS = { postsPerPhone: 2, postsPerIp: 30, open: 40 };
 const SCHEMA = [
@@ -27,10 +28,6 @@ let ready = null;
 const ensure = (env) => (ready ||= env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s))).catch((e) => { ready = null; throw e; }));
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const nowS = () => Math.floor(Date.now() / 1000);
-async function sha(s) {
-  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
-}
 
 async function boardFor(env, venue, night) {
   const { results } = await env.DB.prepare(
@@ -58,8 +55,9 @@ export async function handleDuet(req, env, venue = DEFAULT_VENUE) {
   if (!/^[a-f0-9]{16,64}$/.test(dev)) return json({ error: "Reload the page and try again." }, 400);
   await ensure(env);
   const now = nowS(), night = draftNight(now, venue);
-  const ip = req.headers.get("cf-connecting-ip") || "";
-  const ipHash = ip ? (await sha("oke-night|" + ip + "|" + new Date().toISOString().slice(0, 10))).slice(0, 24) : null;
+  // Same salted, /64-aware network hash as reactions and draft picks (net.js), so an IPv6 phone can't
+  // dodge the per-network limit by switching addresses.
+  const ipHash = await networkHash(env, req, "duet", new Date().toISOString().slice(0, 10));
   const name = cleanName(body.name);
   const board = () => boardFor(env, venue, night);
 
