@@ -539,7 +539,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   async function pollRx() {
     const play = rxPlay; if (!play) return;
     try {
-      const r = await fetch("api/reactions?play=" + encodeURIComponent(play));
+      const r = await fetch("api/reactions?play=" + encodeURIComponent(play), { cache: "no-store" });
       if (r.ok && play === rxPlay) {
         const c = (await r.json()).counts || {};
         if (rxSeen) { const burst = []; Object.entries(c).forEach(([k, n]) => { for (let i = (rxSeen[k] || 0); i < n && burst.length < 14; i++) burst.push(k); }); burst.forEach((k, i) => setTimeout(() => flyRx(k), i * 180)); }

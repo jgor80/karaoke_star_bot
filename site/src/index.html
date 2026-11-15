@@ -1361,7 +1361,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     clearTimeout(rx.pollT);
     const play = rx.play; if (!play) return;
     if (!document.hidden) {
-      try { const r = await fetch("api/reactions?play=" + encodeURIComponent(play)); if (r.ok) { const d = await r.json(); if (rx.play === play) { rx.counts = maxCounts(rx.counts, d.counts || {}); paintRx(); } } } catch (e) {}
+      try { const r = await fetch("api/reactions?play=" + encodeURIComponent(play), { cache: "no-store" }); if (r.ok) { const d = await r.json(); if (rx.play === play) { rx.counts = maxCounts(rx.counts, d.counts || {}); paintRx(); } } } catch (e) {}
     }
     if (rx.play === play) rx.pollT = setTimeout(pollRx, 4000);
   }

@@ -9,7 +9,7 @@
 export const REACTION_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange", "cringe", "offkey", "tomato", "snooze"];
 const KEYS = new Set(REACTION_KEYS);
 import { DEFAULT_VENUE, ensureVenueColumn } from "./venues.js";
-import { networkHash } from "./net.js";
+import { networkHash, withCacheControl } from "./net.js";
 
 export const LIMITS = {
   burst: 8, burstWindowS: 10,     // one phone: at most 8 taps in 10 seconds
@@ -109,6 +109,7 @@ export async function handleCounts(req, env, ctx) {
   const cache = caches.default;
   const key = new Request(url.origin + "/api/reactions?play=" + encodeURIComponent(play));
   let res = await cache.match(key);
+  if (res) res = withCacheControl(res, "public, max-age=2");
   if (!res) {
     let counts = {};
     try { counts = await countsFor(env, play); } catch (e) { /* table not made yet: no reactions */ }

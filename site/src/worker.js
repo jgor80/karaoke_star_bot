@@ -15,6 +15,7 @@ import { handleLead } from "./leads_api.js";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
 import { scheduleStatus, localStampToUnix } from "./schedule.js";
+import { withCacheControl } from "./net.js";
 import AWARDS from "./awards.js";
 import TV from "./tv.html";
 import { handleReact, handleCounts, reactionTotals } from "./reactions_api.js";
@@ -128,6 +129,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
     const cache = caches.default;
     const key = new Request(url.origin + "/" + venue.slug + "/api/plays" + (delta ? "?since=" + delta : ""));
     let res = await cache.match(key);
+    if (res) res = withCacheControl(res, "public, max-age=" + maxAge);
     if (!res) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading

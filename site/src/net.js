@@ -22,3 +22,13 @@ export async function networkHash(env, req, scope, day) {
   const h = await crypto.subtle.digest("SHA-256", d);
   return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 24);
 }
+
+// A response read back from the edge cache (caches.default) can come out with the zone's Browser Cache TTL
+// (4 hours on okenight.com) as its cache-control instead of the one it was stored with. Phones polling a live
+// endpoint would then keep their first copy for hours (reactions froze on the TV). Put the real one back.
+export function withCacheControl(res, cc) {
+  if (!res) return res;
+  const out = new Response(res.body, res);
+  out.headers.set("cache-control", cc);
+  return out;
+}
