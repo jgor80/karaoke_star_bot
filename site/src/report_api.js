@@ -7,6 +7,7 @@
 // hostReportAction(env, body, venue)         /host: make (or turn off) the owner's alert topic
 import { cfgKey, venueConfig } from "./venues.js";
 import { scheduleStatus } from "./schedule.js";
+import { withCacheControl } from "./net.js";
 
 const json = (body, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": cache } });
@@ -59,7 +60,7 @@ export async function handleReport(req, env, venue, url, ctx) {
   const cache = caches.default;
   const key = new Request(url.origin + "/" + venue.slug + "/api/report" + (want0 && NIGHT_RE.test(want0) ? "?night=" + want0 : ""));
   const hit = await cache.match(key).catch(() => null);
-  if (hit) return hit;
+  if (hit) return withCacheControl(hit, "public, max-age=60");
   const res = await buildReport(env, venue, url);
   if (ctx && res.status === 200) ctx.waitUntil(cache.put(key, res.clone()).catch(() => {}));
   return res;

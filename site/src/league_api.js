@@ -4,6 +4,7 @@
 // Scoring happens on the page (league.html) so names can be merged the same way as everywhere else (fun.js).
 // crowd = applause score 0-10 for that song (crowd_api.js), hype = how many phones sent a hype reaction.
 import { VENUES, venueConfig } from "./venues.js";
+import { withCacheControl } from "./net.js";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const HYPE = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
@@ -14,13 +15,13 @@ export async function handleLeague(req, env, ctx, url) {
   // No month = the latest one, cached under its own key so the page's first load doesn't scan every play either.
   const firstKey = new Request(url.origin + "/api/league?month=" + (asked && MONTH_RE.test(asked) ? asked : "latest"));
   const first = await cache.match(firstKey).catch(() => null);
-  if (first) return first;
+  if (first) return withCacheControl(first, "public, max-age=120");
   const months = (await env.DB.prepare("SELECT DISTINCT substr(night, 1, 7) AS m FROM plays WHERE night IS NOT NULL ORDER BY m DESC").all()).results.map((r) => r.m);
   const want = url.searchParams.get("month");
   const month = want && MONTH_RE.test(want) ? want : months[0] || new Date().toISOString().slice(0, 7);
   const key = new Request(url.origin + "/api/league?month=" + month);
   let res = await cache.match(key);
-  if (res) return res;
+  if (res) return withCacheControl(res, "public, max-age=120");
   const q = (sql, ...b) => env.DB.prepare(sql).bind(...b).all().then((r) => r.results).catch(() => []);
   const [plays, crowd, hype] = await Promise.all([
     q("SELECT uuid, venue, night, singer, played_at FROM plays WHERE night >= ?1 AND night < ?2 ORDER BY played_at", month + "-01", month + "-32"),
