@@ -122,9 +122,9 @@ async function handleApi(name, req, env, ctx, venue, url) {
     const schedule = { ...scheduleStatus(now, venue), reminder: reminderLinks(now, venue) };
     // The whole history (no ?since) is loaded once per phone, then phones poll ?since=tonight, so it can be
     // cached longer: 60 s during the night instead of 5 s means far fewer full-history reads.
-    const maxAge = (schedule.status === "off" ? 15 : 5) * (since ? 1 : 12);
     const since = url.searchParams.get("since");
     const delta = since && NIGHT_RE.test(since) ? since : null;
+    const maxAge = (schedule.status === "off" ? 15 : 5) * (delta ? 1 : 12);
     const cache = caches.default;
     const key = new Request(url.origin + "/" + venue.slug + "/api/plays" + (delta ? "?since=" + delta : ""));
     let res = await cache.match(key);
