@@ -104,6 +104,14 @@ h3 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: calc(2.
 html.embed .signup { grid-template-columns: 1fr; }
 .rxnote { font-size: calc(2.2 * var(--u)); color: var(--muted); margin: 0; }
 
+/* pre-show preview: the countdown in the header and the tip menu */
+.tally .count { border-color: var(--hot); min-width: calc(30 * var(--u)); }
+.tally .count strong { color: var(--hot); font-size: calc(6.4 * var(--u)); font-variant-numeric: tabular-nums; }
+.ub.tip-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(.4 * var(--u)) calc(2 * var(--u)); align-items: center; }
+.ub.tip-row .amt { font-family: var(--f-display); font-size: calc(4 * var(--u)); color: var(--gold); grid-row: span 2; }
+.pv-note { font-size: calc(2.6 * var(--u)); color: var(--muted); margin: 0; }
+.pv-note b { color: var(--ink); }
+
 /* bar charts: decade mix and songs by hour */
 .chart { background: var(--panel); border: 2px solid var(--line); border-radius: calc(2 * var(--u)); padding: calc(2.4 * var(--u)) calc(2.6 * var(--u)) calc(1.6 * var(--u)); }
 .bars { display: flex; align-items: flex-end; gap: calc(1.2 * var(--u)); height: calc(26 * var(--u)); }
@@ -207,6 +215,10 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   if (qs.get("embed")) { document.body.classList.add("embed"); document.documentElement.classList.add("embed"); }
   const PIN_ASKED = qs.get("night") || "";
   const PIN = /^\d{4}-\d{2}-\d{2}$/.test(PIN_ASKED) ? PIN_ASKED : null;
+  // ?preview=1 always shows the pre-show preview (to check how it looks), ?preview=0 never does.
+  const PREVIEW_ASK = qs.get("preview");
+  const PREVIEW_LEAD_S = 2 * 3600; // the preview starts this long before the show
+  const PREVIEW_LATE_S = 2 * 3600; // and gives up this long after the start time if no song has played (a cancelled night)
   const SPEED = Math.max(0.2, Math.min(5, Number(qs.get("speed")) || 1)); // 1 = about 3.5% of the screen height per second
   const REFRESH_MS = 60000;
   const LIVE_WINDOW_S = 20 * 60, TONIGHT_WINDOW_S = 10 * 3600;
@@ -217,7 +229,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   const nightLabel = (n) => new Date(n + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const names = (list, max) => list.slice(0, max).join(", ") + (list.length > max ? " and " + (list.length - max) + " more" : "");
-  let clockSkew = 0, lastView = "";
+  let clockSkew = 0, lastView = "", previewing = false;
   const now = () => Date.now() / 1000 + clockSkew;
 
   // ---------- data -> what to show ----------
@@ -392,7 +404,77 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     }
     return box;
   }
+  // ---------- pre-show preview ----------
+  // From 2 hours before the scheduled start until the first song of the night plays, the TV shows a preview:
+  // a countdown, how to sign up, what's on the phones tonight, the tip menu and last time's recap.
+  // The moment a song shows up (or ?preview=0, or a pinned ?night=) the normal live screen takes over.
+  function previewInfo(data) {
+    if (PREVIEW_ASK === "0" || PIN || EMBED) return null;
+    const sc = data.schedule; if (!sc) return null;
+    const start = Number(sc.status === "off" ? sc.next_start : sc.session_start);
+    if (!start) return null;
+    const force = PREVIEW_ASK === "1", t = now();
+    if (!force && (t < start - PREVIEW_LEAD_S || t > start + PREVIEW_LATE_S)) return null;
+    // Any song since the preview window opened means the show is on: back to the live screen.
+    if (!force && (data.plays || []).some((p) => Number(p.played_at) >= start - PREVIEW_LEAD_S)) return null;
+    const startLabel = new Date(start * 1000).toLocaleTimeString("en-US", { timeZone: (VENUE && VENUE.tz) || "America/Chicago", hour: "numeric", minute: "2-digit" }).replace(":00", "");
+    const tips = data.tips && data.tips.venmo ? { venmo: String(data.tips.venmo).replace(/^@/, ""), menu: (data.tips.menu || []).slice(0, 8) } : null;
+    return { start, startLabel, venue: sc.venue || "", tips, secretsLeft: Number(data.secrets_left) || 0 };
+  }
+  function countdownText(start) {
+    const left = Math.round(start - now());
+    if (left <= 0) return "Any minute";
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : String(m)) + ":" + String(s).padStart(2, "0");
+  }
+  let previewStart = 0;
+  function tickCountdown() { const c = $("pv-count"); if (c && previewStart) c.textContent = countdownText(previewStart); }
+  setInterval(tickCountdown, 1000);
+  function renderPreview(v, pv) {
+    previewStart = pv.start;
+    $("title").textContent = "Karaoke tonight · " + pv.startLabel;
+    const k = $("kicker"); k.classList.add("live");
+    k.textContent = "Coming up" + (pv.venue ? " at " + pv.venue : "") + " · sign up at the KJ booth";
+    const t = $("tally"); t.replaceChildren();
+    const d = el("div", "count"); const st = el("strong", null, countdownText(pv.start)); st.id = "pv-count";
+    d.append(st, document.createTextNode(now() < pv.start ? "until the first song" : "Warming up the mics")); t.append(d);
+    const box = el("div", "copy");
+    box.append(heading("Want to sing tonight?", "sign up at the KJ booth"));
+    const g = el("div", "signup");
+    [["Grab a slip at the KJ booth", "That’s where the host runs the music."],
+     ["Write your name and song", "Add the artist if more than one song has that title."],
+     ["Hand it to the KJ", "Get in early. The first slips go up first!"]].forEach(([b, s], i) => { const c = el("div"); c.append(el("div", "n", String(i + 1)), el("b", null, b), el("span", null, s)); g.append(c); });
+    box.append(g);
+    box.append(heading("On your phone tonight", "scan the code or open " + SHOW_URL));
+    const f = el("div", "grid");
+    [["🔥", "React to every song", "Tap 🔥 🎤 🍅 😴 on whoever is singing. The crowd’s taps decide some awards."],
+     ["🎯", "Karaoke bingo", "Fill your card as the songs play."],
+     ["🗳️", "Crowd draft", "Draft a friend to sing a song. The crowd votes picks up."],
+     ["🤝", "Duet finder", "Looking for a partner? Post a song and find one."],
+     ["📖", "Songbook", "Search every song and save a list for later."],
+     ["🤫", "Secret songs", pv.secretsLeft ? pv.secretsLeft + " hidden songs win a prize when someone sings one." : "Some songs are secretly worth a prize."]]
+      .forEach(([ic, nm, ds]) => { const c = el("article", "ub"); const i = el("span", "ic", ic); i.setAttribute("aria-hidden", "true"); c.append(i, el("div", "nm", nm), el("div", "ds", ds)); f.append(c); });
+    box.append(f);
+    if (pv.tips && pv.tips.menu.length) {
+      box.append(heading("Tip the KJ", "Venmo @" + pv.tips.venmo + " · tip menu at " + SHOW_URL));
+      const tg = el("div", "grid");
+      pv.tips.menu.forEach((m) => { const c = el("article", "ub tip-row");
+        c.append(el("span", "amt", "$" + Number(m.amount || 0)), el("div", "nm", ((m.emoji ? m.emoji + " " : "") + (m.label || "")).trim()), el("div", "ds", m.note || ""));
+        tg.append(c); });
+      box.append(tg);
+    }
+    // Last time's recap: the same awards, singers and badges the TV showed that night (the host never wins volume awards).
+    if (v && (v.awards.length || v.singers.length)) {
+      box.append(heading("Last time", nightLabel(v.night)));
+      const last = copyOf({ ...v, live: false, tonight: false, drafts: [], duets: [], dares: [] });
+      box.append(...last.children);
+    } else box.append(el("p", "pv-note", "Be the first song of the night. Get your slip in!"));
+    const reel = $("reel"); reel.replaceChildren(box);
+    layout();
+  }
+
   function render(v) {
+    previewStart = 0;
     $("title").textContent = v.tonight ? "Tonight · " + nightLabel(v.night) : nightLabel(v.night);
     const k = $("kicker"); k.classList.toggle("live", v.live);
     const sc = v.schedule, at = sc && sc.venue ? " at " + sc.venue : "";
@@ -463,9 +545,21 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       base = data;
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
       const v = build(data);
-      if (!v) { $("title").textContent = "No karaoke nights yet"; return setStatus(""); }
-      const sig = JSON.stringify({ ...v, welcome: null }); // only redraw when something on screen would change, so the scroll doesn't jump
-      if (sig !== lastView) { lastView = sig; render(v); }
+      // Pre-show preview (see previewInfo). If anything in it goes wrong, fall back to the normal screen.
+      let pv = null;
+      try { pv = previewInfo(data); } catch (e) { pv = null; }
+      previewing = !!pv;
+      if (pv) {
+        const sig = "preview:" + JSON.stringify({ pv, v: v && { night: v.night, awards: v.awards, singers: v.singers, badges: v.badges, songs: v.songs, artists: v.artists, reactions: v.reactions, decades: v.decades, hours: v.hours } });
+        try { if (sig !== lastView) { renderPreview(v, pv); lastView = sig; } }
+        catch (e) { pv = null; previewing = false; lastView = ""; }
+      }
+      if (!v && !pv) { $("title").textContent = "No karaoke nights yet"; return setStatus(""); }
+      if (!pv) {
+        const sig = JSON.stringify({ ...v, welcome: null }); // only redraw when something on screen would change, so the scroll doesn't jump
+        if (sig !== lastView) { lastView = sig; render(v); }
+      }
+      if (!v) return setStatus("");
       watchRx(v.current);
       secretMoment(data);
       welcomeMoment(v);
@@ -588,8 +682,8 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   wake(); document.addEventListener("visibilitychange", wake);
 
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
-  refresh();
-  setInterval(refresh, REFRESH_MS);
+  // Check every minute, or every 20 seconds during the preview so the live screen takes over fast once songs start.
+  (async function loop() { await refresh(); setTimeout(loop, previewing ? 20000 : REFRESH_MS); })();
   // Reload every 6 hours so a TV left on all week picks up site updates.
   setTimeout(() => location.reload(), 6 * 3600 * 1000);
 })();
