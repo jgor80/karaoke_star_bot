@@ -291,9 +291,11 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       return json(r);
     } else if (body.action === "test") {
       if (!cfg.ntfy_topic) return json({ error: "No alert topic yet." }, 400);
-      const sent = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } })
-        .then((r) => r.ok).catch(() => false);
-      return sent ? json({ ok: true }) : json({ error: "ntfy didn’t take the test. Try again in a minute." }, 502);
+      // Say what ntfy answered, so a quota or block on ntfy's side shows up on /host instead of a generic failure.
+      const why = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } })
+        .then(async (r) => (r.ok ? "" : "ntfy said " + r.status + ": " + (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160)))
+        .catch((e) => "couldn’t reach ntfy (" + String(e && e.message || e).slice(0, 80) + ")");
+      return !why ? json({ ok: true }) : json({ error: "ntfy didn’t take the test: " + why }, 502);
     } else return json({ error: "unknown action" }, 400);
   }
   await checkSecrets(env, venue);
