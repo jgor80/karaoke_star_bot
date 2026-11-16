@@ -9,6 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%AB%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <style>
 :root {
   --bg: #170d1c; --panel: #23152a; --panel-2: #2d1b36; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843;
@@ -71,6 +72,20 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
 .alarm small { font-size: 16px; opacity: .8; }
 @keyframes flash { 0% { background: var(--hot); } 100% { background: var(--gold); } }
 @media (prefers-reduced-motion: reduce) { .alarm { animation: none; } }
+/* Scan code: a card at the bottom of the page, plus a pinned button that opens it full screen to hold out to the crowd. */
+main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.scan { text-align: center; justify-items: center; }
+.scan .code { background: #fff; padding: 16px; border-radius: 16px; width: min(100%, 360px); aspect-ratio: 1; cursor: pointer; border: 0; }
+.scan .code img, .scan .code canvas, .scan-full .code img, .scan-full .code canvas { display: block; width: 100% !important; height: 100% !important; }
+.scan .url, .scan-full .url { font-family: var(--f-mono); font-size: 20px; color: var(--gold); overflow-wrap: anywhere; }
+.qr-text { color: #1a0710; font: 700 22px var(--f-body); display: grid; place-content: center; overflow-wrap: anywhere; }
+.scan-pin { position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 6px 24px rgba(0,0,0,.5); border-radius: 99px; padding: 14px 24px; font-size: 18px; white-space: nowrap; }
+.scan-full { position: fixed; inset: 0; z-index: 45; background: #fff; color: #1a0710; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 20px; text-align: center; cursor: pointer; }
+.scan-full .big { font-family: var(--f-display); font-size: clamp(26px, 8vw, 44px); color: #1a0710; line-height: 1.05; }
+.scan-full .code { width: min(88vw, 72vh, 560px); aspect-ratio: 1; }
+.scan-full .url { color: #1a0710; }
+.scan-full small { font-size: 15px; color: #555; }
 </style>
 </head>
 <body>
@@ -214,7 +229,22 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
     </section>
     <div class="row"><button type="button" class="ghost small" id="logout">Log out of this phone</button></div>
   </div>
+
+  <section class="card scan" id="scan-card" aria-label="Scan code for the crowd">
+    <h2>Crowd scan code</h2>
+    <p class="hint">Hold your phone out. People scan this to open tonight’s page on their own phones.</p>
+    <button type="button" class="code" id="scan-qr" aria-label="QR code for the crowd page. Tap to show it full screen."></button>
+    <div class="url" id="scan-url"></div>
+  </section>
 </main>
+
+<button type="button" class="scan-pin" id="scan-pin">📱 Show scan code</button>
+<div class="scan-full" id="scan-full" hidden role="dialog" aria-label="Scan code for the crowd">
+  <div class="big">Scan to join<br>Oke Night</div>
+  <div class="code" id="scan-qr-full" role="img" aria-label="QR code for the crowd page"></div>
+  <div class="url" id="scan-url-full"></div>
+  <small>Tap anywhere to close</small>
+</div>
 
 <div class="alarm" id="alarm" hidden role="alertdialog" aria-live="assertive">
   <div class="big">Secret song!</div>
@@ -223,6 +253,31 @@ code { font-family: var(--f-mono); font-size: 16px; background: var(--bg); borde
   <small>Tap anywhere to stop the alarm</small>
 </div>
 
+<script>
+  // Crowd scan code: links to this bar's public phone page. Separate from the host script so nothing here can break login or alerts.
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const V = window.OKE_VENUE || { path: "/wbl/" };
+    const url = location.origin + (V.path || "/wbl/");
+    const short = url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+    $("scan-url").textContent = $("scan-url-full").textContent = short;
+    let fullDone = false;
+    function draw(el, px) {
+      try { if (window.QRCode) { new QRCode(el, { text: url, width: px, height: px, correctLevel: QRCode.CorrectLevel.M }); return; } } catch (e) {}
+      el.textContent = short; el.classList.add("qr-text");
+    }
+    function inline() { draw($("scan-qr"), 480); }
+    if (document.readyState === "complete") inline(); else window.addEventListener("load", inline);
+    function openFull() {
+      if (!fullDone) { draw($("scan-qr-full"), 720); fullDone = true; }
+      $("scan-full").hidden = false;
+    }
+    $("scan-pin").addEventListener("click", openFull);
+    $("scan-qr").addEventListener("click", openFull);
+    $("scan-full").addEventListener("click", () => { $("scan-full").hidden = true; });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("scan-full").hidden = true; });
+  })();
+</script>
 <script>
   if (window.OKE_VENUE) document.getElementById("venue-name").textContent = "📍 " + window.OKE_VENUE.name;
 (function () {
