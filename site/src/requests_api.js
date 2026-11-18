@@ -65,7 +65,7 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
   const dev = String(b.dev || "");
   if (title.length < 2) return json({ error: "Type the song’s title." }, 400);
   if (!/^[a-f0-9]{32}$/.test(dev)) return json({ error: "bad device" }, 400);
-  const day = new Date(Date.now() - 6 * 3600e3).toISOString().slice(0, 10); // close enough to a Central "night"
+  const day = new Date(Date.now() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: venue.tz || "America/Chicago" }); // the bar's night, rolling over at 6 AM there
   const ipHash = await networkHash(env, req, "request", day);
   const now = nowS();
 

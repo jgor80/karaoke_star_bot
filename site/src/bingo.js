@@ -160,6 +160,21 @@
     return { rows, marks, won, count: marks.filter(Boolean).length - 1 };
   }
 
+  // A yes/no box in the page's own style (confirm() doesn't show in some phone web views). Resolves true on yes.
+  function ask(msg, yes) {
+    return new Promise((done) => {
+      const d = document.createElement("dialog"); d.className = "kb-ask";
+      const p = document.createElement("p"); p.textContent = msg;
+      const row = document.createElement("div"); row.className = "btns"; row.style.justifyContent = "center";
+      const no = document.createElement("button"); no.type = "button"; no.className = "act ghost"; no.textContent = "Keep this card";
+      const ok = document.createElement("button"); ok.type = "button"; ok.className = "act"; ok.textContent = yes;
+      no.onclick = () => d.close("no"); ok.onclick = () => d.close("yes");
+      d.addEventListener("close", () => { d.remove(); done(d.returnValue === "yes"); });
+      row.append(no, ok); d.append(p, row); document.body.append(d);
+      if (d.showModal) d.showModal(); else { d.remove(); done(window.confirm(msg)); }
+    });
+  }
+
   function mount(root, opts) {
     const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
     let allRows = [], night = null, card = null, since = 0, lastWon = 0;
@@ -176,10 +191,10 @@
       // A card for tonight marks songs from when it was made. Replaying a past night marks the whole night.
       since = night === tonight() && made ? made : 0;
     }
-    function newCard() {
+    async function newCard() {
       const had = evaluate(card, allRows, night, since).count > 0, live = night === tonight();
       const msg = live ? "Get a new card? It only marks songs sung from now on" + (had ? ", and the squares you have now won't come with you." : ".") : "Get a new card for this replay?";
-      if ((had || live) && !confirm(msg)) return;
+      if ((had || live) && !(await ask(msg, "New card"))) return;
       saveCard(); lastWon = 0; ensureCard(); draw();
     }
 
