@@ -4,8 +4,9 @@
 // Plays are generated from the clock: a show starts every CYCLE_S (the latest one began at least an hour
 // ago), with a song every few minutes, so the page always has a "now singing", a line, a leaderboard and
 // earlier songs. Three earlier weeks of shows give history, badges and records. Reactions and applause are
-// generated too. Taps on the phone get a friendly answer; anything else that would save (requests, photos,
-// draft picks, duet posts) says this is the demo. Singer names are invented.
+// generated too. Taps on the phone get a friendly answer, and Report on a singer's photo or name answers
+// "thanks"; anything else that would save (requests, photos, draft picks, duet posts) says this is the demo.
+// Singer names are invented, and the sample photos are drawings.
 import { scheduleStatus } from "./schedule.js";
 import { publicVenue } from "./venues.js";
 
@@ -73,6 +74,18 @@ function demoSchedule(start) {
   return { ...DEMO_VENUE, weekday: dow, start: [Number(p.hour), Number(p.minute)] };
 }
 
+// Sample singer photos, so App Review can see photos and try Report and Hide. They are drawn here (a cartoon
+// singer in the demo's colors), not photos of real people.
+const DEMO_PHOTOS = { maya: ["#ff4fa0", "#2a1233"], rosa: ["#ffb347", "#1d1838"], theo: ["#4fd1ff", "#20122b"], priya: ["#a78bfa", "#17202e"], marcus: ["#7ee787", "#251530"] };
+function demoPhoto(k) {
+  const c = DEMO_PHOTOS[k];
+  if (!c) return null;
+  const [fg, bg] = c;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="${bg}"/>` +
+    `<circle cx="60" cy="46" r="22" fill="${fg}" opacity=".9"/><path d="M22 120c4-26 20-40 38-40s34 14 38 40z" fill="${fg}" opacity=".75"/>` +
+    `<rect x="78" y="52" width="9" height="30" rx="4" fill="#eee" transform="rotate(-25 82 67)"/><circle cx="88" cy="48" r="8" fill="#ccc"/></svg>`;
+}
+
 const json = (d, status = 200, cache = "no-store") => new Response(JSON.stringify(d), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": cache } });
 const NOT_SAVED = "This is the demo night, so nothing is saved here. At a real Oke Night bar this works for real.";
 
@@ -95,7 +108,7 @@ export async function handleDemoApi(name, req, url, real) {
       last_sync: null, last_sync_ts: now - 20, served_at: now, schedule: { ...scheduleStatus(now, venue), reminder: null },
       reactions, reactors, secrets_found: [], secrets_left: 3, host: "DJ Demo", tips: { venmo: "", menu: [] },
       queue: { updated_at: now - 30, items: upcoming.map((p) => ({ id: p.song_id, singer: p.singer, len: p.length_s })) },
-      draft_night: dayOf(start, DEMO_VENUE.tz), drafts: [], crowd, duets: [], avatars: {},
+      draft_night: dayOf(start, DEMO_VENUE.tz), drafts: [], crowd, duets: [], avatars: Object.fromEntries(Object.keys(DEMO_PHOTOS).map((k) => [k, 1])),
     }, 200, "public, max-age=5");
   }
   if (name === "react") {
@@ -105,6 +118,17 @@ export async function handleDemoApi(name, req, url, real) {
   }
   if (name === "reactions") return json({ play: url.searchParams.get("play"), counts: {} }, 200, "public, max-age=5");
   if (["catalog", "art", "listen"].includes(name)) return real();
+  if (name === "avatar" && req.method === "GET") {
+    const svg = demoPhoto(String(url.searchParams.get("k") || ""));
+    if (!svg) return new Response("Not found", { status: 404 });
+    return new Response(svg, { headers: { "content-type": "image/svg+xml", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "cache-control": "public, max-age=86400" } });
+  }
+  if (name === "avatar" && req.method === "POST") {
+    // Report works here (it's what App Review checks for user content), but nothing is stored or sent.
+    let b = {}; try { b = await req.json(); } catch (e) {}
+    if (b.action === "report") return json({ ok: true, demo: true, hidden: false });
+    if (b.action === "upload") return json({ error: "This is the demo night, so your photo isn't uploaded. At a real Oke Night bar it goes to the host, who approves it before anyone else sees it.", demo: true }, 409);
+  }
   if (req.method === "POST") return json({ error: NOT_SAVED, demo: true }, 409);
   return json({ error: "Not part of the demo night." }, 404);
 }
