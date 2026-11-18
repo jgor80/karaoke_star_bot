@@ -19,6 +19,8 @@ it also reads the laptop's mic once a second while karaoke is on (a song in the 
 45 minutes, or people in the queue) and uploads the loudness level only, never audio.
 The site scores the applause after each song from it (site/src/crowd_api.js).
 Turn audio enhancements off for the mic in Windows so cheers aren't flattened (see README).
+If sounddevice is missing (a self-update brings the meter but can't run the installer), the live sync
+installs it by itself. Test the mic any time with:  python karaoke_sync.py --mic-test
 Config keys (optional): "crowd_mic": false turns it off; "crowd_mic_device": "part of the mic's name".
 
 Song requests: with --watch it also files karaoke tracks you download. Every 30 seconds it looks
@@ -37,8 +39,13 @@ restarts. The daily run checks too. Config keys (optional): "auto_update": false
 
 Health: each heartbeat also tells the site whether KaraFun is open and which version of this script runs,
 so the host gets a phone alert before the night if the laptop or KaraFun isn't ready (site/src/health_api.js).
+The live (--watch) copy also reports that it is running, its own version and the crowd mic's state
+(listening, idle, off and why), which /host shows under "Laptop".
 
-Usage: python karaoke_sync.py [--watch] [--source PATH] [--target PATH] [--config PATH]
+Only one live copy runs at a time. A newly started live copy stops any older one first, so a copy left
+running from an old version (it can live for days if the laptop only sleeps) can't block the new one.
+
+Usage: python karaoke_sync.py [--watch | --mic-test] [--source PATH] [--target PATH] [--config PATH]
 """
 import argparse
 import hashlib
@@ -414,20 +421,45 @@ def karafun_running():
 
 
 _health_ready = False
+# Set by --watch. One-off runs (the daily sync, the installer's test) leave the live copy's columns alone,
+# so a test run of a new version can't hide that an old live copy is still the one running.
+watch_info = {"on": False, "version": None}
+# The crowd mic's state for the heartbeat: "listening: <mic>", "idle" (no karaoke on), "off: <why>", "error: <why>".
+mic_state = {"status": "starting", "level_ts": 0}
+# Keep in step with HEALTH_TABLE / HEALTH_ADD in site/src/health_api.js.
+HEALTH_TABLE = ("create table if not exists sync_health (venue text primary key, ts integer not null,"
+                " version text, karafun integer, device text, watch_ts integer, watch_version text,"
+                " mic text, mic_ts integer)")
+HEALTH_ADD = ("watch_ts integer", "watch_version text", "mic text", "mic_ts integer")
 
 
 def send_health(cfg):
     """One row per bar in D1 sync_health: when this laptop last checked in, whether KaraFun is open, and
-    which copy of this script it runs. The site uses it for the host's pre-show alert and the /host status."""
+    which copy of this script it runs; from the live copy also its version and the crowd mic's state.
+    The site uses it for the host's pre-show alert and the /host status."""
     global _health_ready
     if not _health_ready:
-        d1_query(cfg, "create table if not exists sync_health (venue text primary key, ts integer not null,"
-                 " version text, karafun integer, device text)", [])
+        d1_query(cfg, HEALTH_TABLE, [])
+        for col in HEALTH_ADD:  # tables made by older versions lack these
+            try:
+                d1_query(cfg, "alter table sync_health add column " + col, [])
+            except Exception:
+                pass  # already there
         _health_ready = True
     kf = karafun_running()
-    d1_query(cfg, "insert or replace into sync_health (venue, ts, version, karafun, device) values (?, ?, ?, ?, ?)",
-             [venue_of(cfg), int(time.time()), script_hash()[:12], None if kf is None else int(kf),
-              os.environ.get("COMPUTERNAME", "")])
+    now = int(time.time())
+    live = watch_info["on"]
+    d1_query(cfg, "insert into sync_health (venue, ts, version, karafun, device, watch_ts, watch_version, mic, mic_ts)"
+             " values (?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(venue) do update set ts = excluded.ts,"
+             " version = excluded.version, karafun = excluded.karafun, device = excluded.device,"
+             " watch_ts = coalesce(excluded.watch_ts, sync_health.watch_ts),"
+             " watch_version = coalesce(excluded.watch_version, sync_health.watch_version),"
+             " mic = coalesce(excluded.mic, sync_health.mic), mic_ts = coalesce(excluded.mic_ts, sync_health.mic_ts)",
+             [venue_of(cfg), now, script_hash()[:12], None if kf is None else int(kf),
+              os.environ.get("COMPUTERNAME", ""),
+              now if live else None, watch_info["version"] if live else None,
+              str(mic_state["status"])[:200] if live else None,
+              (mic_state["level_ts"] or None) if live else None])
 
 
 def fetch(url, timeout=60):
@@ -601,6 +633,44 @@ def crowd_active():
     return (time.time() - karaoke_state["newest_play"] < CROWD_ACTIVE_S) or karaoke_state["queue_len"] > 0
 
 
+def ensure_sounddevice(log):
+    """Import sounddevice, installing it for this Python first if it's missing. Returns the module or None.
+    A self-updated script brings the crowd meter but not the package, so the live sync fixes that itself."""
+    try:
+        import sounddevice as sd
+        return sd
+    except ImportError:
+        pass
+    except Exception as e:  # installed, but PortAudio or the sound system failed to load
+        mic_state["status"] = f"off: sounddevice won't load ({e})"
+        write_log(log, f"crowd meter: {mic_state['status']}")
+        return None
+    exe = sys.executable
+    console = os.path.join(os.path.dirname(exe), "python.exe")
+    if os.path.basename(exe).lower() == "pythonw.exe" and os.path.exists(console):
+        exe = console
+    write_log(log, "crowd meter: sounddevice isn't installed, installing it now")
+    try:
+        r = subprocess.run([exe, "-m", "pip", "install", "--user", "--quiet", "--disable-pip-version-check", "sounddevice"],
+                           capture_output=True, text=True, timeout=600,
+                           creationflags=0x08000000 if os.name == "nt" else 0)
+        if r.returncode != 0:
+            raise RuntimeError((r.stderr or r.stdout or "pip failed").strip().splitlines()[-1][:200])
+        import importlib
+        import site
+        importlib.invalidate_caches()
+        user_site = site.getusersitepackages()
+        if user_site not in sys.path:
+            sys.path.append(user_site)  # Python skips a user folder that didn't exist when it started
+        import sounddevice as sd
+        write_log(log, "crowd meter: installed sounddevice")
+        return sd
+    except Exception as e:
+        mic_state["status"] = f"off: couldn't install sounddevice ({e})"
+        write_log(log, "crowd meter: " + mic_state["status"] + ". Run install_live_sync.bat again.")
+        return None
+
+
 def crowd_meter(a, log):
     """Background thread: read the mic's loudness once a second during karaoke and upload it to D1.
 
@@ -611,15 +681,17 @@ def crowd_meter(a, log):
         with open(a.config, encoding="utf-8") as f:
             cfg = json.load(f)
     except (OSError, ValueError):
+        mic_state["status"] = "off: no karaoke_sync_config.json"
         return  # no Cloudflare config, nowhere to send it
     if cfg.get("crowd_mic") is False:
+        mic_state["status"] = "off: crowd_mic is false in the config"
         write_log(log, "crowd meter: off (crowd_mic is false in the config)")
         return
-    try:
-        import sounddevice as sd
-    except Exception:
-        write_log(log, "crowd meter: off. To turn it on run:  python -m pip install sounddevice  then sign out and back in")
+    sd = ensure_sounddevice(log)
+    if sd is None:
         return
+    mic_state["status"] = "idle: waiting for karaoke to start"
+    write_log(log, "crowd meter: ready, the mic opens when a song plays or someone is in the queue")
     from array import array
 
     lock = threading.Lock()
@@ -644,7 +716,7 @@ def crowd_meter(a, log):
         write_log(log, f"crowd meter: no mic matching \"{want}\", using the default mic")
         return None
 
-    stream, out, last_up, fails, created = None, [], time.monotonic(), 0, False
+    stream, out, last_up, fails, created, silent = None, [], time.monotonic(), 0, False, 0
     sec = int(time.time())
     while True:
         try:
@@ -659,14 +731,22 @@ def crowd_meter(a, log):
                 with lock:
                     acc["sum"], acc["n"] = 0.0, 0
                 sec = int(time.time())
+                mic_state["status"] = f"listening: {info.get('name')}"
                 write_log(log, f"crowd meter: listening on {info.get('name')}")
             elif not active and stream is not None:
                 stream.stop()
                 stream.close()
                 stream = None
+                mic_state["status"] = "idle: karaoke's over, mic closed"
                 write_log(log, "crowd meter: karaoke's over, mic closed")
         except Exception as e:
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
             stream = None
+            mic_state["status"] = f"error: can't open the mic ({e})"[:200]
             write_log(log, f"crowd meter: can't open the mic ({e}); trying again in a minute."
                            " Check Settings > Privacy > Microphone > Let desktop apps access your microphone")
             time.sleep(60)
@@ -683,6 +763,17 @@ def crowd_meter(a, log):
                 db = max(-120.0, 10 * math.log10(ms)) if ms > 0 else -120.0
                 out.append((sec, round(db, 1)))
                 del out[:-CROWD_KEEP]
+                silent = 0
+            else:
+                silent += 1
+                if silent == 30:  # the stream is open but no sound arrives: a dead or unplugged mic
+                    mic_state["status"] = "error: the mic is open but sends nothing (unplugged or in use?)"
+                    write_log(log, "crowd meter: no sound from the mic for 30 seconds, reopening it")
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+                    stream, silent = None, 0
             sec = now
 
         if out and time.monotonic() - last_up >= CROWD_UPLOAD_S:
@@ -699,12 +790,68 @@ def crowd_meter(a, log):
                     sql = ("insert or ignore into crowd_levels (ts, src, db) values "
                            + ",".join(["(?,?,?)"] * len(chunk)))
                     d1_query(cfg, sql, [v for ts, db in chunk for v in (ts, src, db)])
+                    mic_state["level_ts"] = chunk[-1][0]
                     del out[:len(chunk)]
+                if fails >= 1:
+                    write_log(log, "crowd meter: uploading again")
                 fails = 0
             except Exception as e:
                 fails += 1
                 if fails in (1, 10) or fails % 100 == 0:
                     write_log(log, f"crowd meter: upload failed ({e}), keeping {len(out)} seconds to retry")
+
+
+def crowd_meter_safe(a, log):
+    """Run the crowd meter, and say so in the log and on /host if it ever stops on an unexpected error."""
+    try:
+        crowd_meter(a, log)
+    except Exception as e:
+        mic_state["status"] = f"error: the crowd meter stopped ({e})"[:200]
+        write_log(log, "crowd meter: stopped on an error: " + repr(e) + ". Sign out and back in to restart it")
+
+
+def mic_test(a, log, seconds=6):
+    """--mic-test: list the mics, then show the chosen mic's level for a few seconds. Clap to see it jump."""
+    cfg = load_cfg(a.config) or {}
+    if cfg.get("crowd_mic") is False:
+        print('The crowd meter is turned off: "crowd_mic": false in karaoke_sync_config.json.')
+        return 1
+    sd = ensure_sounddevice(log)
+    if sd is None:
+        print("Can't use the mic: " + mic_state["status"])
+        return 1
+    want = (cfg.get("crowd_mic_device") or "").lower()
+    dev = None
+    print("Mics on this laptop:")
+    for i, d in enumerate(sd.query_devices()):
+        if d.get("max_input_channels", 0) > 0:
+            print(f"  {d.get('name')}")
+            if want and dev is None and want in d.get("name", "").lower():
+                dev = i
+    try:
+        info = sd.query_devices(dev, "input")
+        rate = int(info.get("default_samplerate") or 48000)
+        print(f"\nListening on: {info.get('name')} for {seconds} seconds. Clap or cheer now.")
+        from array import array
+        levels = []
+        with sd.RawInputStream(device=dev, samplerate=rate, channels=1, dtype="int16", blocksize=rate // 2) as st:
+            for _ in range(seconds * 2):
+                data, _over = st.read(rate // 2)
+                x = array("h", bytes(data))
+                ms = sum(v * v for v in x) / max(1, len(x)) / (32768.0 * 32768.0)
+                db = max(-120.0, 10 * math.log10(ms)) if ms > 0 else -120.0
+                levels.append(db)
+                print(f"  {db:6.1f} dB  " + "#" * max(0, int((db + 80) / 2)), flush=True)
+    except Exception as e:
+        print(f"\nCan't open the mic: {e}")
+        print("Check Settings > Privacy & security > Microphone > Let desktop apps access your microphone: On.")
+        return 1
+    if max(levels) <= -90:
+        print("\nThe mic is open but hears nothing. Check it isn't muted or unplugged, or pick another mic with"
+              ' "crowd_mic_device" in karaoke_sync_config.json.')
+        return 1
+    print(f"\nMic works. Quietest {min(levels):.0f} dB, loudest {max(levels):.0f} dB. A clap should be at least 10 dB above quiet.")
+    return 0
 
 
 # ---------- song requests: file downloaded karaoke tracks ----------
@@ -963,16 +1110,51 @@ def request_filer(a, log):
         time.sleep(FILE_EVERY_S)
 
 
+def stop_other_copies(log):
+    """Stop any other live copy of this script (Windows). Returns how many were stopped."""
+    if os.name != "nt":
+        return 0
+    ps = ("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | Where-Object { $_.ProcessId -ne %d -and"
+          " $_.CommandLine -like '*karaoke_sync*' -and $_.CommandLine -like '*--watch*' } |"
+          " ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $_.ProcessId }").replace("%d", str(os.getpid()))
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], capture_output=True,
+                             text=True, timeout=60, creationflags=0x08000000).stdout
+    except Exception as e:
+        write_log(log, f"watch: couldn't look for an older copy ({e})")
+        return 0
+    pids = [x.strip() for x in out.split() if x.strip().isdigit()]
+    if pids:
+        write_log(log, "watch: stopped an older live copy (process " + ", ".join(pids) + ")")
+    return len(pids)
+
+
+def take_lock(log):
+    """Hold the single-instance port. If another copy holds it, stop that copy (once) and take over:
+    the newest start wins, so an old version left running can't keep the new one out."""
+    for attempt in range(2):
+        lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            lock.bind(("127.0.0.1", WATCH_LOCK_PORT))
+            return lock
+        except OSError:
+            lock.close()
+            if attempt or not stop_other_copies(log):
+                return None
+            time.sleep(3)
+    return None
+
+
 def watch(a, log):
     """Sync whenever KaraFun's database changes. Runs until the computer logs off."""
-    lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        lock.bind(("127.0.0.1", WATCH_LOCK_PORT))
-    except OSError:
-        write_log(log, "watch: already running, exiting")
+    lock = take_lock(log)
+    if lock is None:
+        write_log(log, "watch: another live copy is running and couldn't be stopped, exiting."
+                       " Sign out and back in (or restart) to start the newest one")
         return 0
-    write_log(log, "watch: started")
-    threading.Thread(target=crowd_meter, args=(a, log), daemon=True).start()
+    watch_info["on"], watch_info["version"] = True, script_hash()[:12]
+    write_log(log, f"watch: started (version {watch_info['version']}, Python {sys.version.split()[0]} at {sys.executable})")
+    threading.Thread(target=crowd_meter_safe, args=(a, log), daemon=True).start()
     threading.Thread(target=request_filer, args=(a, log), daemon=True).start()
     last_stamp, last_sync, failures = None, 0.0, 0
     last_update = time.monotonic() - UPDATE_EVERY_S + 120  # first check 2 minutes after starting
@@ -1010,8 +1192,11 @@ def main():
     ap.add_argument("--target", default=DEFAULT_TARGET)
     ap.add_argument("--config", default=DEFAULT_CONFIG)
     ap.add_argument("--watch", action="store_true", help="keep running and sync each new song within seconds")
+    ap.add_argument("--mic-test", action="store_true", help="check the crowd meter's mic for a few seconds")
     a = ap.parse_args()
     log = os.path.join(os.path.dirname(os.path.abspath(a.target)), "sync_log.txt")
+    if a.mic_test:
+        sys.exit(mic_test(a, log))
     if a.watch:
         sys.exit(watch(a, log))
     ok, msg = run_once(a)

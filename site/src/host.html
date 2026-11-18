@@ -128,6 +128,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     <section class="card" id="laptop-card">
       <h2>Karaoke laptop</h2>
       <p class="hint" id="laptop-state">Checking…</p>
+      <p class="hint" id="laptop-mic"></p>
       <p class="hint">From 30 minutes before each night, you get a push (same ntfy topic as above) if the laptop stops checking in or the karaoke app isn’t open. The laptop’s sync updates itself, so there are no files to copy.</p>
     </section>
 
@@ -646,6 +647,21 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     p.textContent = (ok ? "🟢 Online" : "🔴 Offline") + " · last check-in " + (mins < 1 ? "just now" : mins < 120 ? mins + " min ago" : when(h.ts)) +
       (h.app_open === true ? " · karaoke app open" : h.app_open === false ? " · karaoke app closed" : "") +
       (h.up_to_date === true ? " · sync up to date" : h.up_to_date === false ? (h.version ? " · sync updating (it checks every 30 min between nights)" : " · old sync: copy the new karaoke_sync.py to the laptop once, and it updates itself after that") : "");
+    // The live (--watch) copy and the crowd mic (health_api.js). A one-off test run doesn't count as live.
+    const now = Date.now() / 1000, ago = (t) => { const m = Math.round((now - t) / 60); return m < 1 ? "just now" : m < 120 ? m + " min ago" : when(t); };
+    const lv = h.live || {}, mic = h.mic || {}, lines = [];
+    if (!lv.ts) lines.push("🔴 Live sync: no report from it yet. An old copy may be running: on the laptop run install_live_sync.bat again (or sign out of Windows and back in).");
+    else if (now - lv.ts > 15 * 60) lines.push("🔴 Live sync: last report " + ago(lv.ts) + ". Sign out of Windows and back in, or run install_live_sync.bat again.");
+    else lines.push("🟢 Live sync running" + (lv.up_to_date === false ? " (an update is waiting; it installs between nights)" : ""));
+    const st = mic.status || "", fresh = lv.ts && now - lv.ts <= 15 * 60;
+    const heard = mic.level_ts ? " · last reading " + ago(mic.level_ts) : " · no readings yet";
+    if (mic.level_ts && now - mic.level_ts < 120) lines.push("🎤 Crowd mic live" + (st.startsWith("listening: ") ? " on " + st.slice(11) : "") + heard);
+    else if (fresh && st.startsWith("listening")) lines.push("🟡 Crowd mic open but no readings reaching the site yet" + heard);
+    else if (fresh && st.startsWith("idle")) lines.push("⚪ Crowd mic ready, it opens when a song plays or someone is in the queue" + heard);
+    else if (fresh && st) lines.push("🔴 Crowd mic " + st + heard);
+    else lines.push("🔴 Crowd mic: no word from the laptop" + heard);
+    if (mic.phone_ts && now - mic.phone_ts < 120) lines.push("📱 Phone crowd mic live");
+    const box = $("laptop-mic"); box.replaceChildren(); lines.forEach((t) => box.append(el("span", "", t), document.createElement("br")));
   }
   let ownerTopic = null;
   function renderOwner(t) {
