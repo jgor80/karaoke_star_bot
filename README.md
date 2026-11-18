@@ -124,7 +124,8 @@ Wireless buttons around the bar that send an emoji reaction to whoever is singin
 2. Copy the secret link it shows. It's only shown once. **New link** makes a fresh one (the old one stops working), and **Remove** shuts a lost or stolen button off.
 3. Paste the link into the button:
    - **Flic 2 + Flic Hub:** in the Flic app, pick the button, then for Click, Double click and Hold add the action **Internet Request**, type **GET**, and paste a link. Use the emoji chips under the link to copy a link for one emoji (it adds `&r=tomato` and so on), so each press type can send a different emoji. If requests from the hub fail, turn off "Validate certificates" on that action.
-   - **Anything else** (a Wi-Fi arcade button, a Shelly script, a phone shortcut): open the link with GET, or POST `{"k": "<secret>", "r": "fire"}` as JSON. `r` can be a reaction key (`fire`, `micdrop`, `encore`, `chills`, `dance`, `keychange`, `cringe`, `offkey`, `tomato`, `snooze`), its emoji, `hype`, `roast` or `random`.
+   - **DIY Wi-Fi buttons** (an M5Stack ATOM Lite, or arcade buttons on an ESP32): see [`buttons/README.md`](buttons/README.md) for parts, wiring and the board code.
+   - **Anything else** ( a Shelly script, a phone shortcut): open the link with GET, or POST `{"k": "<secret>", "r": "fire"}` as JSON. `r` can be a reaction key (`fire`, `micdrop`, `encore`, `chills`, `dance`, `keychange`, `cringe`, `offkey`, `tomato`, `snooze`), its emoji, `hype`, `roast` or `random`.
 4. Test at home by opening the link with `&test=1` added: nothing is sent, and the button shows "last press" on /host.
 
 Presses only count while a song is on (the same window phones get). Each button can send 5 presses every 10 seconds and 30 a song, and all of a bar's buttons together 120 a minute. Extra presses are dropped. Each button counts as one phone for crowd awards and badges, and buttons never win the who-reacted-most awards.
