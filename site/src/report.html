@@ -129,7 +129,8 @@ footer { margin-top: 32px; }
     if (!SAMPLE && location.search.indexOf(d.night) < 0) history.replaceState(null, "", "?night=" + d.night);
   }
   if (SAMPLE) $("back-link").href = "/";
-  $("pick").addEventListener("change", (e) => load(e.target.value).catch(() => {}));
+  // A failed switch used to leave the old night's numbers up as if they were the new one's.
+  $("pick").addEventListener("change", (e) => { const was = $("sub").textContent; load(e.target.value).catch(() => { $("sub").textContent = "Couldn’t load that night. Pick it again to retry."; setTimeout(() => { if ($("sub").textContent.startsWith("Couldn’t load that")) $("sub").textContent = was; }, 8000); }); });
   $("print").addEventListener("click", () => window.print());
   load(new URLSearchParams(location.search).get("night")).catch(() => { $("sub").textContent = "Couldn’t load the report. Reload to try again."; });
 })();

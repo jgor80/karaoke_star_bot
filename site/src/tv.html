@@ -46,6 +46,7 @@ header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-i
 .qr .code { background: #fff; padding: calc(.8 * var(--u)); border-radius: calc(1 * var(--u)); width: calc(15 * var(--u)); height: calc(15 * var(--u)); }
 .qr .code img, .qr .code canvas { width: 100% !important; height: 100% !important; display: block; }
 .qr small { font-family: var(--f-mono); font-size: calc(1.7 * var(--u)); color: var(--gold); }
+.qr .scan { font-size: calc(2 * var(--u)); color: var(--ink, #fff); letter-spacing: .02em; }
 
 .view { position: relative; overflow: hidden;
   -webkit-mask-image: linear-gradient(transparent, #000 calc(4 * var(--u)), #000 calc(100% - 6 * var(--u)), transparent);
@@ -192,7 +193,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     <div class="kicker" id="kicker"></div>
   </div>
   <div class="tally" id="tally"></div>
-  <div class="qr"><div class="code" id="qr"></div><small id="host">okenight.com</small></div>
+  <div class="qr"><b class="scan">Scan to join</b><div class="code" id="qr"></div><small id="host">okenight.com</small></div>
 </header>
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
 <div class="status" id="status"></div>
