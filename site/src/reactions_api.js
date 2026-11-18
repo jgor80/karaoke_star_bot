@@ -10,6 +10,7 @@ export const REACTION_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "k
 const KEYS = new Set(REACTION_KEYS);
 import { DEFAULT_VENUE, ensureVenueColumn } from "./venues.js";
 import { networkHash, withCacheControl } from "./net.js";
+import { objectionable } from "./wordfilter.js";
 
 export const LIMITS = {
   burst: 8, burstWindowS: 10,     // one phone: at most 8 taps in 10 seconds
@@ -46,10 +47,12 @@ async function sha(s) {
   return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-// Display names are typed by anyone, so: printable text only, single spaces, 24 characters at most.
+// Display names are typed by anyone, so: printable text only, single spaces, 24 characters at most, and
+// nothing the word filter catches (then it's as if no name was typed: "Anon XXXX", or asked again).
 export function cleanName(s) {
-  return String(s || "").normalize("NFC").replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, "")
+  const n = String(s || "").normalize("NFC").replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, "")
     .replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 24).trim();
+  return objectionable(n) ? "" : n;
 }
 
 async function countsFor(env, play) {
