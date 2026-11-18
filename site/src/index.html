@@ -12,6 +12,14 @@
 <meta name="apple-mobile-web-app-title" content="Oke Night">
 <title>Oke Night</title>
 <meta name="description" content="Live karaoke stats: who's on the mic, tonight's leaderboard, awards and records.">
+<script>
+// The Oke Night phone app shows this same page. Its shell sets window.OKE_APP (or adds "OkeNightApp" to the
+// browser's name) and window.OKE_SITE (https://okenight.com, since the app's own pages live at capacitor://).
+// In the app there's no bar pitch and no host page (screens a reviewer can't use). Tips stay: they're an
+// optional gift paid in Venmo, all of it to the host, and unlock nothing in the app (Apple 3.2.1(vii)).
+window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
+if (window.OKE_APP) document.documentElement.classList.add("app");
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
@@ -578,6 +586,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 /* tip menu */
 .icon-btn.tip { border-color: var(--gold); color: var(--gold); }
 #tip-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+html:not(.app) #tip-app-note { display: none; }
 @media (max-width: 440px) { .icon-btn.tip .lbl, .top:has(#tip-btn:not([hidden])) #share-btn .lbl { display: none; } }
 .tips { display: grid; gap: 8px; margin: 14px 0; }
 .tip-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-decoration: none; color: var(--ink); background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
@@ -890,6 +899,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   <p class="muted small" style="margin:0" id="tip-sub"></p>
   <div class="tips" id="tips"></div>
   <p class="muted small" style="margin:0 0 12px">Opens Venmo with the amount filled in. Perks are up to the host.</p>
+  <p class="muted small" id="tip-app-note" style="margin:0 0 12px">A tip is a thank-you to the host, paid in Venmo, and all of it goes to them. It doesn’t unlock or change anything in the app.</p>
   <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
 </dialog>
 
@@ -912,7 +922,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const $ = (id) => document.getElementById(id);
   // Which bar this page is for (set by the Worker, see venues.js). Remembered so okenight.com can offer it next time.
   const VENUE = window.OKE_VENUE || { slug: "wbl", name: "Welcome Back Lounge", day_name: "Sunday", path: "/wbl/" };
-  const VENUE_URL = location.origin + VENUE.path;
+  const SITE = window.OKE_SITE || location.origin; // the app runs from capacitor://, so links and QR codes point at the site
+  const VENUE_URL = SITE + VENUE.path;
   $("where-name").textContent = VENUE.name;
   try { localStorage.setItem("oke_venue", VENUE.slug); } catch (e) {}
   let secrets = { found: [], left: 0 }; // from /api/plays: secret songs found so far + how many are still hidden

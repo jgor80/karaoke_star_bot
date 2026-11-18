@@ -8,6 +8,7 @@
 // Keep in sync with REACTIONS in awards.js (the page's buttons).
 export const REACTION_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange", "cringe", "offkey", "tomato", "snooze"];
 const KEYS = new Set(REACTION_KEYS);
+import { okOrigin } from "./origins.js";
 import { DEFAULT_VENUE, ensureVenueColumn } from "./venues.js";
 import { networkHash, withCacheControl } from "./net.js";
 import { objectionable } from "./wordfilter.js";
@@ -62,8 +63,7 @@ async function countsFor(env, play) {
 
 export async function handleReact(req, env, venue = DEFAULT_VENUE) {
   const url = new URL(req.url);
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== url.host) return json({ error: "Wrong site" }, 403);
+  if (!okOrigin(req, url)) return json({ error: "Wrong site" }, 403);
   if (!(req.headers.get("content-type") || "").includes("application/json")) return json({ error: "Send JSON" }, 415);
   let body;
   try { body = JSON.parse((await req.text()).slice(0, 2000)); } catch (e) { return json({ error: "Bad JSON" }, 400); }

@@ -10,6 +10,7 @@
 import { cleanName } from "./reactions_api.js";
 import { DEFAULT_VENUE, cfgKey, ensureVenueColumn } from "./venues.js";
 import { networkHash } from "./net.js";
+import { okOrigin } from "./origins.js";
 
 export const REQ_LIMITS = { perPhone: 5, perIp: 40 }; // per day
 const STATUSES = ["open", "added", "unavailable"];
@@ -56,9 +57,7 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   // Same as reactions, picks and leads: only this site's own pages may post (stops other sites making
   // their visitors' browsers send requests).
-  const origin = req.headers.get("origin");
-  if (origin && origin !== "null" && new URL(origin).host !== url.host) return json({ error: "Wrong site" }, 403);
-  if (origin === "null") return json({ error: "Wrong site" }, 403);
+  if (!okOrigin(req, url)) return json({ error: "Wrong site" }, 403); // includes the "null" origin of sandboxed frames
   let b;
   try { b = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const title = cleanText(b.title, 100), artist = cleanText(b.artist, 80), name = cleanName(b.name);

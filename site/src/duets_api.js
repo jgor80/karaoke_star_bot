@@ -14,6 +14,7 @@ import { listSongById } from "./songbook_api.js";
 import { draftNight } from "./drafts_api.js";
 import { DEFAULT_VENUE } from "./venues.js";
 import { networkHash } from "./net.js";
+import { okOrigin } from "./origins.js";
 
 export const DUET_LIMITS = { postsPerPhone: 2, postsPerIp: 30, open: 40 };
 const SCHEMA = [
@@ -48,8 +49,8 @@ async function lookupSong(env, id) {
 
 export async function handleDuet(req, env, venue = DEFAULT_VENUE) {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  const url = new URL(req.url), origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== url.host) return json({ error: "Wrong site" }, 403);
+  const url = new URL(req.url);
+  if (!okOrigin(req, url)) return json({ error: "Wrong site" }, 403);
   let body; try { body = JSON.parse((await req.text()).slice(0, 2000)); } catch (e) { return json({ error: "Bad JSON" }, 400); }
   const dev = String(body.dev || "").toLowerCase();
   if (!/^[a-f0-9]{16,64}$/.test(dev)) return json({ error: "Reload the page and try again." }, 400);
