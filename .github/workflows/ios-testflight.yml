@@ -50,6 +50,9 @@ jobs:
 
       - name: Build the app's web files and copy them into the iPhone project
         working-directory: app
+        env:
+          # Firebase config for push (base64 of GoogleService-Info.plist). Empty = the app builds without push.
+          FIREBASE_IOS_PLIST_B64: ${{ secrets.FIREBASE_IOS_PLIST_B64 }}
         run: |
           npm ci
           npm run check

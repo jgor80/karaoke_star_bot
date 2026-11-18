@@ -59,15 +59,25 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
   <h2 id="pick-h">Pick your bar</h2>
   <div class="venues" id="venues" aria-labelledby="pick-h"></div>
 
-  <h2>Karaoke night reminders</h2>
+  <h2>Notifications</h2>
   <div class="card">
     <div class="row">
       <label for="remind" id="remind-l"><b>Remind me</b> <span class="muted small" id="remind-for"></span></label>
       <input type="checkbox" class="switch" id="remind" role="switch" aria-labelledby="remind-l">
     </div>
-    <p class="muted small note" id="remind-msg" role="status" aria-live="polite">A notification on your phone a few hours before karaoke starts at your bar.</p>
+    <p class="muted small note" id="remind-msg" role="status" aria-live="polite">A heads-up a few hours before karaoke starts at your bar, when the first song starts, and when a song you asked for is added.</p>
     <button type="button" id="remind-test" hidden style="margin-top:8px;background:none;border:0;padding:4px 0;color:inherit;text-decoration:underline;font:inherit;font-size:15px;cursor:pointer">Send a test notification</button>
   </div>
+
+  <details class="card" id="host-box" style="margin-top:12px">
+    <summary><b>Host of this bar?</b> <span class="muted small">Get host alerts on this phone</span></summary>
+    <p class="muted small note">Secret songs, song requests, photos to check, the laptop, the line and the morning report. Enter your bar’s host key (the one you use on the host page).</p>
+    <form id="host-form" class="row" style="gap:8px;margin-top:8px">
+      <input id="host-key" type="password" autocomplete="current-password" placeholder="Host key" aria-label="Host key" style="flex:1;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid #5a3f66;background:#170d1c;color:inherit">
+      <button type="submit" id="host-go" style="font:inherit;font-size:16px;padding:10px 14px;border-radius:10px;border:0;background:#ff4fa0;color:#170d1c;font-weight:700">Turn on</button>
+    </form>
+    <p class="muted small note" id="host-msg" role="status" aria-live="polite"></p>
+  </details>
 
   <footer>
     For ages 21 and over. ·
@@ -82,7 +92,9 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
   "use strict";
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const { store, Notes, schedule, cancel, refresh } = window.OkeApp;
+  const { store, Notes, schedule, cancel, refresh, pushRegister, pushOff } = window.OkeApp;
+  const PUSH_ERR = { app: "Notifications work in the Oke Night app.", bar: "Pick your bar first.", perm: "Notifications are off for Oke Night. Turn them on in your phone’s Settings.",
+    token: "This phone couldn’t get a notification address. Check you’re online and try again.", net: "Couldn’t reach Oke Night. Check you’re online and try again." };
 
   // A sample show that's always on (okenight.com/demo/). Lets anyone, App Review included, see Oke Night
   // on a day without karaoke.
@@ -130,9 +142,29 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
       try { p = await N.checkPermissions(); if (p.display !== "granted") p = await N.requestPermissions(); } catch (e) {}
       if (p.display !== "granted") { ev.target.checked = false; store.set("oke_app_remind", false); msg.textContent = "Notifications are off for Oke Night. Turn them on in your phone’s Settings to get reminders."; return; }
       store.set("oke_app_remind", true); await schedule();
+      pushRegister().catch(() => {}); // live / request pushes (a no-op until a bar is picked)
       msg.textContent = store.get("oke_app_home") ? "On. You’ll get a heads-up a few hours before karaoke starts." : "On. Pick your bar and we’ll remind you before its karaoke nights.";
-    } else { store.set("oke_app_remind", false); await cancel(); msg.textContent = "Off."; }
+    } else { store.set("oke_app_remind", false); await cancel(); await pushOff(); msg.textContent = "Off."; hostState(); }
     testBtn();
+  });
+
+  // Host alerts: the host key goes to the site once to mark this phone as the host's; it isn't kept on the phone.
+  function hostState() {
+    const p = store.get("oke_app_push"), home = store.get("oke_app_home");
+    $("host-msg").textContent = p && p.host && p.home === home ? "Host alerts are on for this phone." : "";
+  }
+  hostState();
+  $("host-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const key = $("host-key").value.trim(), m = $("host-msg");
+    if (!key) { m.textContent = "Enter your host key."; return; }
+    $("host-go").disabled = true; m.textContent = "Checking…";
+    const r = await pushRegister(key);
+    $("host-go").disabled = false; $("host-key").value = "";
+    if (r.ok && r.host) {
+      m.textContent = "Host alerts are on for this phone. 🎤";
+      if (!store.get("oke_app_remind")) { store.set("oke_app_remind", true); $("remind").checked = true; schedule(); testBtn(); }
+    } else m.textContent = PUSH_ERR[r.error] || r.error || "That didn’t work. Try again.";
   });
 
   // Already on a bar: go straight back to it (venue.html refreshes the list and reminders itself), unless

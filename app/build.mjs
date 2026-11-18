@@ -29,6 +29,21 @@ mkdirSync(OUT, { recursive: true });
 copyFileSync(join(SHELL, "index.html"), join(OUT, "index.html"));
 copyFileSync(join(SHELL, "remind.js"), join(OUT, "remind.js"));
 
+// Firebase (push): the config files from the Firebase console, kept out of git. Put them in app/firebase/, or
+// pass them base64-encoded in FIREBASE_IOS_PLIST_B64 / FIREBASE_ANDROID_JSON_B64 (GitHub Actions secrets).
+// The iPhone one rides in www/ and a build step copies it next to the app (ios/App/App.xcodeproj, "Firebase config").
+// Without them the app builds and runs normally, just without push.
+const FB = join(here, "firebase");
+const fbFile = (name, envName) => {
+  if (process.env[envName]) return Buffer.from(process.env[envName], "base64");
+  return existsSync(join(FB, name)) ? readFileSync(join(FB, name)) : null;
+};
+const iosPlist = fbFile("GoogleService-Info.plist", "FIREBASE_IOS_PLIST_B64");
+const androidJson = fbFile("google-services.json", "FIREBASE_ANDROID_JSON_B64");
+if (iosPlist) writeFileSync(join(OUT, "GoogleService-Info.plist"), iosPlist);
+if (androidJson) writeFileSync(join(here, "android", "app", "google-services.json"), androidJson);
+console.log("Firebase push config: iPhone " + (iosPlist ? "yes" : "no") + ", Android " + (androidJson ? "yes" : "no"));
+
 let page = read(join(SITE_SRC, "index.html"));
 
 // 1. App head: venue, app mode and the <base>, first thing in <head> so every URL after it uses the site.

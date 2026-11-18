@@ -68,13 +68,13 @@ export async function watchLine(env, venue, now = Math.floor(Date.now() / 1000))
   if (!cfg.ntfy_topic) return;
   const host = "okenight.com/" + venue.slug + "/host";
   if (e.over_s >= OVER_ALERT_S && e.late.length) {
-    await once(env, venue, "line_over", st.session_start, () => push(cfg.ntfy_topic, "The line runs past " + e.end_label,
+    await once(env, venue, "line_over", st.session_start, () => push(env, cfg.ntfy_topic, "The line runs past " + e.end_label,
       e.count + " in line, about " + waitLabel(e.wait_s) + " of songs, and " + waitLabel(e.left_s) + " left. " +
       (e.late.length === 1 ? "The last one" : "The last " + e.late.length) + " (" + names(e.late) + ") probably won’t get on. " +
       (e.overtime ? "" : "Run later from " + host + ", or stop taking slips."), venue, "high", "hourglass"));
   }
   if (!e.overtime && e.left_s <= LAST_CALL_S && e.left_s > LAST_CALL_S - 10 * 60 && e.over_s === 0) {
-    await once(env, venue, "line_lastcall", st.session_start, () => push(cfg.ntfy_topic, "30 minutes left: last call",
+    await once(env, venue, "line_lastcall", st.session_start, () => push(env, cfg.ntfy_topic, "30 minutes left: last call",
       "Karaoke ends at " + e.end_label + ". " + (e.count ? e.count + " in line, done around " + e.finish_label + ", so there’s room for about " + Math.max(0, Math.floor((e.end - e.finish) / 265)) + " more." : "Nobody’s in line.") + " The TV is showing last call.", venue, "default", "bell"));
   }
 }

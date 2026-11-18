@@ -28,6 +28,7 @@ import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
 import { lineCheck } from "./line_api.js";
+import { hostPush } from "./push_api.js";
 import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
 import { hostStyled, hostStyledAction } from "./styled_api.js";
@@ -106,11 +107,11 @@ export async function checkSecrets(env, venue = DEFAULT_VENUE) {
     if (!claim.meta.changes || !cfg.ntfy_topic) continue;
     const who = (s.singer || "Someone").trim();
     const body = who + " just sang “" + (s.sung_title || s.title) + "”" + (s.reward ? ". Reward: " + s.reward : "");
-    let sent = false;
+    let sent = await hostPush(env, venue, "Secret song found!", body); // the app on the host's phone
     try {
       const r = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body,
         headers: { Title: "Secret song found!", Priority: "high", Tags: "shushing_face,microphone", Click: "https://okenight.com/" + venue.slug + "/host" } });
-      sent = r.ok;
+      sent = r.ok || sent;
     } catch (e) { /* retried on the next run; the host page still alerts */ }
     await env.DB.prepare("UPDATE secret_songs SET notified_at = ?1 WHERE id = ?2 AND notified_at = ?3")
       .bind(sent ? now() : null, s.id, -t).run();
@@ -331,12 +332,13 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       if (r.error) return json(r, 400);
       return json(r);
     } else if (body.action === "test") {
-      if (!cfg.ntfy_topic) return json({ error: "No alert topic yet." }, 400);
+      const app = await hostPush(env, venue, "Secret song found!", "Test alert from Oke Night. Secret song alerts will look like this.");
+      if (!cfg.ntfy_topic) return app ? json({ ok: true, app }) : json({ error: "No alert topic yet." }, 400);
       // Say what ntfy answered, so a quota or block on ntfy's side shows up on /host instead of a generic failure.
       const why = await fetch("https://ntfy.sh/" + cfg.ntfy_topic, { method: "POST", body: "Test alert from Oke Night. Secret song alerts will look like this.", headers: { Title: "Secret song found!", Tags: "shushing_face" } })
         .then(async (r) => (r.ok ? "" : "ntfy said " + r.status + ": " + (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160)))
         .catch((e) => "couldn’t reach ntfy (" + String(e && e.message || e).slice(0, 80) + ")");
-      return !why ? json({ ok: true }) : json({ error: "ntfy didn’t take the test: " + why }, 502);
+      return !why || app ? json({ ok: true, app, ntfy: why || "ok" }) : json({ error: "ntfy didn’t take the test: " + why }, 502);
     } else return json({ error: "unknown action" }, 400);
   }
   await checkSecrets(env, venue);

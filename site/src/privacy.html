@@ -47,7 +47,8 @@ li { margin: 6px 0; }
     <li><b>Reports.</b> If you report a photo or a name, we keep the singer name, the reason and a scrambled code of your network (so one person counts once) until the host deals with it. Photos you hide stay on your phone only.</li>
     <li><b>Rock-star looks, if you ask for one.</b> If you tap “Rock-star me” and tick the box, your photo and the look you picked (like “90s grunge”) are sent to Cloudflare Workers AI, which redraws it and does not keep it (zero data retention). If you type a favorite band, only that name goes to a Cloudflare text model to pick the closest look. Your looks are kept so you can switch between them, and show on your phone right away and publicly on that bar’s page and TV only after the host OKs one. They’re deleted when the host removes them or your name is taken off the site, and stop showing when you change or remove your photo.</li>
     <li><b>Crowd noise levels.</b> The host’s laptop or phone measures how loud the room is for the applause meter. Only loudness numbers are sent, never audio. They are deleted after 45 days.</li>
-    <li><b>Song requests</b> you send from the Songbook: the song and the name you typed. Only the host sees them (the host’s phone gets them as a push alert through ntfy.sh, below). The names on a request are removed 90 days after it was last updated.</li>
+    <li><b>Song requests</b> you send from the Songbook: the song and the name you typed. Only the host sees them (the host’s phone gets them as a push alert in the Oke Night app and through ntfy.sh, below). The names on a request are removed 90 days after it was last updated.</li>
+    <li><b>Notifications in the Oke Night app.</b> If you turn on notifications in the app, we keep the address Firebase gives your phone for this app, the bar you picked, your phone’s random ID (so “your request is in” reaches the phone that asked) and whether it’s the host’s phone. No name or contact details. It’s deleted when you turn notifications off, when Firebase says the address no longer works, or after 120 days without the app being opened.</li>
     <li><b>The “bring Oke Night to your bar” form.</b> Your name, bar, city, contact details and note, so we can reply. Only the site owner sees them. They are deleted once handled, or after a year (the scrambled network code on it after 90 days).</li>
     <li><b>On your phone only:</b> the browser keeps your random ID, the name you typed, the bar you picked and your settings. Clear the site’s data in your browser to remove them. If you let the home page use your location to find the nearest bar, that stays on your phone and is never sent.</li>
   </ul>
@@ -55,6 +56,7 @@ li { margin: 6px 0; }
   <h2>Who else is involved</h2>
   <ul>
     <li><b>Cloudflare</b> hosts the site and its database.</li>
+    <li><b>Google Firebase Cloud Messaging</b> (with Apple’s push service on iPhones) delivers the app’s notifications. It gets the notification text and your phone’s notification address.</li>
     <li><b>ntfy.sh</b> sends push alerts to the host’s phone (for example “a secret song was found”, “a new bar is interested”, or a song request with the name typed on it). Alerts don’t include contact details.</li>
     <li><b>Apple Music:</b> album covers come from Apple through our server, so your phone usually doesn’t contact Apple until you tap a cover to hear the song.</li>
     <li><b>Google Fonts:</b> the main pages load their fonts from Google, so your browser contacts Google’s font servers.</li>

@@ -1,3 +1,7 @@
 www/
 node_modules/
 icons/
+firebase/GoogleService-Info.plist
+firebase/google-services.json
+android/app/google-services.json
+ios/App/CapApp-SPM/symlinks/
