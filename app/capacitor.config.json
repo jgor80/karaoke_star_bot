@@ -1,0 +1,14 @@
+{
+  "appId": "com.okenight.app",
+  "appName": "Oke Night",
+  "webDir": "www",
+  "backgroundColor": "#170d1c",
+  "server": { "hostname": "localhost", "iosScheme": "capacitor", "androidScheme": "https" },
+  "ios": { "contentInset": "never", "appendUserAgent": "OkeNightApp/1.0", "limitsNavigationsToAppBoundDomains": false },
+  "android": { "appendUserAgent": "OkeNightApp/1.0" },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 800, "backgroundColor": "#170d1c", "showSpinner": false },
+    "LocalNotifications": { "iconColor": "#ff4fa0" },
+    "StatusBar": { "style": "DARK", "backgroundColor": "#170d1c", "overlaysWebView": false }
+  }
+}
