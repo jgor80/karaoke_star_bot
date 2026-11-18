@@ -510,15 +510,43 @@ BAD_PATH = os.path.join(os.path.dirname(SCRIPT_PATH), "karaoke_sync.bad")
 TRIAL_WAIT_S = 180
 
 
-def trial_passed():
-    """Called by a freshly updated copy once its watch loop has run a full pass: it started fine."""
+TRIAL_FAILS = 3  # a freshly updated copy whose first syncs fail this many times in a row rolls itself back
+
+
+def on_trial():
+    """True while this copy is a fresh update that hasn't finished a good sync yet."""
     try:
         with open(TRIAL_PATH, encoding="utf-8") as f:
-            mine = f.read().strip() == script_hash()
-        if mine:
-            os.remove(TRIAL_PATH)
+            return f.read().strip() == script_hash()
     except OSError:
-        pass
+        return False
+
+
+def trial_passed():
+    """Called by a freshly updated copy after its first sync that worked (read and uploaded): keep it."""
+    if on_trial():
+        try:
+            os.remove(TRIAL_PATH)
+        except OSError:
+            pass
+
+
+def roll_back(log, why):
+    """This copy is a bad update: mark its hash so check_update skips it, and put karaoke_sync.prev.py back.
+    Returns True when the previous copy is on disk again (the caller starts it, or the next run uses it)."""
+    prev = os.path.join(os.path.dirname(SCRIPT_PATH), "karaoke_sync.prev.py")
+    if not on_trial() or not os.path.exists(prev):
+        return False
+    try:
+        with open(BAD_PATH, "w", encoding="utf-8") as b:
+            b.write(script_hash())
+        shutil.copy2(prev, SCRIPT_PATH)
+        os.remove(TRIAL_PATH)
+        write_log(log, f"update: the new version {why}, so the previous one was put back")
+        return True
+    except OSError as e:
+        write_log(log, f"update: the new version {why} and the previous one couldn't be put back ({e})")
+        return False
 
 
 def restart(lock, log=None):
@@ -1177,12 +1205,16 @@ def watch(a, log):
                 if failures or " 0 new" not in msg:
                     write_log(log, "watch " + msg)
                 failures = 0
+                trial_passed()  # a sync that worked: tell the copy that started this one (after an update) all is well
             else:
                 failures += 1
                 if failures in (1, 5) or failures % 60 == 0:
                     write_log(log, f"watch {msg} (try {failures})")
+                # A fresh update that can't sync (the update was checked online moments ago, so it isn't the
+                # network): put the previous copy back and run that instead.
+                if failures >= TRIAL_FAILS and roll_back(log, f"failed its first {failures} syncs ({msg})"):
+                    restart(lock, log)
                 time.sleep(min(60, 5 * failures))  # back off while offline
-        trial_passed()  # a full pass: tell the copy that started this one (after an update) that all is well
         time.sleep(WATCH_POLL_S)
 
 
@@ -1201,6 +1233,11 @@ def main():
         sys.exit(watch(a, log))
     ok, msg = run_once(a)
     write_log(log, msg)
+    # Run-once mode (the scheduled task) has no supervisor: the first run of a fresh update settles it here.
+    if ok:
+        trial_passed()
+    elif roll_back(log, f"failed its first sync ({msg})"):
+        sys.exit(1)  # the next run uses the previous copy; don't download this version again now
     cfg = load_cfg(a.config)
     if cfg:
         check_update(cfg, log)  # the next run (and the next --watch start) uses the new copy
