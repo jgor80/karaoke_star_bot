@@ -1739,9 +1739,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (data.avatars) avatars = mergeAvatars(data.avatars);
-      // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions or host changed.
-      // The response also carries served_at, the schedule and the sync time, which change every poll.
-      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.host, avatars]);
+      // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions, applause scores
+      // or host changed. The response also carries served_at, the schedule and the sync time, which change every poll.
+      // Applause (crowd) is scored by the Worker's cron about a minute after a song ends, often with nothing else
+      // changing, so it has to be part of this check or the last song's 👏 score never shows until a reload.
+      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.crowd, data.host, avatars]);
       if (sig !== lastJson) { lastJson = sig; load(data); } else renderTonight();
       if (draft) draft.update(data);
       if (duets) duets.update(data);
