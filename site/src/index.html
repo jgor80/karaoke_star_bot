@@ -1722,13 +1722,36 @@ html:not(.app) #tip-app-note { display: none; }
 
   // ---------- Sunday reminder + hot streaks ----------
   // Shown when karaoke isn't on, so people leaving (or checking on a Tuesday) can sign up for next week.
+  // In the phone app the "Phone alert" button turns on the app's own reminders (local notifications from
+  // app/shell/remind.js, loaded at the end of the app's page) instead of sending people to the ntfy app.
+  function appRemind() {
+    const b = $("rm-push"), note = $("rm-push-note");
+    let on = false; try { on = !!JSON.parse(localStorage.getItem("oke_app_remind") || "false"); } catch (e) {}
+    b.removeAttribute("href"); b.removeAttribute("target"); b.setAttribute("role", "button"); b.hidden = false; note.hidden = false;
+    b.textContent = on ? "🔔 Reminders on" : "🔔 Remind me";
+    note.textContent = on ? "You’ll get a notification a few hours before karaoke starts." : "Get a notification on this phone a few hours before karaoke starts.";
+    b.onclick = async (ev) => {
+      ev.preventDefault();
+      const A = window.OkeApp, N = A && A.Notes();
+      if (!N) { note.textContent = "Reminders aren’t available here."; return; }
+      let p = { display: "prompt" };
+      try { p = await N.checkPermissions(); if (p.display !== "granted") p = await N.requestPermissions(); } catch (e) {}
+      if (p.display !== "granted") { note.textContent = "Notifications are off for Oke Night. Turn them on in your phone’s Settings to get reminders."; return; }
+      A.store.set("oke_app_remind", true);
+      if (!A.store.get("oke_app_home")) A.store.set("oke_app_home", VENUE.slug);
+      await A.schedule();
+      b.textContent = "🔔 Reminders on"; note.textContent = "On. You’ll get a notification a few hours before karaoke starts.";
+    };
+  }
+
   function renderRemind(live) {
     if (live) return;
     const R = (schedule && schedule.reminder) || {};
     $("rm-h").textContent = "🗓️ Karaoke every " + VENUE.day_name;
     $("rm-sub").textContent = (schedule ? schedule.hours_label + " at " + schedule.venue + ". Next: " + schedule.next_label + "." : "");
     if (R.gcal) $("rm-gcal").href = R.gcal; else $("rm-gcal").hidden = true;
-    if (R.ntfy) $("rm-push").href = R.ntfy; else { $("rm-push").hidden = true; $("rm-push-note").hidden = true; }
+    if (window.OKE_APP) appRemind();
+    else if (R.ntfy) $("rm-push").href = R.ntfy; else { $("rm-push").hidden = true; $("rm-push-note").hidden = true; }
     const sb = $("rm-streaks");
     const hot = window.KaraokeFun ? KaraokeFun.hotStreaks(people, plays) : [];
     sb.hidden = !hot.length;

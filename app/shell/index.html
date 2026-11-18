@@ -66,6 +66,7 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
       <input type="checkbox" class="switch" id="remind" role="switch" aria-labelledby="remind-l">
     </div>
     <p class="muted small note" id="remind-msg" role="status" aria-live="polite">A notification on your phone a few hours before karaoke starts at your bar.</p>
+    <button type="button" id="remind-test" hidden style="margin-top:8px;background:none;border:0;padding:4px 0;color:inherit;text-decoration:underline;font:inherit;font-size:15px;cursor:pointer">Send a test notification</button>
   </div>
 
   <footer>
@@ -116,6 +117,11 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
   async function load() { const list = await refresh(); $("offline").hidden = !!list; render(); }
 
   $("remind").checked = !!store.get("oke_app_remind");
+  const testBtn = () => { $("remind-test").hidden = !$("remind").checked; };
+  testBtn();
+  $("remind-test").addEventListener("click", async () => {
+    $("remind-msg").textContent = (await window.OkeApp.test()) ? "Test sent. It shows in about 5 seconds (lock your phone or switch apps to see it)." : "Couldn’t send a test. Check notifications for Oke Night in your phone’s Settings.";
+  });
   $("remind").addEventListener("change", async (ev) => {
     const on = ev.target.checked, msg = $("remind-msg"), N = Notes();
     if (!N) { ev.target.checked = false; msg.textContent = "Reminders work in the Oke Night app."; return; }
@@ -126,6 +132,7 @@ footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
       store.set("oke_app_remind", true); await schedule();
       msg.textContent = store.get("oke_app_home") ? "On. You’ll get a heads-up a few hours before karaoke starts." : "On. Pick your bar and we’ll remind you before its karaoke nights.";
     } else { store.set("oke_app_remind", false); await cancel(); msg.textContent = "Off."; }
+    testBtn();
   });
 
   // Already on a bar: go straight back to it (venue.html refreshes the list and reminders itself), unless
