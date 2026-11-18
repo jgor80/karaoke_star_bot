@@ -9,7 +9,7 @@
 // The phone crops and shrinks the photo itself (a square, PHOTO_PX wide, re-encoded as JPEG), which also drops
 // the camera's hidden data such as the location. The Worker only checks it is a small square JPEG.
 // Photos are stored in D1 (a few tens of KB each) and served with a version number in the link, so phones and
-// the edge cache can keep them for a year and a new photo gets a new link.
+// the edge cache can keep them for a year and a new photo gets a new link (the version never repeats for a name).
 //
 // POST /<slug>/api/avatar {action: "upload", name, key, image: base64 JPEG}  -> {ok, k, v}
 // POST /<slug>/api/avatar {action: "delete", name, key}                      -> {ok}
@@ -117,10 +117,17 @@ export async function handleAvatar(req, env, ctx, venue, url) {
   const lim = await tooMany(env, venue, req);
   if (lim.limited) return json({ error: "Too many photo changes. Try again tomorrow." }, 429);
 
-  const ver = ((row && row.ver) || 0) + 1, t = now();
+  // The version goes in the photo's link, which phones and the edge cache keep for a year. It must never
+  // repeat for a name, even after the photo was removed (the row is deleted then), so it is at least the
+  // current time in seconds: a new photo always gets a link no one has cached.
+  const t = now(), ver = Math.max(((row && row.ver) || 0) + 1, t);
+  // The owner and block checks above are repeated inside the write, so two phones claiming the same name
+  // at once can't both win: the second one's update matches no row and is turned away.
+  const put = await env.DB.prepare("INSERT INTO avatars (venue, k, name, img, ver, owner, blocked, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7) " +
+    "ON CONFLICT (venue, k) DO UPDATE SET name = ?3, img = ?4, ver = ?5, owner = ?6, updated_at = ?7 " +
+    "WHERE avatars.blocked = 0 AND (avatars.owner IS NULL OR avatars.owner = ?6)").bind(venue.slug, k, name, img, ver, owner, t).run();
+  if (!put.meta || !put.meta.changes) return json({ error: "Another phone already added a photo for this name. If that’s not you, ask the host to remove it." }, 403);
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO avatars (venue, k, name, img, ver, owner, blocked, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7) " +
-      "ON CONFLICT (venue, k) DO UPDATE SET name = ?3, img = ?4, ver = ?5, owner = ?6, updated_at = ?7").bind(venue.slug, k, name, img, ver, owner, t),
     env.DB.prepare("INSERT INTO avatar_log (venue, net, at) VALUES (?, ?, ?)").bind(venue.slug, lim.net, t),
     env.DB.prepare("DELETE FROM avatar_log WHERE at < ?").bind(t - 2 * 86400),
   ]);
