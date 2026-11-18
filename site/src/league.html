@@ -126,7 +126,8 @@ li.mine { outline: 2px solid var(--hot); }
     $("sub").textContent = last.venues.length > 1 ? "One table for all " + last.venues.length + " Oke Night bars. Points reset each month." : "Points reset each month. More bars join the league as Oke Night grows.";
     render();
   }
-  $("month").addEventListener("change", (e) => load(e.target.value).catch(() => {}));
+  // A failed switch used to leave the old month's table up as if it were the new one's.
+  $("month").addEventListener("change", (e) => { const was = $("sub").textContent; load(e.target.value).catch(() => { $("sub").textContent = "Couldn’t load that month. Pick it again to retry."; setTimeout(() => { if ($("sub").textContent.startsWith("Couldn’t load that")) $("sub").textContent = was; }, 8000); }); });
   $("more").addEventListener("click", () => { showAll = true; render(); });
   load(new URLSearchParams(location.search).get("month")).catch(() => { $("sub").textContent = "Couldn’t load the league. Reload to try again."; });
 })();
