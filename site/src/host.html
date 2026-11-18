@@ -282,11 +282,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   <small>Tap anywhere to close</small>
 </div>
 
-<div class="alarm" id="alarm" hidden role="alertdialog" aria-live="assertive">
-  <div class="big">Secret song!</div>
+<div class="alarm" id="alarm" hidden role="alertdialog" aria-modal="true" aria-labelledby="alarm-h" aria-describedby="alarm-who">
+  <div class="big" id="alarm-h">Secret song!</div>
   <div class="who" id="alarm-who"></div>
   <div class="rw" id="alarm-rw"></div>
-  <small>Tap anywhere to stop the alarm</small>
+  <button type="button" class="ghost" id="alarm-stop">Stop the alarm</button>
+  <small>Or tap anywhere, or press Esc</small>
 </div>
 
 <script>
@@ -818,14 +819,22 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   function alarm(s) {
     $("alarm-who").textContent = (s.singer || "Someone") + " sang “" + (s.sung_title || s.title) + "”";
     $("alarm-rw").textContent = s.reward ? "🎁 " + s.reward : "";
-    $("alarm").hidden = false;
+    if ($("alarm").hidden) alarmFrom = document.activeElement;
+    $("alarm").hidden = false; $("alarm-stop").focus();
     try { navigator.vibrate && navigator.vibrate([400, 150, 400, 150, 800]); } catch (e) {}
     try { if ("Notification" in window && Notification.permission === "granted") new Notification("Secret song found!", { body: $("alarm-who").textContent + (s.reward ? ". " + s.reward : ""), tag: "secret-" + s.id }); } catch (e) {}
     clearInterval(beepT); let n = 0;
     beepT = setInterval(() => { beep(0.35); if (++n % 4 === 0) try { navigator.vibrate && navigator.vibrate([300, 100, 300]); } catch (e) {} if (n > 60) stop(); }, 700);
   }
-  function stop() { clearInterval(beepT); $("alarm").hidden = true; }
+  let alarmFrom = null; // where focus was before the alarm, to put it back
+  function stop() {
+    clearInterval(beepT); if ($("alarm").hidden) return;
+    $("alarm").hidden = true;
+    if (alarmFrom && alarmFrom.focus) try { alarmFrom.focus(); } catch (e) {}
+    alarmFrom = null;
+  }
   $("alarm").addEventListener("click", stop);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("alarm").hidden) stop(); });
 
   if (key) load(); else { showLogin(false); api("GET").then((r) => { if (r.status === 401 && r.d.needs_setup) showLogin(true); }).catch(() => {}); }
 })();
