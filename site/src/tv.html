@@ -471,7 +471,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       box.append(heading("Tip the KJ", "Venmo @" + pv.tips.venmo + " · tip menu at " + SHOW_URL));
       const tg = el("div", "grid");
       pv.tips.menu.forEach((m) => { const c = el("article", "ub tip-row");
-        c.append(el("span", "amt", "$" + Number(m.amount || 0)), el("div", "nm", ((m.emoji ? m.emoji + " " : "") + (m.label || "")).trim()), el("div", "ds", m.note || ""));
+        c.append(el("span", "amt", Number(m.amount) > 0 ? "$" + Number(m.amount) : "You pick"), el("div", "nm", ((m.emoji ? m.emoji + " " : "") + (m.label || "")).trim()), el("div", "ds", m.note || ""));
         tg.append(c); });
       box.append(tg);
     }
