@@ -1496,9 +1496,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   document.addEventListener("visibilitychange", () => { if (!document.hidden && rx.play) pollRx(); });
 
   // ---------- after the session: recap, then promote the next one ----------
-  // A karaoke night runs 6am to 6am Central (same as plays.night). Once the session closes, the rest of that
+  // A karaoke night runs 6am to 6am in the bar's time zone (same as plays.night). Once the session closes, the rest of that
   // night shows the scrolling TV recap. From 6am the next day the top of the page promotes the next session.
-  const NIGHT_TZ = "America/Chicago";
+  const NIGHT_TZ = VENUE.tz || "America/Chicago"; // the bar's time zone (venues.js)
   const nightOf = (ts) => new Date((ts - 6 * 3600) * 1000).toLocaleDateString("en-CA", { timeZone: NIGHT_TZ });
   let recapFor = null;
   function renderStage(live, last) {
@@ -1936,7 +1936,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   $("tip-close").addEventListener("click", () => tipDlg.close());
 
   // ---------- how to sign up (paper slips at the KJ booth) ----------
-  const SIGNUP_STEPS = [
+  // Each bar can set its own steps in venues.js (signup_steps); these are the paper-slip default.
+  const SIGNUP_STEPS = (VENUE.signup_steps && VENUE.signup_steps.length) ? VENUE.signup_steps : [
     ["Go to the KJ booth", "That’s where the host runs the music."],
     ["Write it on a slip of paper", "Your name and the song. Add the artist if there’s more than one song with that title."],
     ["Hand it to the KJ", "Then listen for your name. Watch “The line” on this page for your spot."]];

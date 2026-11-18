@@ -351,14 +351,17 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       b.append(el("span", null, String(x.n)), bar); bars.append(b); axis.append(el("span", null, x.label)); });
     const wrap = el("div"); wrap.append(el("h3", null, title), box); box.append(bars, axis); return wrap;
   }
+  // How to sign up: the bar's own steps from venues.js (signup_steps / signup_where), else paper slips at the KJ booth.
+  const SIGNUP_AT = VENUE.signup_where || "the KJ booth";
+  const stepsOr = (fallback) => (VENUE.signup_steps && VENUE.signup_steps.length ? VENUE.signup_steps : fallback);
   function copyOf(v) {
     const box = el("div", "copy");
     if (v.live) {
-      box.append(heading("Want to sing?", "sign up at the KJ booth"));
+      box.append(heading("Want to sing?", "sign up at " + SIGNUP_AT));
       const g = el("div", "signup");
-      [["Go to the KJ booth", "That’s where the host runs the music."],
+      stepsOr([["Go to the KJ booth", "That’s where the host runs the music."],
        ["Write your name and song", "On a slip of paper. Add the artist if more than one song has that title."],
-       ["Hand it to the KJ", "Then listen for your name!"]].forEach(([b, s], i) => { const d = el("div"); d.append(el("div", "n", String(i + 1)), el("b", null, b), el("span", null, s)); g.append(d); });
+       ["Hand it to the KJ", "Then listen for your name!"]]).forEach(([b, s], i) => { const d = el("div"); d.append(el("div", "n", String(i + 1)), el("b", null, b), el("span", null, s)); g.append(d); });
       box.append(g);
     }
     const h1 = el("h2", null, v.tonight ? "Tonight's awards" : "The awards"); h1.append(el("small", null, plural(v.awards.length, "winner")));
@@ -446,16 +449,16 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     previewStart = pv.start;
     $("title").textContent = "Karaoke tonight · " + pv.startLabel;
     const k = $("kicker"); k.classList.add("live");
-    k.textContent = "Coming up" + (pv.venue ? " at " + pv.venue : "") + " · sign up at the KJ booth";
+    k.textContent = "Coming up" + (pv.venue ? " at " + pv.venue : "") + " · sign up at " + SIGNUP_AT;
     const t = $("tally"); t.replaceChildren();
     const d = el("div", "count"); const st = el("strong", null, countdownText(pv.start)); st.id = "pv-count";
     d.append(st, document.createTextNode(now() < pv.start ? "until the first song" : "Warming up the mics")); t.append(d);
     const box = el("div", "copy");
-    box.append(heading("Want to sing tonight?", "sign up at the KJ booth"));
+    box.append(heading("Want to sing tonight?", "sign up at " + SIGNUP_AT));
     const g = el("div", "signup");
-    [["Grab a slip at the KJ booth", "That’s where the host runs the music."],
+    stepsOr([["Grab a slip at the KJ booth", "That’s where the host runs the music."],
      ["Write your name and song", "Add the artist if more than one song has that title."],
-     ["Hand it to the KJ", "Get in early. The first slips go up first!"]].forEach(([b, s], i) => { const c = el("div"); c.append(el("div", "n", String(i + 1)), el("b", null, b), el("span", null, s)); g.append(c); });
+     ["Hand it to the KJ", "Get in early. The first slips go up first!"]]).forEach(([b, s], i) => { const c = el("div"); c.append(el("div", "n", String(i + 1)), el("b", null, b), el("span", null, s)); g.append(c); });
     box.append(g);
     box.append(heading("On your phone tonight", "scan the code or open " + SHOW_URL));
     const f = el("div", "grid");
@@ -480,7 +483,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       box.append(heading("Last time", nightLabel(v.night)));
       const last = copyOf({ ...v, live: false, tonight: false, drafts: [], duets: [], dares: [] });
       box.append(...last.children);
-    } else box.append(el("p", "pv-note", "Be the first song of the night. Get your slip in!"));
+    } else box.append(el("p", "pv-note", VENUE.signup_steps ? "Be the first song of the night. Sign up early!" : "Be the first song of the night. Get your slip in!"));
     const reel = $("reel"); reel.replaceChildren(box);
     layout();
   }
