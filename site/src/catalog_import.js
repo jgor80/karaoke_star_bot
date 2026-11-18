@@ -22,7 +22,8 @@ import { matchKey, stylesFor, seedDetails, loadDetails } from "./details_import.
 
 const KV_ZIP = "https://www.karaoke-version.com/misc/catalog/karaokeversion_catalog_en_USD.xml.zip";
 const SOURCE = "kv";            // catalog_meta.source; a different value means the old list, so re-import now
-export const KV_ID_BASE = 3e9;  // ids of songs that only come from the file (host songbook ids start at 1e9)
+import { KV_ID_BASE, OWN_BASE } from "./song_ids.js"; // id ranges: see song_ids.js
+export { KV_ID_BASE };
 const UA = "OkeNight/1.0 (affiliate catalog import; okenight.com)";
 const REFRESH_MS = 7 * 86400 * 1000;
 const RETRY_MS = 3600 * 1000;
@@ -244,7 +245,7 @@ export async function importCatalog(env, now = Date.now(), firstImport = false) 
   const prev = new Map(firstImport ? [] : existing.map((r) => [Number(r.id), r]));
   const sung = new Map();
   try {
-    const { results } = await env.DB.prepare("SELECT song_id AS id, title, artist FROM plays WHERE song_id IS NOT NULL AND song_id < ? AND title IS NOT NULL GROUP BY song_id").bind(1e9).all();
+    const { results } = await env.DB.prepare("SELECT song_id AS id, title, artist FROM plays WHERE song_id IS NOT NULL AND song_id < ? AND title IS NOT NULL GROUP BY song_id").bind(OWN_BASE).all();
     for (const r of results) { const k = matchKey(r.title, r.artist); if (!sung.has(k)) sung.set(k, Number(r.id)); }
   } catch (e) { /* no plays yet */ }
   const songs = buildCatalog(kvSongs, sung, prev, firstImport ? "" : new Date(now).toISOString().slice(0, 10), await loadDetails(env));

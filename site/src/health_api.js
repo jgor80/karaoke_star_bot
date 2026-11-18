@@ -71,14 +71,14 @@ export async function syncHealth(env, venue) {
   } catch (e) { return { sync_health: null }; }
 }
 
-async function push(topic, title, body, venue, priority = "high") {
+export async function push(topic, title, body, venue, priority = "high", tags = "computer,warning") {
   const r = await fetch("https://ntfy.sh/" + topic, { method: "POST", body,
-    headers: { Title: title, Priority: priority, Tags: "computer,warning", Click: "https://okenight.com/" + venue.slug + "/host" } });
+    headers: { Title: title, Priority: priority, Tags: tags, Click: "https://okenight.com/" + venue.slug + "/host" } });
   return r.ok;
 }
 
 // Send one alert of `kind` per session: host_config "sync_alert_<kind>" holds the session start it was sent for.
-async function once(env, venue, kind, start, send) {
+export async function once(env, venue, kind, start, send) {
   const key = cfgKey(venue, "sync_alert_" + kind);
   const claim = await env.DB.prepare(
     "INSERT INTO host_config (k, v) VALUES (?2, ?1) ON CONFLICT(k) DO UPDATE SET v = ?1 WHERE CAST(v AS integer) < ?1").bind(String(start), key).run();

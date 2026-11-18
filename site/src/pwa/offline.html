@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#170d1c">
+<title>Offline · Oke Night</title>
+<style>
+:root { --bg: #170d1c; --panel: #23152a; --ink: #f6ecf8; --muted: #d3c4d8; --hot: #ff5c9d; --gold: #f5b84a; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--ink);
+  font: 18px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); text-align: center; }
+main { max-width: 360px; display: grid; gap: 14px; justify-items: center; }
+img { width: 96px; height: 96px; border-radius: 22px; }
+h1 { margin: 0; font-size: 26px; }
+p { margin: 0; color: var(--muted); }
+button { font: inherit; font-weight: 700; color: #170d1c; background: linear-gradient(90deg, var(--hot), var(--gold)); border: 0; border-radius: 999px; padding: 12px 22px; min-height: 48px; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <img src="/icons/icon-192.png" alt="">
+  <h1>You’re offline</h1>
+  <p>Oke Night needs a connection to show who’s on the mic. It will reload by itself when you’re back online.</p>
+  <button type="button" id="retry">Try again</button>
+</main>
+<script>
+document.getElementById("retry").addEventListener("click", () => location.reload());
+addEventListener("online", () => location.reload());
+</script>
+</body>
+</html>

@@ -14,7 +14,8 @@
 import { searchKey, MAX_SQL_BYTES } from "./catalog_import.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig } from "./venues.js";
 
-export const OWN_BASE = 1000000000;
+import { OWN_BASE, songTable } from "./song_ids.js";
+export { OWN_BASE };
 export const MAX_OWN = 150000;
 const CHUNK = 2000;
 const UNRANKED = 1000000;
@@ -50,7 +51,7 @@ export function forgetSongbookConfig(venue = DEFAULT_VENUE) { memo.delete(venue.
 // venue (optional): only that bar's own songbook. Half-uploaded (staging) songs never count.
 export async function listSongById(env, id, venue = null) {
   try {
-    const own = Number(id) >= OWN_BASE;
+    const own = songTable(id) === "songbook";
     const r = await env.DB.prepare(own
       ? "SELECT rowid AS id, title, artist FROM songbook WHERE rowid = ?1 AND venue NOT LIKE '%~new'" + (venue ? " AND venue = ?2" : "")
       : "SELECT rowid AS id, title, artist FROM catalog WHERE rowid = ?1").bind(...(own && venue ? [Number(id), venue.slug] : [Number(id)])).first();

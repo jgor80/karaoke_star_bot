@@ -96,8 +96,7 @@ export async function scoreCrowd(env, venue = DEFAULT_VENUE) {
     if (best) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO crowd_scores (uuid, src, peak, base, over, scored_at) VALUES (?, ?, ?, ?, ?, ?)").bind(p.uuid, src, best.peak, best.base, best.over, t));
     else if (w.skip || t > w.end + CROWD.giveUp) stmts.push(env.DB.prepare("INSERT OR IGNORE INTO crowd_scores (uuid, scored_at) VALUES (?, ?)").bind(p.uuid, t)); // stopped early, or nobody was listening
   });
-  // Raw samples are only needed for scoring: keep 45 days, trimmed now and then.
-  if (Math.random() < 1 / 60) stmts.push(env.DB.prepare("DELETE FROM crowd_levels WHERE ts < ?").bind(t - 45 * 86400));
+  // Raw samples are only needed for scoring; privacy_api.js dailyCleanup deletes them after CROWD_KEEP_DAYS.
   if (stmts.length) await env.DB.batch(stmts);
   return stmts.length;
 }

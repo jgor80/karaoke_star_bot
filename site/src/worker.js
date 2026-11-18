@@ -10,6 +10,7 @@
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 // Wireless buttons around the bar can send reactions too, each with its own secret link made on /host (buttons_api.js).
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
+import { watchLine } from "./line_api.js";
 import PAGE from "./index.html";
 import HOME from "./home.html";
 import { appPreflight, withAppCors } from "./origins.js"; // the phone app calls the API from its own origin
@@ -33,7 +34,7 @@ import { updateDetails } from "./details_import.js";
 import { updateVoices } from "./voice_import.js";
 import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
-import { erasedSingers, relabel, sweepErased, dailyCleanup } from "./privacy_api.js";
+import { erasedSingers, relabel, relabelRows, sweepErased, dailyCleanup } from "./privacy_api.js";
 import PRIVACY from "./privacy.html";
 import TERMS from "./terms.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
@@ -46,10 +47,20 @@ import { SAMPLE_REPORT } from "./sample_report.js";
 import { handleDuet, duetBoard } from "./duets_api.js";
 import DUETS from "./duets.js";
 import PICKER from "./picker.js";
+import { DEMO_VENUE, handleDemoApi } from "./demo.js"; // okenight.com/demo/: an always-on sample night
 import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
 import { handleButton } from "./buttons_api.js";
+// Installable web app (pwa/): manifest, service worker, offline screen and icons. Text/Data per [[rules]].
+import MANIFEST from "./pwa/manifest.webmanifest";
+import SW from "./pwa/sw.js";
+import OFFLINE from "./pwa/offline.html";
+import ICON_192 from "./pwa/icon-192.png";
+import ICON_512 from "./pwa/icon-512.png";
+import ICON_MASK from "./pwa/icon-maskable-512.png";
+import ICON_APPLE from "./pwa/apple-touch-icon.png";
+const ICONS = { "/icons/icon-192.png": ICON_192, "/icons/icon-512.png": ICON_512, "/icons/icon-maskable-512.png": ICON_MASK, "/apple-touch-icon.png": ICON_APPLE, "/icons/apple-touch-icon.png": ICON_APPLE };
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
@@ -104,6 +115,7 @@ function venueList(env) {
 
 // /<slug>/api/<name> and the old /api/<name> (= first venue).
 async function handleApi(name, req, env, ctx, venue, url) {
+  if (venue.demo) return handleDemoApi(name, req, url, () => handleApi(name, req, env, ctx, DEFAULT_VENUE, url));
   if (name === "react") {
     if (req.method !== "POST") return new Response("POST only", { status: 405 });
     await ensureCore(env);
@@ -145,9 +157,11 @@ async function handleApi(name, req, env, ctx, venue, url) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
       const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
-      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars] = await Promise.all([
+      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, erased] = await Promise.all([
         env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
-        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue)]);
+        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue),
+        erasedSingers(env, venue).catch(() => [])]);
+      plays.results = relabelRows(erased, plays.results); // a removed singer's name never goes out, even before the sweep
       res = new Response(
         JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
@@ -164,6 +178,7 @@ function handleVenue(rest, req, env, ctx, venue, url) {
   if (rest === "" || rest === "index.html") return html(withVenue(PAGE, venue));
   if (rest === "tv" || rest === "tv/") return html(withVenue(TV, venue));
   if (rest === "report" || rest === "report/") return html(withVenue(REPORT, venue), "public, max-age=300", { "x-robots-tag": "noindex" });
+  if (venue.demo && /^(host|report)\/?$/.test(rest)) return Response.redirect(url.origin + "/demo/", 302); // nothing to run or report
   if (rest === "host" || rest === "host/") return html(withVenue(HOST, venue), "no-store", { "x-robots-tag": "noindex" });
   if (rest === "sunday.ics" || rest === "calendar.ics") {
     return new Response(sundayIcs(Math.floor(Date.now() / 1000), venue), {
@@ -187,6 +202,11 @@ async function route(req, env, ctx) {
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
       });
     }
+    if (path === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json", "cache-control": "public, max-age=3600" } });
+    // The service worker itself: revalidated every load so a new version reaches phones quickly.
+    if (path === "/sw.js") return new Response(SW, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+    if (path === "/offline.html") return html(OFFLINE, "public, max-age=3600");
+    if (ICONS[path]) return new Response(ICONS[path], { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
     if (path === "/sample-report" || path === "/sample-report/") // the home page's sample: real numbers, no bar name or dates (sample_report.js)
       return html(REPORT.replace("<script>", "<script>window.OKE_SAMPLE = " + JSON.stringify(SAMPLE_REPORT) + ";</script>\n<script>"), "public, max-age=3600", { "x-robots-tag": "noindex" });
@@ -201,10 +221,10 @@ async function route(req, env, ctx) {
     if (path in LEGACY) return Response.redirect(url.origin + "/" + DEFAULT_VENUE.slug + "/" + LEGACY[path] + url.search + url.hash, 301);
 
     const m = /^\/([a-z0-9-]+)(\/(.*))?$/.exec(path);
-    const venue = m && venueBySlug(m[1]);
+    const venue = m && (venueBySlug(m[1]) || (m[1] === DEMO_VENUE.slug ? DEMO_VENUE : null));
     if (venue) {
       if (m[2] === undefined) return Response.redirect(url.origin + "/" + venue.slug + "/" + url.search, 301); // /wbl -> /wbl/
-      return handleVenue(m[3], req, env, ctx, await withNightsOff(env, venue), url);
+      return handleVenue(m[3], req, env, ctx, venue.demo ? venue : await withNightsOff(env, venue), url);
     }
     return new Response("Not found", { status: 404 });
 }
@@ -219,16 +239,17 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       await ensureCore(env);
+      const daily = await dailyCleanup(env, event.scheduledTime).catch(() => false); // drop old rate-limit IDs (privacy_api.js)
       for (const v0 of VENUES) {
         const v = await withNightsOff(env, v0); // nights the host turned off: no reminder, laptop alert or report
         await checkSecrets(env, v).catch(() => {});
         await scoreCrowd(env, v).catch(() => {}); // crowd meter
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic
-        await sweepErased(env, v).catch(() => {}); // new songs by singers who asked to be removed
+        await sweepErased(env, v, daily).catch(() => {}); // new songs by singers who asked to be removed (all nights once a day)
         await checkSyncAlerts(env, v).catch(() => {}); // host alert if the laptop or karaoke app isn't ready (health_api.js)
+        await watchLine(env, v).catch(() => {}); // host alert when the line runs past tonight's end, and last call (line_api.js)
         await sendReports(env, v).catch(() => {}); // the morning-after numbers for the host and bar owner (report_api.js)
       }
-      await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
     })().catch(() => {}));
     // Weekly: refresh the Songbook's song list (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
