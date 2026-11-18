@@ -43,6 +43,12 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .sb-prev { width: 100%; border-collapse: collapse; font-size: 14px; display: block; overflow-x: auto; }
 .sb-prev td, .sb-prev th { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; white-space: nowrap; }
 .sb-prev th { color: var(--muted); font-weight: 600; }
+.ph-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ph-list li { background: var(--panel-2); border-radius: 12px; padding: 10px; display: grid; gap: 6px; justify-items: center; text-align: center; }
+.ph-list img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--bg); }
+.ph-list .t { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.ph-list .s { color: var(--muted); font-size: 14px; }
+.ph-list .row { justify-content: center; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .hint { font-size: 15px; color: var(--muted); margin: 0; }
 .err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
@@ -148,6 +154,13 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
         <button type="submit" class="ghost small">Remove name</button>
       </form>
       <p class="hint" id="erase-msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <section>
+      <h2 id="ph-h">Singer photos</h2>
+      <p class="hint" style="margin-bottom:8px">Singers can add a photo for their name from their phone (tap their circle after “That’s me”). Photos show on this bar’s page and the TV right away. Remove anything that isn’t OK. “Remove and block” also stops new photos for that name, for example when someone used another person’s name.</p>
+      <ul class="ph-list" id="ph-list"></ul>
+      <p class="hint" id="ph-blocked" hidden></p>
     </section>
 
     <section class="card">
@@ -493,6 +506,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", x.partner ? "🤝 " + x.by + " + " + x.partner : "🎤 " + x.by + " needs a partner"));
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "duet_remove", id: x.id });
       const row = el("div", "row"); row.append(rm); li.append(row); dul.append(li); });
+    renderPhotos(d.photos || []);
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
     $("req-h").textContent = "Song requests (" + rq.length + ")";
@@ -602,6 +616,32 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     try { await navigator.clipboard.writeText(link); $("owner-btn").textContent = "Link copied"; } catch (e) {}
   });
   $("owner-off").addEventListener("click", async () => { if (confirm("Stop sending the report to the owner’s link?")) { await api("POST", { action: "owner_topic", on: false }); load(); } });
+
+  // Singer photos (avatars_api.js). Only redrawn when the list changes, so the pictures don't flicker every poll.
+  let photosSig = "";
+  function renderPhotos(list) {
+    const sig = JSON.stringify(list); if (sig === photosSig) return; photosSig = sig;
+    const shown = list.filter((p) => p.has_img && !p.blocked), blocked = list.filter((p) => p.blocked), ul = $("ph-list");
+    $("ph-h").textContent = "Singer photos (" + shown.length + ")";
+    ul.replaceChildren();
+    if (!shown.length) ul.append(el("li", "s", "No singer photos yet."));
+    shown.forEach((p) => {
+      const li = el("li"), img = el("img"); img.alt = "Photo for " + p.name; img.loading = "lazy"; img.src = "api/avatar?k=" + encodeURIComponent(p.k) + "&v=" + p.v;
+      const row = el("div", "row");
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button";
+      rm.onclick = () => { if (confirm("Remove " + p.name + "’s photo?")) act({ action: "photo_remove", k: p.k }); };
+      const bl = el("button", "ghost small", "Remove and block"); bl.type = "button";
+      bl.onclick = () => { if (confirm("Remove " + p.name + "’s photo and stop new photos for that name?")) act({ action: "photo_remove", k: p.k, name: p.name, block: true }); };
+      row.append(rm, bl);
+      li.append(img, el("span", "t", p.name), el("span", "s", when(p.at)), row); ul.append(li);
+    });
+    const bp = $("ph-blocked"); bp.hidden = !blocked.length; bp.replaceChildren();
+    if (blocked.length) {
+      bp.append(document.createTextNode("No photos allowed for: "));
+      blocked.forEach((p, i) => { if (i) bp.append(document.createTextNode(" ")); const b = el("button", "ghost small", "Allow " + p.name); b.type = "button";
+        b.onclick = () => act({ action: "photo_unblock", k: p.k }); bp.append(b); });
+    }
+  }
 
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 

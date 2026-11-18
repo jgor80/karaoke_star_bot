@@ -26,6 +26,7 @@ import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
 import { networkOf } from "./net.js";
+import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
@@ -280,6 +281,9 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       if (venue.slug !== DEFAULT_VENUE.slug) return json({ error: "Leads are on the first venue's host page." }, 403);
       const r = await hostLeadAction(env, body); // "Bring Oke Night to your bar" leads: remove one once handled
       if (r.error) return json(r, 400);
+    } else if (String(body.action || "").startsWith("photo_")) {
+      const r = await hostPhotoAction(env, body, venue); // singer photos: remove one, block or unblock a name
+      if (r.error) return json(r, 400);
     } else if (body.action === "duet_remove") {
       const r = await hostDuetAction(env, body, venue); // duet finder: take a post down
       if (r.error) return json(r, 400);
@@ -304,5 +308,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
