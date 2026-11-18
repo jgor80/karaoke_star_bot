@@ -15,8 +15,8 @@
 <script>
 // The Oke Night phone app shows this same page. Its shell sets window.OKE_APP (or adds "OkeNightApp" to the
 // browser's name) and window.OKE_SITE (https://okenight.com, since the app's own pages live at capacitor://).
-// In the app there's no tipping, no bar pitch and no host page: stores treat those as in-app purchases or
-// as screens a reviewer can't use.
+// In the app there's no bar pitch and no host page (screens a reviewer can't use). Tips stay: they're an
+// optional gift paid in Venmo, all of it to the host, and unlock nothing in the app (Apple 3.2.1(vii)).
 window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
 if (window.OKE_APP) document.documentElement.classList.add("app");
 </script>
@@ -586,7 +586,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 /* tip menu */
 .icon-btn.tip { border-color: var(--gold); color: var(--gold); }
 #tip-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
-html.app #tip-btn, html.app #tip-dlg { display: none !important; }
+html:not(.app) #tip-app-note { display: none; }
 @media (max-width: 440px) { .icon-btn.tip .lbl, .top:has(#tip-btn:not([hidden])) #share-btn .lbl { display: none; } }
 .tips { display: grid; gap: 8px; margin: 14px 0; }
 .tip-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-decoration: none; color: var(--ink); background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
@@ -899,6 +899,7 @@ html.app #tip-btn, html.app #tip-dlg { display: none !important; }
   <p class="muted small" style="margin:0" id="tip-sub"></p>
   <div class="tips" id="tips"></div>
   <p class="muted small" style="margin:0 0 12px">Opens Venmo with the amount filled in. Perks are up to the host.</p>
+  <p class="muted small" id="tip-app-note" style="margin:0 0 12px">A tip is a thank-you to the host, paid in Venmo, and all of it goes to them. It doesn’t unlock or change anything in the app.</p>
   <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
 </dialog>
 
@@ -1798,7 +1799,7 @@ html.app #tip-btn, html.app #tip-dlg { display: none !important; }
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       hostKey = key(clean(data.host || "")); OkeAwards.setHost(data.host || "");
-      tips = data.tips || null; $("tip-btn").hidden = window.OKE_APP || !(tips && tips.venmo && tips.menu && tips.menu.length); // no tips in the app (store payment rules)
+      tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (data.avatars) avatars = mergeAvatars(data.avatars);
