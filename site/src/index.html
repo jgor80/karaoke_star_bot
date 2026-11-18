@@ -958,10 +958,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   let avatars = {}, styled = {};
   // A rock-star look (styled_api.js) shows instead of the plain photo once the host OKs it. This phone also
   // shows its own chosen look before that ("" = this phone went back to the plain photo).
+  // Photos this phone hid after reporting them (oke-hidden-photos, photo safety work) stay hidden, looks too.
+  function hiddenPhoto(k) { try { const h = JSON.parse(store.get("oke-hidden-photos") || "null"); return !!h && (Array.isArray(h) ? h.includes(k) : !!h[k]); } catch (e) { return false; } }
   const myLooks = () => { try { return JSON.parse(store.get("oke-my-looks") || "{}"); } catch (e) { return {}; } };
   function photoSrc(name) {
     const k = photoKey(name), v = k && avatars[k];
-    if (!v) return null;
+    if (!v || hiddenPhoto(k)) return null;
     const mine = myLooks()[k], look = mine !== undefined ? mine : styled[k];
     return look ? "api/styled?k=" + k + "&id=" + look : "api/avatar?k=" + k + "&v=" + v;
   }

@@ -82,8 +82,8 @@ async function ownedPhoto(env, venue, k, key) {
   const row = await env.DB.prepare("SELECT * FROM avatars WHERE venue = ? AND k = ?").bind(venue.slug, k).first().catch(() => null);
   if (!row || !row.img || row.blocked) return { error: "Add your photo first.", status: 404 };
   if (row.owner !== await sha256("avatar:" + venue.slug + ":" + key)) return { error: "Only the phone that added this photo can make looks from it.", status: 403 };
-  // If photos get a host review step (approved / status column), a look can only be made from an approved photo.
-  if (("approved" in row && !row.approved) || ("status" in row && row.status && row.status !== "approved")) return { error: "Your photo is waiting for the host. Try again once it shows.", status: 409 };
+  // A photo waiting for the host or hidden after reports (avatars.pending = 1) can't be made into a look.
+  if (row.pending) return { error: "Your photo is waiting for the host. Try again once it shows.", status: 409 };
   if ((await erasedSingers(env, venue)).some((x) => x.k === k)) return { error: "That name isn’t on the site.", status: 404 };
   return { row };
 }
@@ -226,10 +226,11 @@ async function serveLook(env, venue, url) {
 export async function styledMap(env, venue) {
   try {
     await ensure(env);
-    const [{ results }, erased] = await Promise.all([
-      env.DB.prepare("SELECT s.k, s.id FROM styled_looks s JOIN avatars a ON a.venue = s.venue AND a.k = s.k AND a.ver = s.pver AND a.img IS NOT NULL AND a.blocked = 0 " +
-        "WHERE s.venue = ? AND s.approved = 1 AND s.chosen = 1").bind(venue.slug).all(),
-      erasedSingers(env, venue)]);
+    // Photos waiting for the host or hidden after reports (avatars.pending, added by the photo safety work)
+    // hide their looks too. Before that column exists the first query fails and the second one runs.
+    const q = (pending) => env.DB.prepare("SELECT s.k, s.id FROM styled_looks s JOIN avatars a ON a.venue = s.venue AND a.k = s.k AND a.ver = s.pver AND a.img IS NOT NULL AND a.blocked = 0" +
+      (pending ? " AND a.pending = 0" : "") + " WHERE s.venue = ? AND s.approved = 1 AND s.chosen = 1").bind(venue.slug).all();
+    const [{ results }, erased] = await Promise.all([q(true).catch(() => q(false)), erasedSingers(env, venue)]);
     const gone = new Set(erased.map((x) => x.k)), out = {};
     for (const r of results) if (!gone.has(r.k)) out[r.k] = r.id;
     return { styled: out };
