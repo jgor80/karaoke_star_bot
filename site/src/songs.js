@@ -189,7 +189,12 @@
     // opts.shelf: song ideas (picker.js), shown while browsing, hidden while searching or filtering.
     find.append(sw, filters, note, topWrap);
     if (opts.shelf) find.append(opts.shelf);
-    find.append(listH, ol, moreBtn, requestBox());
+    // A light credit + affiliate link: the song list and previews come from Karaoke Version's affiliate
+    // catalog, and tracks bought through this link earn the host a commission (catalog_import.js).
+    const credit = el("p", "muted small kv-credit");
+    const kv = el("a", null, "Karaoke Version"); kv.href = "https://www.karaoke-version.com/?aff=1507"; kv.target = "_blank"; kv.rel = "noopener sponsored";
+    credit.append(document.createTextNode("Song list and previews from "), kv, document.createTextNode(". Want to practice at home? Get the backing tracks there."));
+    find.append(listH, ol, moreBtn, requestBox(), credit);
 
     // ---- my list ----
     mine.replaceChildren();
