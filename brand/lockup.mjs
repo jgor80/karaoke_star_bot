@@ -1,13 +1,15 @@
 // lockup.mjs <svgdir>: horizontal "Oke Night" wordmark lockups next to each icon (font embedded, OFL Audiowide)
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 const dir = process.argv[2];
 const font = readFileSync(new URL("./font/audiowide.woff2", import.meta.url)).toString("base64");
 const V = {
   "a-headliner": { c1: "#19e6ff", c2: "#c4ff2e", frame: "#19e6ff", accent: "#ff3fb8", iris: "#c4ff2e", ring: "#19e6ff", bg: "#060a18" },
   "b-encore": { c1: "#ff5c9d", c2: "#f5b84a", frame: "#ff5c9d", accent: "#f5b84a", iris: "#c4ff2e", ring: "#4de8ff", bg: "#170d1c" },
+  "b2-icon": { c1: "#ff4f9a", c2: "#ffb93d", frame: "#ff4f9a", accent: "#ffb93d", iris: "#c4ff2e", ring: "#3fe6ff", bg: "#12081a" },
   "c-belter": { c1: "#19e6ff", c2: "#c4ff2e", frame: "#9b5cff", accent: "#ff3fb8", iris: "#c4ff2e", ring: "#19e6ff", bg: "#0a0618" },
 };
 for (const [k, c] of Object.entries(V)) {
+  if (!existsSync(`${dir}/${k}.svg`)) continue;
   const src = readFileSync(`${dir}/${k}.svg`, "utf8");
   const defs = src.match(/<defs>([\s\S]*?)<\/defs>/)[1];
   const body = src.split("</defs>")[1].replace("</svg>", "");
@@ -27,5 +29,5 @@ for (const [k, c] of Object.entries(V)) {
   <circle cx="${cx + 11}" cy="${cy - 11}" r="8" fill="${c.iris}"/></g>
 <text x="712" y="316" font-family="OkeWord, Audiowide, sans-serif" font-size="156" filter="url(#glow)"><tspan fill="${c.c1}">ke</tspan><tspan dx="44" fill="${c.c2}">Night</tspan></text>
 </svg>`;
-  writeFileSync(`${dir}/${k}-wordmark.svg`, svg);
+  writeFileSync(`${dir}/${k}-wordmark.svg`, k.startsWith("b2") ? svg.replaceAll("url(#glow)", "url(#n)").replace('r="470"/></clipPath>', 'r="460"/></clipPath>') : svg);
 }

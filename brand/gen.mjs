@@ -131,3 +131,66 @@ function belter() {
 const files = { "a-headliner": headliner(), "a-headliner-noring": headliner({ ring: false }), "b-encore": encore(), "b-encore-fg": encore({ bg: false }), "b-encore-mark": encore({ bg: false, halo: false, notes: false }), "c-belter": belter() };
 for (const [k, v] of Object.entries(files)) writeFileSync(`${out}/${k}.svg`, v);
 console.log(Object.keys(files).join(" "));
+
+// ---------- B v2: Encore, crisp (closer to GafferBot / PennantBot: solid neon lines, tight glow, HUD ring, segmented head) ----------
+export function encore2({ bg = true, hud = true, notes = true, size = 1024 } = {}) {
+  const C = { pink: "#ff4f9a", gold: "#ffb93d", lime: "#c4ff2e", cyan: "#3fe6ff", dark: "#12081a", ink: "#1d0d26" };
+  const F = 'filter="url(#n)"';
+  const crisp = `<filter id="n" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".75"/></feComponentTransfer>
+    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  const R = 104, ex = 512, ey = 452, circ = 2 * Math.PI * R;
+  const arc = (r, a0, a1) => `M${ex + r * Math.cos(a0)} ${ey + r * Math.sin(a0)} A${r} ${r} 0 0 1 ${ex + r * Math.cos(a1)} ${ey + r * Math.sin(a1)}`;
+  const eyeSvg = `<g ${F}>
+    <circle cx="${ex}" cy="${ey}" r="${R}" fill="none" stroke="${C.cyan}" stroke-width="9" stroke-dasharray="${circ * 0.2} ${circ * 0.05}" transform="rotate(-78 ${ex} ${ey})"/>
+    <path d="${arc(R, -0.42, 0.42)}" fill="none" stroke="${C.pink}" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="${ex}" cy="${ey}" r="70" fill="${C.dark}" stroke="${C.lime}" stroke-width="24"/>
+    <circle cx="${ex + 18}" cy="${ey - 18}" r="12" fill="${C.lime}"/></g>`;
+  const noteS = (x, y, s, c, r) => `<g transform="translate(${x} ${y}) rotate(${r}) scale(${s})" ${F}><ellipse rx="21" ry="15" transform="rotate(-22)" fill="${c}"/><path d="M18 -6 V-88 q8 22 32 32 q8 6 6 24" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  const noteD = (x, y, s, c, r) => `<g transform="translate(${x} ${y}) rotate(${r}) scale(${s})" ${F}><ellipse rx="19" ry="14" transform="rotate(-22)" fill="${c}"/><ellipse cx="58" cy="-13" rx="19" ry="14" transform="rotate(-22 58 -13)" fill="${c}"/><path d="M17 -6 V-82 L75 -95 V-19" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 -82 L75 -95" stroke="${c}" stroke-width="15" stroke-linecap="round"/></g>`;
+  const hudSvg = hud ? `<g ${F} fill="none">
+    <circle cx="512" cy="512" r="448" stroke="${C.pink}" stroke-width="16"/>
+    <circle cx="512" cy="512" r="412" stroke="${C.cyan}" stroke-width="4" opacity=".55" stroke-dasharray="64 20"/>
+    <path d="M512 50 v40 M512 934 v40 M50 512 h40 M934 512 h40" stroke="${C.gold}" stroke-width="7" stroke-linecap="round"/>
+    <g stroke="${C.cyan}" stroke-width="8" stroke-linecap="round" opacity=".8"><path d="M150 470 h34 M142 500 h42 M150 530 h34"/><path d="M840 470 h34 M840 500 h42 M840 530 h34"/></g></g>` : "";
+  const robot = `
+    <!-- arms (behind the head) -->
+    <g ${F} fill="none" stroke="${C.pink}" stroke-width="20" stroke-linecap="round">
+      <path d="M262 520 C185 545 165 480 178 410"/>
+      <path d="M760 552 C850 610 810 800 630 806"/></g>
+    <g transform="translate(180 384) rotate(-12)" ${F} fill="${C.ink}" stroke="${C.pink}" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-22 -30 V-76 M4 -36 V-88 M28 -30 V-74 M-38 2 l-30 -24" stroke-width="17"/>
+      <rect x="-40" y="-40" width="80" height="74" rx="28" stroke-width="15"/></g>
+    <!-- antenna -->
+    <g ${F}><path d="M512 296 V226" stroke="${C.gold}" stroke-width="14" stroke-linecap="round"/>
+      <path d="M512 182 l13 26 29 4 -21 20 5 29 -26 -14 -26 14 5 -29 -21 -20 29 -4z" fill="${C.gold}" stroke="${C.gold}" stroke-width="5" stroke-linejoin="round"/></g>
+    <!-- ear brackets -->
+    <g ${F} fill="none" stroke="${C.gold}" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M290 404 h-26 a14 14 0 0 0 -14 14 v104 a14 14 0 0 0 14 14 h26"/><path d="M734 404 h26 a14 14 0 0 1 14 14 v104 a14 14 0 0 1 -14 14 h-26"/></g>
+    <!-- head: segmented outline + thin inner line, like GafferBot's -->
+    <rect x="290" y="306" width="444" height="372" rx="118" fill="${C.ink}" stroke="${C.pink}" stroke-width="24" stroke-dasharray="64 14" ${F}/>
+    <rect x="320" y="336" width="384" height="312" rx="92" fill="none" stroke="${C.pink}" stroke-width="4" opacity=".55"/>
+    ${eyeSvg}
+    <!-- singing mouth -->
+    <g ${F}><path d="M458 584 h108 a54 48 0 0 1 -108 0 z" fill="${C.dark}" stroke="${C.gold}" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M490 620 q22 -12 44 0" fill="none" stroke="${C.pink}" stroke-width="9" stroke-linecap="round"/></g>
+    <!-- mic + hand -->
+    <g transform="translate(668 662) rotate(32)" ${F}>
+      <path d="M-18 50 L-13 214 Q0 226 13 214 L18 50 Z" fill="${C.dark}" stroke="${C.gold}" stroke-width="11" stroke-linejoin="round"/>
+      <rect x="-32" y="38" width="64" height="20" rx="7" fill="${C.dark}" stroke="${C.gold}" stroke-width="10"/>
+      <circle r="48" fill="${C.dark}" stroke="${C.gold}" stroke-width="12"/>
+      <path d="M-28 -20 H28 M-35 0 H35 M-28 20 H28" stroke="${C.gold}" stroke-width="6" stroke-linecap="round"/>
+      <path d="M-11 -38 V38 M11 -38 V38" stroke="${C.gold}" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+      <g stroke="${C.pink}" stroke-linecap="round" stroke-linejoin="round"><rect x="-36" y="104" width="72" height="80" rx="24" fill="${C.ink}" stroke-width="12"/><path d="M-22 130 H22 M-22 156 H22" stroke-width="7"/><path d="M-36 122 q-24 -6 -22 -32" fill="none" stroke-width="11"/></g></g>`;
+  const k = hud ? 0.85 : 0.92;
+  const inner = `${bg ? `<rect width="1024" height="1024" fill="url(#bg2)"/><g stroke="#ff4f9a" stroke-width="1.5" opacity=".07">${Array.from({ length: 15 }, (_, i) => `<path d="M${(i + 1) * 64} 0 V1024 M0 ${(i + 1) * 64} H1024"/>`).join("")}</g>` : ""}
+  ${hudSvg}
+  <g transform="translate(512 ${hud ? 530 : 520}) scale(${k}) translate(-512 -540)">${robot}</g>
+  ${notes ? (hud ? noteS(268, 268, 0.95, C.gold, -10) + noteD(700, 236, 0.85, C.cyan, 8) : noteS(170, 230, 1.05, C.gold, -10) + noteD(790, 200, 0.95, C.cyan, 8)) : ""}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="${size}" height="${size}">
+<defs>${crisp}<radialGradient id="bg2" cx="0.5" cy="0.45" r="0.72"><stop offset="0" stop-color="#2c1031"/><stop offset="1" stop-color="#0c0510"/></radialGradient></defs>
+${inner}
+</svg>`;
+}
+const v2 = { "b2-icon": encore2(), "b2-noring": encore2({ hud: false }), "b2-fg": encore2({ bg: false }), "b2-mark": encore2({ bg: false, hud: false, notes: false }) };
+for (const [k, v] of Object.entries(v2)) writeFileSync(`${out}/${k}.svg`, v);
