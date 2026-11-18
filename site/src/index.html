@@ -293,6 +293,12 @@ details.singer summary .chev { grid-row: 1; grid-column: 3; color: var(--muted);
 details.singer[open] summary .chev { transform: rotate(90deg); }
 .also { font-size: 15px; color: var(--muted); overflow-wrap: anywhere; }
 .me-btn { justify-self: start; }
+.safety { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.linkish { background: none; border: 0; padding: 10px 0; min-height: 44px; color: var(--muted); font: inherit; font-size: 15px; text-decoration: underline; cursor: pointer; }
+.rep-opts { display: grid; gap: 6px; margin: 4px 0; }
+.rep-opts label { display: flex; gap: 10px; align-items: center; min-height: 40px; }
+.agree { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.agree input { margin-top: 4px; width: 20px; height: 20px; flex: none; }
 
 .search-wrap { position: relative; }
 #singers { display: grid; gap: 20px; }
@@ -841,7 +847,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <dialog id="photo-dlg" aria-labelledby="photo-h">
   <h3 id="photo-h">Your photo</h3>
   <p class="muted small" style="margin:0" id="photo-sub">Only a photo of you, and only if you’re 21 or over. Everyone can see it next to your name on this bar’s page and on the TV. Keep it friendly: the host can take it down.</p>
-  <p class="muted small" style="margin:0">Someone used your name or your photo? Tell the host, or email <a href="mailto:info@synthwaveweb.com">info@synthwaveweb.com</a>. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+  <p class="muted small" style="margin:0">Someone used your name or your photo? Tap their name and “Report”, tell the host, or email <a href="mailto:info@synthwaveweb.com">info@synthwaveweb.com</a>. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+  <label class="agree" id="ph-agree-l" hidden><input type="checkbox" id="ph-agree"> <span>It’s me, I’m 21 or over, and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy</a> notice.</span></label>
   <input type="file" id="photo-file" accept="image/*" hidden>
   <div class="ph-stage" id="ph-stage" hidden><canvas id="ph-canvas" width="560" height="560" aria-label="Drag to move your photo"></canvas></div>
   <label class="ph-zoom" id="ph-zoom-l" hidden>Zoom <input type="range" id="ph-zoom" min="1" max="4" step="0.01" value="1"></label>
@@ -851,6 +858,23 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     <button class="act" id="ph-pick" type="button">Choose a photo</button>
     <button class="act ghost" id="ph-remove" type="button" hidden>Remove my photo</button>
     <button class="act ghost" id="ph-close" type="button">Cancel</button>
+  </div>
+</dialog>
+
+<dialog id="report-dlg" aria-labelledby="report-h">
+  <h3 id="report-h">Report</h3>
+  <p class="muted small" style="margin:0">The host gets it right away. A photo reported by two people is hidden until the host looks.</p>
+  <div class="rep-opts" id="rep-kind" role="radiogroup" aria-label="Report what"></div>
+  <fieldset class="rep-opts" style="border:0;padding:0;margin:0"><legend class="muted small" style="padding:0">What’s wrong?</legend>
+    <label><input type="radio" name="rep-why" value="not_them" checked> It’s not them / someone used their name</label>
+    <label><input type="radio" name="rep-why" value="offensive"> Offensive or inappropriate</label>
+    <label><input type="radio" name="rep-why" value="underage"> Looks under 21</label>
+    <label><input type="radio" name="rep-why" value="other"> Something else</label>
+  </fieldset>
+  <p class="ph-msg" id="rep-msg" role="status" aria-live="polite"></p>
+  <div class="btns" style="justify-content:center">
+    <button class="act" id="rep-send" type="button">Send report</button>
+    <button class="act ghost" id="rep-close" type="button">Cancel</button>
   </div>
 </dialog>
 
@@ -920,7 +944,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   // Same folding as the server (privacy_api.js matchKey), so "Amy", "amy " and "Ámy" share a photo.
   const photoKey = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
   let avatars = {};
-  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return v ? "api/avatar?k=" + k + "&v=" + v : null; }
+  // Photos this phone chose to hide ("Hide photo" on a singer): their letter circle shows instead.
+  const HIDDEN_KEY = "oke-hidden-photos";
+  const hiddenPhotos = () => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"); } catch (e) { return []; } };
+  function setHidden(k, on) { const l = hiddenPhotos().filter((x) => x !== k); if (on) l.push(k); try { l.length ? localStorage.setItem(HIDDEN_KEY, JSON.stringify(l)) : localStorage.removeItem(HIDDEN_KEY); } catch (e) {} }
+  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return v && !hiddenPhotos().includes(k) ? "api/avatar?k=" + k + "&v=" + v : null; }
   // ICON, awards and tally live in /awards.js so the TV screen (/tv) shares them.
   const icon = OkeAwards.icon;
   // Adds a "🎤 Host" tag after a name element when that name is the host's.
@@ -1308,6 +1336,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (person) { const isMe = getMe() === key(e.name); const mb = el("button", "act me-btn" + (isMe ? " ghost" : ""), isMe ? "That’s not me" : "That’s me 🙋"); mb.type = "button";
         mb.addEventListener("click", () => { setMe(isMe ? null : key(e.name)); if (!isMe) show("tonight"); }); extra.push(mb); }
       if (person && getMe() === key(e.name)) { const pb = el("button", "act ghost me-btn", photoSrc(e.name) ? "📷 Change my photo" : "📷 Add my photo"); pb.type = "button"; pb.addEventListener("click", () => openPhoto(e.name)); extra.push(pb); }
+      if (person && getMe() !== key(e.name)) { // report or hide someone else's photo or name (app store rules for user content)
+        const pk = photoKey(e.name), has = !!avatars[pk], hid = hiddenPhotos().includes(pk);
+        const row = el("div", "safety");
+        if (has || hid) { const hb = el("button", "linkish", hid ? "Show their photo again" : "🙈 Hide this photo on my phone"); hb.type = "button";
+          hb.addEventListener("click", () => { setHidden(pk, !hid); renderAll(); }); row.append(hb); }
+        const rb = el("button", "linkish", "🚩 Report " + (has ? "photo or name" : "name")); rb.type = "button"; rb.addEventListener("click", () => openReport(e.name, has)); row.append(rb);
+        extra.push(row);
+      }
       if (person && draft) { const db = el("button", "act ghost me-btn", "🎯 Draft " + e.name + " to sing…"); db.type = "button"; db.addEventListener("click", () => draft.open(e.name)); extra.push(db); }
       const earned = el("div", "badges");
       if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
@@ -1863,12 +1899,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   }
   function phRender() { if (ph) { phClamp(); phDraw(phCtx, VIEW); } }
   function phMode(editing) {
-    $("ph-stage").hidden = $("ph-zoom-l").hidden = $("ph-save").hidden = !editing;
+    $("ph-stage").hidden = $("ph-zoom-l").hidden = $("ph-save").hidden = $("ph-agree-l").hidden = !editing;
     $("ph-pick").textContent = editing ? "Choose another" : "Choose a photo"; $("ph-pick").classList.toggle("ghost", editing);
     $("ph-remove").hidden = editing || !(avatars[photoKey(phName)] && mineList().includes(photoKey(phName)));
   }
   function openPhoto(name) {
-    phName = name; ph = null; phMsg(""); $("ph-zoom").value = "1"; $("photo-file").value = "";
+    phName = name; ph = null; phMsg(""); $("ph-zoom").value = "1"; $("photo-file").value = ""; $("ph-agree").checked = false;
     const k = photoKey(name);
     $("photo-h").textContent = avatars[k] ? "Change your photo" : "Add your photo";
     phMode(false); photoDlg.showModal();
@@ -1925,9 +1961,37 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     phDraw(out.getContext("2d"), OUT_PX);
     const image = out.toDataURL("image/jpeg", 0.85);
     $("ph-save").disabled = true; phMsg("Saving…");
-    try { const d = await photoPost({ action: "upload", image }); photoDone(d.k, d.v); }
+    if (!$("ph-agree").checked) { phMsg("Tick the box first.", true); $("ph-agree").focus(); return; }
+    try {
+      const d = await photoPost({ action: "upload", image, agree: true });
+      if (d.pending) { photoMine.fresh[d.k] = { v: d.v, at: Date.now() }; setMine(d.k, true); avatars = mergeAvatars(avatars); renderAll(); phMode(false); ph = null;
+        phMsg("Sent! The host checks new photos, so everyone else sees it once it’s approved."); return; }
+      photoDone(d.k, d.v);
+    }
     catch (e) { phMsg(e.message || "Couldn’t save. Check the connection and try again.", true); }
     finally { $("ph-save").disabled = false; }
+  });
+  // Report a singer's photo or name (avatars_api.js action "report").
+  const repDlg = $("report-dlg"); let repName = "";
+  function openReport(name, hasPhoto) {
+    repName = name; $("report-h").textContent = "Report " + name; $("rep-msg").textContent = ""; $("rep-send").disabled = false;
+    const k = $("rep-kind"); k.replaceChildren(); k.hidden = !hasPhoto;
+    if (hasPhoto) for (const [v, t] of [["photo", "Their photo"], ["name", "Their name"]]) {
+      const l = el("label"), i = el("input"); i.type = "radio"; i.name = "rep-kind"; i.value = v; i.checked = v === "photo"; l.append(i, document.createTextNode(" " + t)); k.append(l); }
+    repDlg.showModal();
+  }
+  $("rep-close").addEventListener("click", () => repDlg.close());
+  $("rep-send").addEventListener("click", async () => {
+    const kindEl = repDlg.querySelector("input[name=rep-kind]:checked"), why = repDlg.querySelector("input[name=rep-why]:checked");
+    $("rep-send").disabled = true; $("rep-msg").textContent = "Sending…";
+    try {
+      const r = await fetch("api/avatar", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "report", name: repName, kind: kindEl ? kindEl.value : "name", reason: why ? why.value : "other" }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "That didn’t go through. Try again.");
+      $("rep-msg").textContent = d.hidden ? "Thanks. The photo is hidden until the host looks at it." : "Thanks. The host will take a look.";
+      setTimeout(() => { if (repDlg.open) repDlg.close(); }, 2200);
+    } catch (e) { $("rep-msg").textContent = e.message || "That didn’t go through. Try again."; $("rep-send").disabled = false; }
   });
   $("ph-remove").addEventListener("click", async () => {
     phMsg("Removing…");
