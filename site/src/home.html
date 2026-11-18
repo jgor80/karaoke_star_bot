@@ -116,6 +116,8 @@ textarea { min-height: 90px; resize: vertical; }
 
 footer a, .muted.small a { display: inline-block; padding: 12px 2px; margin: -12px 0; }
 footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 15px; }
+.needs { margin: 0 0 12px; padding-left: 1.2em; }
+.needs li { margin: 8px 0; }
 </style>
 </head>
 <body>
@@ -181,6 +183,14 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
       <li><div><b>The host installs the helper</b><span>It runs quietly on the karaoke laptop and sends each song to your page.</span></div></li>
       <li><div><b>Put the code on the tables and the TV</b><span>Guests scan it and play along. That’s it.</span></div></li>
     </ol>
+    <h3 style="font-weight:700;margin:20px 0 12px">What it takes</h3>
+    <ul class="needs">
+      <li><b>A Windows laptop running your karaoke app.</b> Oke Night works with one popular karaoke app for now. Tell us which one you use in the form and we’ll let you know if it fits.</li>
+      <li><b>A TV or screen</b> for the scan code and the big-screen recap (optional, but the crowd loves it).</li>
+      <li><b>Wifi for the laptop.</b> Guests use their own phones. No app to install, no sign-ups.</li>
+      <li><b>$20 a month for the bar.</b> Always free for singers. Send the form below and we’ll get you set up.</li>
+    </ul>
+    <p class="muted small">The owner gets the numbers from each night (songs, singers, first-timers, busiest hour, applause) the next morning. No names or song titles. <a href="/sample-report">See a sample report</a> (real numbers from one night, with the bar’s name left out).</p>
     <form class="lead" id="lead" novalidate>
       <b style="font-size:19px">Bring Oke Night to your bar</b>
       <div class="row2">
@@ -192,7 +202,7 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
         <label>You are the…<select name="role"><option value="">Pick one</option><option>Owner or manager</option><option>Karaoke host</option><option>Regular</option><option>Other</option></select></label>
       </div>
       <label>Email or phone<input name="contact" required maxlength="100" autocomplete="email"></label>
-      <label>Karaoke night(s) and anything else<textarea name="note" maxlength="600" placeholder="Thursdays 9 to close, about 40 people…"></textarea></label>
+      <label>Karaoke night(s) and anything else<textarea name="note" maxlength="600" placeholder="Thursdays 9 to close, about 40 people, which karaoke app you use…"></textarea></label>
       <label class="hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
         <button class="act" type="submit" id="lead-send">Send</button>

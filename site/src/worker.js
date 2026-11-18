@@ -41,6 +41,7 @@ import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
 import { checkSyncAlerts } from "./health_api.js";
 import { handleReport, sendReports } from "./report_api.js";
 import REPORT from "./report.html";
+import { SAMPLE_REPORT } from "./sample_report.js";
 import { handleDuet, duetBoard } from "./duets_api.js";
 import DUETS from "./duets.js";
 import PICKER from "./picker.js";
@@ -186,6 +187,8 @@ export default {
       });
     }
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
+    if (path === "/sample-report" || path === "/sample-report/") // the home page's sample: real numbers, no bar name or dates (sample_report.js)
+      return html(REPORT.replace("<script>", "<script>window.OKE_SAMPLE = " + JSON.stringify(SAMPLE_REPORT) + ";</script>\n<script>"), "public, max-age=3600", { "x-robots-tag": "noindex" });
     if (path === "/terms" || path === "/terms/") return html(TERMS, "public, max-age=3600");
     if (path === "/league" || path === "/league/") return html(LEAGUE, "public, max-age=300");
     if (path === "/api/league") return handleLeague(req, env, ctx, url); // monthly table across every bar, see league_api.js
