@@ -242,8 +242,12 @@ export async function importCatalog(env, now = Date.now(), firstImport = false) 
   const have = new Map(existing.map((r) => [Number(r.id), r.h]));
   const todo = songs.filter((s) => have.get(s.id) !== s.h);
   const stmts = insertStatements(todo);
-  for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5).map((sql) => env.DB.prepare(sql)));
   const ids = new Set(songs.map((s) => s.id)), gone = [...have.keys()].filter((id) => !ids.has(id));
+  // Mark the browse copy stale before changing the catalog. rebuildOrder sets order_version back when it
+  // finishes, so if it (or anything before it) fails, the next cron run rebuilds it (maybeImportCatalog)
+  // even though a retry would find no changed songs and skip the rebuild here.
+  if (todo.length || gone.length) await setMeta(env, { order_version: "stale" });
+  for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5).map((sql) => env.DB.prepare(sql)));
   for (let i = 0; i < gone.length; i += 500) await env.DB.prepare("DELETE FROM catalog WHERE rowid IN (" + gone.slice(i, i + 500).join(",") + ")").run();
   if (todo.length || gone.length) await rebuildOrder(env);
   await seedDetails(env, songs); // queue years, genres and languages to look up (details_import.js)
