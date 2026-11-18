@@ -28,7 +28,7 @@ const REFRESH_MS = 7 * 86400 * 1000;
 const RETRY_MS = 3600 * 1000;
 export const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
 const MIN_SONGS = 10000;     // a broken download must never wipe the catalog
-const VERSION = "4";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
+const VERSION = "5";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
 
 const SCHEMA = [
   // rowid = the app's song id (same as plays.song_id). Only title, artist and k are searchable.
@@ -130,6 +130,11 @@ export function unzipFirstEntry(body) {
   return deflated.pipeThrough(new DecompressionStream("deflate-raw")).pipeThrough(new TextDecoderStream());
 }
 
+// A copy of a short string that doesn't point into the big chunk of XML it was cut from. V8 keeps a
+// substring's whole parent alive, so without this every title would pin its ~MB chunk and the song list
+// would hold the whole 180 MB file in memory (more than a Worker gets).
+const own = (s) => (" " + s).slice(1);
+
 const ENT = { amp: "&", apos: "'", quot: '"', lt: "<", gt: ">" };
 export const unescapeXml = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) =>
   e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e] ?? m);
@@ -140,13 +145,13 @@ export const unescapeXml = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e)
 export function songsFromArtist(block) {
   const name = /<name>([^<]*)<\/name>/.exec(block);
   if (!name) return [];
-  const artist = unescapeXml(name[1]).trim(), out = [];
+  const artist = own(unescapeXml(name[1]).trim()), out = [];
   const re = /<song id="(\d+)">([\s\S]*?)<\/song>/g; let m;
   while ((m = re.exec(block))) {
     const title = /<name>([^<]*)<\/name>/.exec(m[2]), rank = /<rank>(\d+)<\/rank>/.exec(m[2]);
     if (!title) continue;
     const prev = /<preview>https?:\/\/[^<]*\/preview\/(\d+)\/?<\/preview>/.exec(m[2]);
-    out.push({ kv: Number(m[1]), title: unescapeXml(title[1]).trim(), artist, rank: rank ? Number(rank[1]) : 1e9,
+    out.push({ kv: Number(m[1]), title: own(unescapeXml(title[1]).trim()), artist, rank: rank ? Number(rank[1]) : 1e9,
       kfn: /format="KFN"[^>]*track_type="KAR"/.test(m[2]), preview: prev ? Number(prev[1]) : null });
   }
   return out;
