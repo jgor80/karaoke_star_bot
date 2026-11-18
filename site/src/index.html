@@ -20,7 +20,7 @@
 window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
 if (window.OKE_APP) document.documentElement.classList.add("app");
 </script>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/icons/favicon-48.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
@@ -51,6 +51,10 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .top { display: flex; align-items: center; gap: 12px; height: 56px; }
 .logo { font-family: var(--f-display); font-size: clamp(19px, 5.6vw, 24px); color: var(--hot); letter-spacing: .01em; white-space: nowrap; }
 .logo span { color: var(--gold); }
+.logo .word { color: var(--hot); }
+.logo { display: inline-flex; align-items: center; gap: .22em; }
+.logo .mark { width: 1.45em; height: 1.45em; flex: none; }
+
 a.logo { text-decoration: none; }
 .where { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--muted); margin: 6px 0 4px; min-height: 44px; text-decoration: none; }
 .where b { color: var(--ink); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -631,7 +635,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
 <body>
 <header>
   <div class="wrap top">
-    <a class="logo" href="/" title="Oke Night home">Oke <span>Night</span></a>
+    <a class="logo" href="/" title="Oke Night home"><img class="mark" src="/icons/mark-96.png" alt="" width="48" height="48"><span class="word">Oke <span>Night</span></span></a>
     <span class="pill" id="live-pill">Loading</span>
     <div class="spacer"></div>
     <button class="icon-btn tip" id="tip-btn" type="button" aria-haspopup="dialog" hidden><span aria-hidden="true">💸</span><span class="lbl">Tip</span></button>

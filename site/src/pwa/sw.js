@@ -5,7 +5,7 @@
 // - The shared scripts (/awards.js etc.) and icons: served from the cache, refreshed in the background.
 // - /api/*, POSTs and other sites: never touched.
 // Bump VERSION when this file changes so phones drop the old caches.
-const VERSION = "oke-v1";
+const VERSION = "oke-v2";
 const SHELL = ["/offline.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 const STATIC = /^\/(bingo|fun|awards|songs|drafts|art|duets|picker)\.js$|^\/icons\//;
 
