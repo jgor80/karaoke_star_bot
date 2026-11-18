@@ -120,6 +120,32 @@ jobs:
           lines = [body[i:i + 64] for i in range(0, len(body), 64)]
           open(os.environ["KEY"], "w", newline="\n").write("-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n")
           PY
+          # Ask Apple directly whether this key, Key ID and Issuer ID work together, so a wrong secret is
+          # named here instead of as a vague signing error later. Prints only the answer's status.
+          KEY="$KEY" python3 - <<'PY'
+          import base64, json, os, subprocess, sys, time, urllib.request, urllib.error
+          b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+          head = b64(json.dumps({"alg": "ES256", "kid": os.environ["ASC_KEY_ID"], "typ": "JWT"}).encode())
+          now = int(time.time())
+          body = b64(json.dumps({"iss": os.environ["ASC_ISSUER_ID"], "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}).encode())
+          der = subprocess.run(["openssl", "dgst", "-sha256", "-sign", os.environ["KEY"]], input=(head + "." + body).encode(), capture_output=True, check=True).stdout
+          def ints(d):  # DER ECDSA signature -> the two 32-byte numbers a JWT wants
+              i = 2 + (d[1] & 0x7f if d[1] & 0x80 else 0); out = []
+              for _ in range(2):
+                  n = d[i + 1]; out.append(d[i + 2:i + 2 + n].lstrip(b"\0").rjust(32, b"\0")); i += 2 + n
+              return b"".join(out)
+          tok = head + "." + body + "." + b64(ints(der))
+          req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?limit=1&fields[apps]=bundleId", headers={"Authorization": "Bearer " + tok})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r: print("App Store Connect key check: OK (%d)" % r.status)
+          except urllib.error.HTTPError as e:
+              print("App Store Connect key check: Apple answered %d" % e.code)
+              if e.code == 401:
+                  print("::error::Apple rejected the API key. ASC_KEY_P8 must be the AuthKey_<ASC_KEY_ID>.p8 file from App Store Connect > Users and Access > Integrations (not the push notification key), and ASC_KEY_ID / ASC_ISSUER_ID must be from that same page.")
+                  sys.exit(1)
+          except Exception as e:
+              print("App Store Connect key check: could not reach Apple (%s), carrying on" % type(e).__name__)
+          PY
           # Build number: the run number, so every upload is new. Version (1.0) comes from the project.
           BUILD="${{ github.run_number }}"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
