@@ -12,6 +12,7 @@
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
 import PAGE from "./index.html";
 import HOME from "./home.html";
+import { appPreflight, withAppCors } from "./origins.js"; // the phone app calls the API from its own origin
 import { VENUES, DEFAULT_VENUE, venueBySlug, publicVenue, ensureVenueColumns, withNightsOff } from "./venues.js";
 import { handleLead } from "./leads_api.js";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
@@ -176,8 +177,8 @@ function handleVenue(rest, req, env, ctx, venue, url) {
 
 const LEGACY = { "/tv": "tv", "/tv/": "tv", "/host": "host", "/host/": "host", "/index.html": "" };
 
-export default {
-  async fetch(req, env, ctx) {
+// Every request: the app's CORS preflight and headers wrap the normal routes (origins.js).
+async function route(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
     if (path === "/") return html(billingLinks(HOME, env).replace("/*VENUES*/[]", JSON.stringify(await venueList(env)).replace(/</g, "\\u003c")), "public, max-age=300");
@@ -206,6 +207,12 @@ export default {
       return handleVenue(m[3], req, env, ctx, await withNightsOff(env, venue), url);
     }
     return new Response("Not found", { status: 404 });
+}
+
+export default {
+  async fetch(req, env, ctx) {
+    const url = new URL(req.url);
+    return appPreflight(req, url) || withAppCors(req, url, await route(req, env, ctx));
   },
   // Every minute, for every venue: catch secret songs even when no phone or TV is open, so the host still
   // gets the push; score the applause after songs that just ended; and send the "karaoke tonight" heads-up.

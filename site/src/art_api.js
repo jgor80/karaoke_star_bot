@@ -1,4 +1,5 @@
 import { listSongById } from "./songbook_api.js";
+import { okOrigin } from "./origins.js";
 // Album covers for songs:
 //   GET /api/art?id=<the app's song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
@@ -254,8 +255,7 @@ export async function handleArt(req, env, ctx) {
 const APPLE_IMG = /^https:\/\/is\d-ssl\.mzstatic\.com\/image\/thumb\/[A-Za-z0-9._/%-]+\/300x300bb\.(jpg|png|webp)$/;
 const APPLE_LINK = /^https:\/\/(music|itunes)\.apple\.com\/[A-Za-z0-9._/%?=&-]+$/;
 async function saveFromPhone(req, env, ctx, url) {
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== url.host) return none(403, 0);
+  if (!okOrigin(req, url)) return none(403, 0);
   let b;
   try { b = await req.json(); } catch (e) { return none(400, 0); }
   const id = Number(b && b.id), tk = norm(b && b.t), cover = String((b && b.url) || ""), link = String((b && b.link) || "");

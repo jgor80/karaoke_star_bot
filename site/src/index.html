@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#170d1c">
 <title>Oke Night</title>
 <meta name="description" content="Live karaoke stats: who's on the mic, tonight's leaderboard, awards and records.">
+<script>
+// The Oke Night phone app shows this same page. Its shell sets window.OKE_APP (or adds "OkeNightApp" to the
+// browser's name) and window.OKE_SITE (https://okenight.com, since the app's own pages live at capacitor://).
+// In the app there's no tipping, no bar pitch and no host page: stores treat those as in-app purchases or
+// as screens a reviewer can't use.
+window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
+if (window.OKE_APP) document.documentElement.classList.add("app");
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
@@ -565,6 +573,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 /* tip menu */
 .icon-btn.tip { border-color: var(--gold); color: var(--gold); }
 #tip-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+html.app #tip-btn, html.app #tip-dlg { display: none !important; }
 @media (max-width: 440px) { .icon-btn.tip .lbl, .top:has(#tip-btn:not([hidden])) #share-btn .lbl { display: none; } }
 .tips { display: grid; gap: 8px; margin: 14px 0; }
 .tip-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; text-decoration: none; color: var(--ink); background: var(--panel-2, var(--bg)); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
@@ -881,7 +890,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const $ = (id) => document.getElementById(id);
   // Which bar this page is for (set by the Worker, see venues.js). Remembered so okenight.com can offer it next time.
   const VENUE = window.OKE_VENUE || { slug: "wbl", name: "Welcome Back Lounge", day_name: "Sunday", path: "/wbl/" };
-  const VENUE_URL = location.origin + VENUE.path;
+  const SITE = window.OKE_SITE || location.origin; // the app runs from capacitor://, so links and QR codes point at the site
+  const VENUE_URL = SITE + VENUE.path;
   $("where-name").textContent = VENUE.name;
   try { localStorage.setItem("oke_venue", VENUE.slug); } catch (e) {}
   let secrets = { found: [], left: 0 }; // from /api/plays: secret songs found so far + how many are still hidden
@@ -1737,7 +1747,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       if (data.schedule) schedule = data.schedule;
       secrets = { found: data.secrets_found || [], left: data.secrets_left || 0 };
       hostKey = key(clean(data.host || "")); OkeAwards.setHost(data.host || "");
-      tips = data.tips || null; $("tip-btn").hidden = !(tips && tips.venmo && tips.menu && tips.menu.length);
+      tips = data.tips || null; $("tip-btn").hidden = window.OKE_APP || !(tips && tips.venmo && tips.menu && tips.menu.length); // no tips in the app (store payment rules)
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (data.avatars) avatars = mergeAvatars(data.avatars);

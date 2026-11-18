@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#170d1c">
 <title>Oke Night · Karaoke night on everyone's phone</title>
 <meta name="description" content="Oke Night turns karaoke night into a live show the whole bar plays along with: who's on the mic, crowd reactions, awards, bingo and a recap on the big screen. Find karaoke near you, or bring Oke Night to your bar.">
+<script>
+// The Oke Night phone app shows this same page. Its shell sets window.OKE_APP (or adds "OkeNightApp" to the
+// browser's name) and window.OKE_SITE (https://okenight.com, since the app's own pages live at capacitor://).
+// In the app there's no tipping, no bar pitch and no host page: stores treat those as in-app purchases or
+// as screens a reviewer can't use.
+window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
+if (window.OKE_APP) document.documentElement.classList.add("app");
+</script>
 <meta property="og:title" content="Oke Night">
 <meta property="og:description" content="Karaoke night, on everyone's phone. Find a night near you or bring it to your bar.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
@@ -120,6 +128,8 @@ footer a, .muted.small a { display: inline-block; padding: 12px 2px; margin: -12
 footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 15px; }
 .needs { margin: 0 0 12px; padding-left: 1.2em; }
 .needs li { margin: 8px 0; }
+/* The phone app is for singers: no bar pitch, billing or lead form there (see OKE_APP in the head). */
+html.app #bars, html.app a[href="#bars"], html.app .ask-bar { display: none !important; }
 </style>
 </head>
 <body>
@@ -153,7 +163,7 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
       <span class="muted small" id="loc-msg" role="status" aria-live="polite"></span>
     </div>
     <div class="venues" id="venues"></div>
-    <p class="muted small" style="margin-top:14px">Don’t see your bar? <a href="#bars">Send us their name</a>.</p>
+    <p class="muted small ask-bar" style="margin-top:14px">Don’t see your bar? <a href="#bars">Send us their name</a>.</p>
   </section>
 
   <section id="crowd" aria-labelledby="crowd-h">
