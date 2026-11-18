@@ -31,6 +31,7 @@ import { okOrigin } from "./origins.js";
 const MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const OUT_PX = 512;
+const SUGGEST_PER_NET_DAY = 30, SUGGEST_PER_DAY = 2000; // "Match" a band: each one is a small text-model call
 const NEW_PER_NAME_DAY = 3, NEW_PER_NET_DAY = 6, NEW_PER_VENUE_DAY = 150;
 
 // The only things that ever reach the image model. Eras and genres, never real people.
@@ -66,6 +67,9 @@ function ensure(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS styled_looks_k ON styled_looks (venue, k)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS styled_log (venue text not null, k text, net text, at integer not null)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS styled_log_at ON styled_log (venue, at)"),
+    // "Match" (favorite band -> look) tries, per network, for SUGGEST_PER_NET_DAY.
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS styled_suggest_log (net text not null, at integer not null)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS styled_suggest_log_net ON styled_suggest_log (net, at)"),
   ]).catch((e) => { ready = null; throw e; });
   return ready;
 }
@@ -146,6 +150,12 @@ export async function handleStyled(req, env, ctx, venue, url) {
   try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
 
   if (body.action === "suggest") {
+    const t = now(), net = (await networkHash(env, req, "suggest", day())) || "none";
+    const used = await env.DB.prepare("SELECT sum(net = ?1) AS n, count(*) AS all_n FROM styled_suggest_log WHERE at > ?2").bind(net, t - 86400).first().catch(() => null);
+    if (used && ((used.n || 0) >= SUGGEST_PER_NET_DAY || (used.all_n || 0) >= SUGGEST_PER_DAY)) return json({ error: "That’s a lot of matching for today. Pick a look below." }, 429);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO styled_suggest_log (net, at) VALUES (?, ?)").bind(net, t),
+      env.DB.prepare("DELETE FROM styled_suggest_log WHERE at < ?").bind(t - 2 * 86400)]);
     const id = await suggestStyle(env, body.band);
     return id ? json({ style: id, label: STYLE[id].label }) : json({ error: "Couldn’t place that one. Pick a look below." }, 404);
   }
