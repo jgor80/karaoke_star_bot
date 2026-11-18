@@ -12,6 +12,11 @@ routes = [
 ]
 
 # Every minute: check for newly sung secret songs and push the host alert (see src/secrets_api.js).
+# CPU time per request / cron run. The weekly song list import unzips and reads ~180 MB of XML, which can
+# take more than the default 30 s of CPU; everything else stays far below this.
+[limits]
+cpu_ms = 300000
+
 [triggers]
 crons = ["* * * * *"]
 
