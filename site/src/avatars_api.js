@@ -31,6 +31,7 @@ import { networkHash } from "./net.js";
 import { hostPush } from "./push_api.js";
 import { cfgKey } from "./venues.js";
 import { objectionable } from "./wordfilter.js";
+import { okOrigin } from "./origins.js";
 
 export const PHOTO_PX = 320;
 const MAX_BYTES = 120 * 1024; // a 320 px JPEG from the phone is usually 15-40 KB
@@ -125,6 +126,9 @@ export async function handleAvatar(req, env, ctx, venue, url) {
   await ensure(env);
   if (req.method === "GET" || req.method === "HEAD") return servePhoto(req, env, ctx, venue, url);
   if (req.method !== "POST") return new Response("GET or POST", { status: 405 });
+  // Only this site and the app may post (stops other sites making their visitors' browsers report photos,
+  // which hides a photo once REPORTS_TO_HIDE networks have reported it).
+  if (!okOrigin(req, url)) return json({ error: "Wrong site" }, 403);
   let body;
   try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
   const name = cleanName(body.name), k = matchKey(name);

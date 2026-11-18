@@ -26,6 +26,7 @@
 import { matchKey, erasedSingers } from "./privacy_api.js";
 import { networkHash } from "./net.js";
 import { jpegSize } from "./avatars_api.js";
+import { okOrigin } from "./origins.js";
 
 const MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
@@ -140,6 +141,7 @@ export async function handleStyled(req, env, ctx, venue, url) {
     return serveLook(env, venue, url);
   }
   if (req.method !== "POST") return new Response("GET or POST", { status: 405 });
+  if (!okOrigin(req, url)) return json({ error: "Wrong site" }, 403); // only this site and the app (each try costs AI time)
   let body;
   try { body = await req.json(); } catch (e) { return json({ error: "bad json" }, 400); }
 

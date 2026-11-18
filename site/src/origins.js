@@ -6,7 +6,8 @@ export const APP_ORIGINS = new Set(["capacitor://localhost", "ionic://localhost"
 
 // The singer-page calls the app makes. Host, crowd meter, bar buttons, owner report and the bar-lead form
 // stay site-only: they aren't in the app.
-export const APP_APIS = new Set(["plays", "react", "reactions", "catalog", "art", "listen", "avatar", "request", "draft", "duet", "venues", "league", "push"]);
+// styled: rock-star looks of a singer photo (the photo dialog lists the looks and makes them from the app too).
+export const APP_APIS = new Set(["plays", "react", "reactions", "catalog", "art", "listen", "avatar", "request", "draft", "duet", "venues", "league", "push", "styled"]);
 
 // true when the request has no Origin (a plain page load or a server), comes from this site, or from the app.
 export function okOrigin(req, url) {

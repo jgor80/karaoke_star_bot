@@ -15,6 +15,7 @@ import { DEFAULT_VENUE, cfgKey } from "./venues.js";
 import { okOrigin } from "./origins.js";
 import { isHost } from "./secrets_api.js";
 import { scheduleStatus } from "./schedule.js";
+import { networkHash } from "./net.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS push_devices (
@@ -25,7 +26,10 @@ const SCHEMA = [
 ];
 let ready = null;
 export function ensurePush(env) {
-  if (!ready) ready = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s))).catch((e) => { ready = null; throw e; });
+  if (!ready) ready = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)))
+    // Added later: the scrambled network code (net.js) a token was first registered from, for NEW_PER_NET_DAY.
+    .then(() => env.DB.prepare("ALTER TABLE push_devices ADD COLUMN net text").run().catch(() => {}))
+    .catch((e) => { ready = null; throw e; });
   return ready;
 }
 
@@ -36,7 +40,9 @@ const TOKEN = /^[A-Za-z0-9_:.\-]{20,4096}$/;
 const DEV = /^[a-f0-9]{32}$/;
 const MAX_PER_SEND = 2000;   // phones per notification (Workers subrequest budget)
 const PARALLEL = 25;
-const STALE_S = 120 * 86400; // tokens not refreshed for 120 days are dropped (the app refreshes on every open)
+const STALE_S = 120 * 86400;
+const NEW_PER_NET_DAY = 20;  // new tokens from one network a day (a phone keeps its token, so real use is 1-2), so
+                             // nobody can fill the table with made-up tokens and crowd real phones out of MAX_PER_SEND // tokens not refreshed for 120 days are dropped (the app refreshes on every open)
 
 export async function handlePush(req, env, venue = DEFAULT_VENUE) {
   const url = new URL(req.url);
@@ -64,15 +70,28 @@ export async function handlePush(req, env, venue = DEFAULT_VENUE) {
     host = r && r.host ? 1 : 0;
   }
   const t = nowS();
+  const net = await networkHash(env, req, "push", new Date().toISOString().slice(0, 10));
+  const known = await env.DB.prepare("SELECT 1 FROM push_devices WHERE token = ?").bind(token).first();
+  if (!known && net) {
+    const r = await env.DB.prepare("SELECT count(*) AS n FROM push_devices WHERE net = ? AND created_at > ?").bind(net, t - 86400).first();
+    if (r && Number(r.n) >= NEW_PER_NET_DAY) return json({ error: "Too many phones from this network today. Try again tomorrow." }, 429);
+  }
   const stmts = [
-    env.DB.prepare(`INSERT INTO push_devices (token, venue, platform, device_id, host, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
-      ON CONFLICT(token) DO UPDATE SET venue = ?2, platform = ?3, device_id = ?4, host = ?5, updated_at = ?6`).bind(token, venue.slug, platform, dev, host, t),
+    env.DB.prepare(`INSERT INTO push_devices (token, venue, platform, device_id, host, created_at, updated_at, net) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7)
+      ON CONFLICT(token) DO UPDATE SET venue = ?2, platform = ?3, device_id = ?4, host = ?5, updated_at = ?6`).bind(token, venue.slug, platform, dev, host, t, net),
   ];
   // A phone's token changes now and then: keep only its newest one, so it doesn't get every push twice.
   if (dev) stmts.push(env.DB.prepare("DELETE FROM push_devices WHERE device_id = ? AND token != ?").bind(dev, token));
   stmts.push(env.DB.prepare("DELETE FROM push_devices WHERE updated_at < ?").bind(t - STALE_S));
   await env.DB.batch(stmts);
   return json({ ok: true, host: !!host });
+}
+
+// The host key was set again (secrets_api.js setup): phones signed in with the old key stop getting host alerts
+// until the host signs in again in the app, so a leaked or old key doesn't keep a phone on the host alerts.
+export async function forgetHostPhones(env, venue) {
+  await ensurePush(env);
+  await env.DB.prepare("UPDATE push_devices SET host = 0 WHERE venue = ?").bind(venue.slug).run();
 }
 
 // ---------- Firebase ----------
@@ -124,7 +143,7 @@ export async function sendPush(env, venue, { to = "crowd", kind = "", title, bod
   await ensurePush(env);
   let q;
   if (to === "host") q = env.DB.prepare("SELECT token FROM push_devices WHERE venue = ? AND host = 1").bind(venue.slug);
-  else if (to === "crowd") q = env.DB.prepare("SELECT token FROM push_devices WHERE venue = ? LIMIT " + MAX_PER_SEND).bind(venue.slug);
+  else if (to === "crowd") q = env.DB.prepare("SELECT token FROM push_devices WHERE venue = ? ORDER BY updated_at DESC LIMIT " + MAX_PER_SEND).bind(venue.slug);
   else {
     const devs = ((to && to.devices) || []).filter((d) => DEV.test(String(d))).slice(0, 100);
     if (!devs.length) return 0;
