@@ -303,6 +303,7 @@ details.singer[open] summary .chev { transform: rotate(90deg); }
 .song-link { text-decoration-color: transparent; }
 .list li[data-who] { cursor: pointer; }
 .list li[data-who]:active { background: var(--panel-2); }
+.list li[data-who]:focus-visible, #hero-who[role="button"]:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 details.singer.song summary .main-t { font-weight: 600; }
 
 /* the line: how many are waiting in the karaoke app's queue and about how long a new sign-up waits */
@@ -1769,9 +1770,24 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   tabs.forEach((t) => $("t-" + t).addEventListener("click", () => show(t)));
   window.addEventListener("hashchange", () => { const h = location.hash.slice(1); show(tabs.includes(h) || OLD[h] ? h : "tonight"); });
   document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => show(b.dataset.go)));
-  ["leaderboard", "feed", "top-songs", "top-artists", "collectors"].forEach((id) => $(id).addEventListener("click", (ev) => {
+  const WHO_LISTS = ["leaderboard", "feed", "top-songs", "top-artists", "collectors"];
+  WHO_LISTS.forEach((id) => $(id).addEventListener("click", (ev) => {
     const li = ev.target.closest("li[data-who]"); if (li) openSearch(li.dataset.who); }));
   $("hero-who").addEventListener("click", () => { const t = $("hero-who").dataset.who; if (t) openSearch(t); });
+  // Keyboard and screen readers: the tappable rows (and the singer on the mic) are focusable buttons that open
+  // with Enter or Space, not just a tap. Rows are rebuilt on every refresh, so mark new ones as they appear.
+  function markWho() {
+    WHO_LISTS.forEach((id) => $(id).querySelectorAll("li[data-who]:not([tabindex])").forEach((li) => { li.tabIndex = 0; li.setAttribute("role", "button"); }));
+    const h = $("hero-who"), on = !!h.dataset.who;
+    if (on !== (h.tabIndex === 0)) { if (on) { h.tabIndex = 0; h.setAttribute("role", "button"); } else { h.removeAttribute("tabindex"); h.removeAttribute("role"); } }
+  }
+  new MutationObserver(markWho).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-who"] });
+  markWho();
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const t = ev.target, li = t.closest && t.closest("li[data-who]");
+    if ((li && li === t) || (t.id === "hero-who" && t.dataset.who)) { ev.preventDefault(); t.click(); }
+  });
   $("search-clear").addEventListener("click", () => { $("search").value = ""; singerLimit = 40; renderSingers(); $("search").focus(); });
   document.querySelectorAll(".seg").forEach((seg) => seg.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     seg.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-selected", String(on)); $(x.dataset.sub).classList.toggle("on", on); });
