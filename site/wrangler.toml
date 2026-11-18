@@ -27,8 +27,11 @@ crons = ["* * * * *"]
 ART_SOURCES = "itunes"
 # Bar billing on the home page (Stripe Payment Link with a 30-day trial, and the customer portal login).
 # These are the Stripe SANDBOX links: swap in the live-mode links before taking real cards. Leave one empty to hide it.
-STRIPE_CHECKOUT_URL = "https://buy.stripe.com/test_00weV6dcMdJ1agI2CKgQE00"
-STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/test_00weV6dcMdJ1agI2CKgQE00"
+# Sandbox links (for testing): checkout https://buy.stripe.com/test_00weV6dcMdJ1agI2CKgQE00
+#   portal https://billing.stripe.com/p/login/test_00weV6dcMdJ1agI2CKgQE00
+# Empty until the live Stripe account is activated, so the buttons stay hidden.
+STRIPE_CHECKOUT_URL = ""
+STRIPE_PORTAL_URL = ""
 
 # Secrets (set in the Cloudflare dashboard, never in this file): HOST_SETUP_CODE, ANTHROPIC_API_KEY,
 # IP_SALT (any long random text; keeps rate-limit network hashes from being reversed, see src/net.js).
