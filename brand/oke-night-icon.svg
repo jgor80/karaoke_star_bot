@@ -1,43 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<defs><filter id="glow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
-  <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b"/>
-  <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="soft" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
-  <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="b"/>
-  <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><radialGradient id="bg" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#3a1636"/><stop offset="1" stop-color="#120914"/></radialGradient><radialGradient id="halo"><stop offset="0" stop-color="#ff5c9d" stop-opacity=".22"/><stop offset="1" stop-color="#ff5c9d" stop-opacity="0"/></radialGradient></defs>
-<rect width="1024" height="1024" fill="url(#bg)"/>
-  <circle cx="512" cy="500" r="330" fill="url(#halo)"/>
-  <g transform="rotate(-7 512 520)">
-  <g filter="url(#glow)"><path d="M512 286 V214" stroke="#f5b84a" stroke-width="16" stroke-linecap="round"/>
-    <path d="M512 168 l14 28 31 4 -23 21 6 31 -28 -15 -28 15 6 -31 -23 -21 31 -4z" fill="#f5b84a" stroke="#f5b84a" stroke-width="6" stroke-linejoin="round"/></g>
-  <path d="M262 520 C170 560 120 500 140 400" fill="none" stroke="#ff5c9d" stroke-width="34" stroke-linecap="round" filter="url(#glow)"/><path d="M262 520 C170 560 120 500 140 400" fill="none" stroke="#2b1433" stroke-width="11" stroke-linecap="round"/><g transform="translate(146 380) rotate(-14)" filter="url(#glow)" stroke="#ff5c9d" stroke-linecap="round" fill="#2b1433">
-    <path d="M-20 -30 V-82 M6 -36 V-94 M30 -30 V-80" stroke-width="20"/><path d="M-36 4 l-34 -26" stroke-width="20"/>
-    <rect x="-40" y="-40" width="82" height="76" rx="30" stroke-width="16"/></g>
-  <g filter="url(#glow)" fill="#2b1433" stroke="#ff5c9d" stroke-width="18" stroke-linejoin="round">
-    <rect x="236" y="408" width="56" height="150" rx="26"/><rect x="732" y="408" width="56" height="150" rx="26"/></g>
-  <rect x="282" y="290" width="460" height="400" rx="132" fill="#2b1433" stroke="#ff5c9d" stroke-width="28" filter="url(#glow)"/>
-  <g filter="url(#glow)">
-  <circle cx="512" cy="450" r="118" fill="none" stroke="#4de8ff" stroke-width="10" stroke-dasharray="155.69733191191014 29.656634649887646" transform="rotate(-80 512 450)" stroke-linecap="round"/>
-  <path d="M618.2527580776159 398.67406697487485 A118 118 0 0 1 618.2527580776159 501.32593302512515" fill="none" stroke="#f5b84a" stroke-width="12.5" stroke-linecap="round" transform="translate(0 0)"/>
-  <circle cx="512" cy="450" r="80.24000000000001" fill="#170d1c" stroke="#c4ff2e" stroke-width="27.5"/>
-  <circle cx="504" cy="440" r="44.604" fill="#170d1c" stroke="#170d1c" stroke-width="2"/>
-  <circle cx="524.8152" cy="419.1848" r="14.16" fill="#c4ff2e"/></g>
-  <g filter="url(#glow)"><path d="M446 590 h132 a66 58 0 0 1 -132 0 z" fill="#170d1c" stroke="#f5b84a" stroke-width="16" stroke-linejoin="round"/>
-    <path d="M482 632 q30 -16 60 0" fill="none" stroke="#ff5c9d" stroke-width="12" stroke-linecap="round"/></g>
-  </g>
-  <path d="M770 548 C870 620 820 830 650 832" fill="none" stroke="#ff5c9d" stroke-width="34" stroke-linecap="round" filter="url(#glow)"/><path d="M770 548 C870 620 820 830 650 832" fill="none" stroke="#2b1433" stroke-width="11" stroke-linecap="round"/>
-  <g transform="translate(676 670) rotate(32) scale(1.08)" filter="url(#glow)">
-  <path d="M-20 52 L-14 230 Q0 244 14 230 L20 52 Z" fill="#170d1c" stroke="#f5b84a" stroke-width="12" stroke-linejoin="round"/>
-  <rect x="-34" y="40" width="68" height="22" rx="8" fill="#170d1c" stroke="#f5b84a" stroke-width="11"/>
-  <circle cx="0" cy="0" r="50" fill="#170d1c" stroke="#f5b84a" stroke-width="13"/>
-  <g stroke="#f5b84a" stroke-width="7" stroke-linecap="round" opacity=".95">
-    <path d="M-30 -22 H30 M-38 0 H38 M-30 22 H30"/><path d="M-12 -40 V40 M12 -40 V40" opacity=".6"/></g>
-  <g stroke="#ff5c9d" stroke-linecap="round" stroke-linejoin="round"><rect x="-40" y="108" width="80" height="86" rx="26" fill="#170d1c" stroke-width="11"/><path d="M-24 136 H24 M-24 164 H24" stroke-width="8"/><path d="M-40 128 q-26 -6 -24 -34" fill="none" stroke-width="11"/></g></g>
-  <g transform="translate(250 210) rotate(-10) scale(1.05)" filter="url(#glow)">
-  <ellipse cx="0" cy="0" rx="22" ry="16" transform="rotate(-22)" fill="#f5b84a"/>
-  <path d="M19 -6 V-92 q8 22 34 34 q8 6 6 26" fill="none" stroke="#f5b84a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(782 240) rotate(8) scale(1)" filter="url(#glow)">
-  <ellipse cx="0" cy="0" rx="20" ry="15" transform="rotate(-22)" fill="#ff5c9d"/>
-  <ellipse cx="62" cy="-14" rx="20" ry="15" transform="rotate(-22 62 -14)" fill="#ff5c9d"/>
-  <path d="M18 -6 V-86 L80 -100 V-20" fill="none" stroke="#ff5c9d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M18 -86 L80 -100" stroke="#ff5c9d" stroke-width="16" stroke-linecap="round"/></g>
-  
+<defs><filter id="n" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/><feComponentTransfer in="b" result="g"><feFuncA type="linear" slope=".75"/></feComponentTransfer>
+    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter><radialGradient id="bg2" cx="0.5" cy="0.45" r="0.72"><stop offset="0" stop-color="#2c1031"/><stop offset="1" stop-color="#0c0510"/></radialGradient></defs>
+<rect width="1024" height="1024" fill="url(#bg2)"/><g stroke="#ff4f9a" stroke-width="1.5" opacity=".07"><path d="M64 0 V1024 M0 64 H1024"/><path d="M128 0 V1024 M0 128 H1024"/><path d="M192 0 V1024 M0 192 H1024"/><path d="M256 0 V1024 M0 256 H1024"/><path d="M320 0 V1024 M0 320 H1024"/><path d="M384 0 V1024 M0 384 H1024"/><path d="M448 0 V1024 M0 448 H1024"/><path d="M512 0 V1024 M0 512 H1024"/><path d="M576 0 V1024 M0 576 H1024"/><path d="M640 0 V1024 M0 640 H1024"/><path d="M704 0 V1024 M0 704 H1024"/><path d="M768 0 V1024 M0 768 H1024"/><path d="M832 0 V1024 M0 832 H1024"/><path d="M896 0 V1024 M0 896 H1024"/><path d="M960 0 V1024 M0 960 H1024"/></g>
+  <g filter="url(#n)" fill="none">
+    <circle cx="512" cy="512" r="448" stroke="#ff4f9a" stroke-width="16"/>
+    <circle cx="512" cy="512" r="412" stroke="#3fe6ff" stroke-width="4" opacity=".55" stroke-dasharray="64 20"/>
+    <path d="M512 50 v40 M512 934 v40 M50 512 h40 M934 512 h40" stroke="#ffb93d" stroke-width="7" stroke-linecap="round"/>
+    <g stroke="#3fe6ff" stroke-width="8" stroke-linecap="round" opacity=".8"><path d="M150 470 h34 M142 500 h42 M150 530 h34"/><path d="M840 470 h34 M840 500 h42 M840 530 h34"/></g></g>
+  <g transform="translate(512 530) scale(0.85) translate(-512 -540)">
+    <!-- arms (behind the head) -->
+    <g filter="url(#n)" fill="none" stroke="#ff4f9a" stroke-width="20" stroke-linecap="round">
+      <path d="M262 520 C185 545 165 480 178 410"/>
+      <path d="M760 552 C850 610 810 800 630 806"/></g>
+    <g transform="translate(180 384) rotate(-12)" filter="url(#n)" fill="#1d0d26" stroke="#ff4f9a" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-22 -30 V-76 M4 -36 V-88 M28 -30 V-74 M-38 2 l-30 -24" stroke-width="17"/>
+      <rect x="-40" y="-40" width="80" height="74" rx="28" stroke-width="15"/></g>
+    <!-- antenna -->
+    <g filter="url(#n)"><path d="M512 296 V226" stroke="#ffb93d" stroke-width="14" stroke-linecap="round"/>
+      <path d="M512 182 l13 26 29 4 -21 20 5 29 -26 -14 -26 14 5 -29 -21 -20 29 -4z" fill="#ffb93d" stroke="#ffb93d" stroke-width="5" stroke-linejoin="round"/></g>
+    <!-- ear brackets -->
+    <g filter="url(#n)" fill="none" stroke="#ffb93d" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M290 404 h-26 a14 14 0 0 0 -14 14 v104 a14 14 0 0 0 14 14 h26"/><path d="M734 404 h26 a14 14 0 0 1 14 14 v104 a14 14 0 0 1 -14 14 h-26"/></g>
+    <!-- head: segmented outline + thin inner line, like GafferBot's -->
+    <rect x="290" y="306" width="444" height="372" rx="118" fill="#1d0d26" stroke="#ff4f9a" stroke-width="24" stroke-dasharray="64 14" filter="url(#n)"/>
+    <rect x="320" y="336" width="384" height="312" rx="92" fill="none" stroke="#ff4f9a" stroke-width="4" opacity=".55"/>
+    <g filter="url(#n)">
+    <circle cx="512" cy="452" r="104" fill="none" stroke="#3fe6ff" stroke-width="9" stroke-dasharray="130.69025438933542 32.672563597333856" transform="rotate(-78 512 452)"/>
+    <path d="M606.9612497924801 409.5929128818047 A104 104 0 0 1 606.9612497924801 494.4070871181953" fill="none" stroke="#ff4f9a" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="512" cy="452" r="70" fill="#12081a" stroke="#c4ff2e" stroke-width="24"/>
+    <circle cx="530" cy="434" r="12" fill="#c4ff2e"/></g>
+    <!-- singing mouth -->
+    <g filter="url(#n)"><path d="M458 584 h108 a54 48 0 0 1 -108 0 z" fill="#12081a" stroke="#ffb93d" stroke-width="13" stroke-linejoin="round"/>
+      <path d="M490 620 q22 -12 44 0" fill="none" stroke="#ff4f9a" stroke-width="9" stroke-linecap="round"/></g>
+    <!-- mic + hand -->
+    <g transform="translate(668 662) rotate(32)" filter="url(#n)">
+      <path d="M-18 50 L-13 214 Q0 226 13 214 L18 50 Z" fill="#12081a" stroke="#ffb93d" stroke-width="11" stroke-linejoin="round"/>
+      <rect x="-32" y="38" width="64" height="20" rx="7" fill="#12081a" stroke="#ffb93d" stroke-width="10"/>
+      <circle r="48" fill="#12081a" stroke="#ffb93d" stroke-width="12"/>
+      <path d="M-28 -20 H28 M-35 0 H35 M-28 20 H28" stroke="#ffb93d" stroke-width="6" stroke-linecap="round"/>
+      <path d="M-11 -38 V38 M11 -38 V38" stroke="#ffb93d" stroke-width="6" stroke-linecap="round" opacity=".55"/>
+      <g stroke="#ff4f9a" stroke-linecap="round" stroke-linejoin="round"><rect x="-36" y="104" width="72" height="80" rx="24" fill="#1d0d26" stroke-width="12"/><path d="M-22 130 H22 M-22 156 H22" stroke-width="7"/><path d="M-36 122 q-24 -6 -22 -32" fill="none" stroke-width="11"/></g></g></g>
+  <g transform="translate(268 268) rotate(-10) scale(0.95)" filter="url(#n)"><ellipse rx="21" ry="15" transform="rotate(-22)" fill="#ffb93d"/><path d="M18 -6 V-88 q8 22 32 32 q8 6 6 24" fill="none" stroke="#ffb93d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(700 236) rotate(8) scale(0.85)" filter="url(#n)"><ellipse rx="19" ry="14" transform="rotate(-22)" fill="#3fe6ff"/><ellipse cx="58" cy="-13" rx="19" ry="14" transform="rotate(-22 58 -13)" fill="#3fe6ff"/><path d="M17 -6 V-82 L75 -95 V-19" fill="none" stroke="#3fe6ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 -82 L75 -95" stroke="#3fe6ff" stroke-width="15" stroke-linecap="round"/></g>
 </svg>
