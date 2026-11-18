@@ -187,6 +187,27 @@
     return out;
   }
 
+  // One short line per award on what it means and how it's won, shown on every award card (phone + TV).
+  const HOW = {
+    mvp: "Most songs of the night", broken: "Same song twice in one night", dejavu: "Same song, sung by different people",
+    marathon: "Longest song of the night", speed: "Shortest song of the night", time: "Oldest song of the night",
+    fresh: "Newest song of the night", squad: "Most voices on one song", open: "First song of the night",
+    last: "Last song of the night", artist: "Most-sung artist tonight", decade: "Most-sung decade tonight",
+    loud: "Loudest crowd meter cheer tonight", "s-loud": "Loudest crowd meter cheer all season",
+    crowd: "Most hype reactions tonight", "s-crowd": "Most hype reactions all season", "s-hype": "Sent the most reactions all season",
+    "rx-micdrop": "Most 🎤 mic drops on one song", "rx-encore": "Most 🔁 encore taps on one song",
+    "rx-key": "Most 📈 key change calls on one song", "rx-tomato": "Most 🍅 tomatoes, thrown with love",
+    "rx-pitch": "Most 🎶 own key and 😅 bold choice taps", "rx-snooze": "Most 😴 slow burn taps on one song",
+    "rx-hype": "Sent the most reactions tonight", "rx-critic": "Sent the most playful roasts tonight",
+    "s-mvp": "Most songs of the season", "s-loyal": "Sang on the most nights", "s-mic": "Most minutes on the mic",
+    "s-badges": "Most badges earned", "s-range": "Songs from the most decades", "s-duet": "Most duets and group songs",
+    "s-onesong": "Same song the most times", "s-crate": "Most pre-1980 songs (3+ songs)", "s-trend": "Most songs others sang later",
+  };
+  const how = (id) => HOW[id] || "";
+  // The card's own "what" line, unless it just repeats the explanation in other words (keeps cards short).
+  const SAYS_SAME = new Set(["mvp", "s-crowd", "s-hype", "rx-hype", "rx-critic", "s-mvp", "s-loyal", "s-mic", "s-badges", "s-range", "s-duet", "s-crate", "s-trend"]);
+  const whatOf = (a) => (SAYS_SAME.has(a.id) || a.what === how(a.id) ? "" : a.what || "");
+
   function tallyFor(rows) {
     const singers = new Set(rows.map((p) => key(p.singer)).filter(Boolean)).size;
     const secs = rows.reduce((s, p) => s + (p.length_s || 0), 0);
@@ -196,5 +217,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf, crowdScore, crowdOf, CROWD_MIN_DB };
+  global.OkeAwards = { HOW, how, whatOf, venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf, crowdScore, crowdOf, CROWD_MIN_DB };
 })(typeof window !== "undefined" ? window : globalThis);
