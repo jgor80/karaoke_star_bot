@@ -23,7 +23,7 @@ import { hostLeads, hostLeadAction } from "./leads_api.js";
 import { hostSongbookAction, songbookConfig } from "./songbook_api.js";
 import { eraseSinger, erasedSingers } from "./privacy_api.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn, forgetNightsOff } from "./venues.js";
-import { upcomingNights } from "./schedule.js";
+import { upcomingNights, endChoices } from "./schedule.js";
 import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
@@ -207,6 +207,14 @@ async function catalogCount(env) {
   return r ? Number(r.v) || 0 : 0;
 }
 
+// The /host "Tonight ends at" picker: which night it's for, the choices and what's set now (null = regular end).
+function endNight(venue, cfg) {
+  const night = upcomingNights(now(), venue, 1)[0];
+  let set = null;
+  try { const o = JSON.parse(cfg.end_override || "null"); if (o && o.date === night.date) set = Number(o.hours) || null; } catch (e) {}
+  return { date: night.date, label: night.label, hours: set, regular: venue.hours, choices: endChoices(venue) };
+}
+
 export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const cfg = await config(env, venue);
   const K = (k) => cfgKey(venue, k);
@@ -303,6 +311,14 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       if (body.off) cur.push(date);
       await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("nights_off"), JSON.stringify(cur.sort())).run();
       forgetNightsOff(venue);
+    } else if (body.action === "end_time") {
+      // Tonight's end time (or the next night's, between nights): one of endChoices, or null for the regular end.
+      // The TV counts down to it and warns when the line runs past it.
+      const night = upcomingNights(now(), venue, 1)[0], h = body.hours == null ? null : Number(body.hours);
+      if (h !== null && !endChoices(venue).some((c) => c.hours === h)) return json({ error: "Pick one of the end times." }, 400);
+      if (h === null || h === venue.hours) await env.DB.prepare("DELETE FROM host_config WHERE k = ?").bind(K("end_override")).run();
+      else await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("end_override"), JSON.stringify({ date: night.date, hours: h })).run();
+      forgetNightsOff(venue);
     } else if (body.action === "owner_topic") {
       return json(await hostReportAction(env, body, venue)); // the bar owner's report alerts
     } else if (body.action === "singer_erase") {
@@ -324,5 +340,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

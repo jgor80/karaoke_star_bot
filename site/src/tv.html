@@ -178,6 +178,39 @@ body.embed .qr, body.embed .fs { display: none !important; }
 body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
 .status.bad { color: var(--hot); opacity: 1; font-size: calc(2.2 * var(--u)); background: rgba(0, 0, 0, .6); padding: calc(.6 * var(--u)) calc(1.2 * var(--u)); border-radius: calc(1 * var(--u)); max-width: 60vw; }
 
+/* The line: the karaoke app's queue down the right side while the night is on, with the wait for a new
+   sign-up and a countdown to the end of the night. */
+body { grid-template-columns: minmax(0, 1fr) auto; }
+header { grid-column: 1 / -1; }
+.line-tv { width: calc(44 * var(--u)); border-left: 2px solid var(--line); padding: calc(2.6 * var(--u)) calc(3 * var(--u)) calc(4.6 * var(--u));
+  display: flex; flex-direction: column; gap: calc(1.4 * var(--u)); min-height: 0; overflow: hidden; background: rgba(0, 0, 0, .14); }
+.line-tv > * { flex-shrink: 0; }
+.line-tv h2 { margin: 0; }
+.line-tv .ln-stats { display: grid; grid-template-columns: 1fr 1fr; gap: calc(1.2 * var(--u)); }
+.line-tv .ln-stats div { background: var(--panel); border: 2px solid var(--line); border-radius: calc(1.6 * var(--u)); padding: calc(1 * var(--u)) calc(1.4 * var(--u));
+  font-family: var(--f-mono); font-size: calc(1.6 * var(--u)); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); line-height: 1.25; }
+.line-tv .ln-stats strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: calc(4 * var(--u)); color: var(--ink); letter-spacing: 0; line-height: 1.1; white-space: nowrap; }
+.line-tv ol { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(.7 * var(--u)); min-height: 0; }
+.line-tv li { display: grid; grid-template-columns: calc(4 * var(--u)) minmax(0, 1fr) auto; align-items: baseline; gap: calc(1.2 * var(--u));
+  background: var(--panel); border: 2px solid var(--line); border-radius: calc(1.4 * var(--u)); padding: calc(.7 * var(--u)) calc(1.6 * var(--u)); }
+.line-tv li:first-child { border-color: var(--hot); background: linear-gradient(90deg, var(--hot-soft), var(--panel) 75%); }
+.line-tv li .n { font-family: var(--f-display); font-size: calc(2.6 * var(--u)); color: var(--gold); }
+.line-tv li .nm { font-size: calc(2.9 * var(--u)); font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-tv li .w { font-family: var(--f-mono); font-size: calc(2.1 * var(--u)); color: var(--hot); white-space: nowrap; }
+.line-tv li.late { opacity: .55; border-style: dashed; }
+.line-tv li.late .w { color: var(--muted); }
+.line-tv .ln-more { font-size: calc(2.2 * var(--u)); color: var(--ink); font-weight: 700; margin: 0; }
+.line-tv .ln-note { font-size: calc(1.8 * var(--u)); color: var(--muted); margin: 0; line-height: 1.3; }
+.line-tv .ln-empty { font-size: calc(2.8 * var(--u)); font-weight: 700; margin: 0; line-height: 1.25; }
+.line-tv .ln-end { margin-top: auto; background: var(--panel); border: 2px solid var(--gold); border-radius: calc(2 * var(--u)); padding: calc(1.1 * var(--u)) calc(2 * var(--u));
+  font-family: var(--f-mono); font-size: calc(1.7 * var(--u)); letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.line-tv .ln-end strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: calc(5.2 * var(--u)); color: var(--ink); letter-spacing: 0; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.line-tv .ln-end.soon { border-color: var(--hot); background: linear-gradient(180deg, var(--hot-soft), var(--panel) 80%); }
+.line-tv .ln-end.soon strong { color: var(--hot); }
+.line-tv .ln-warn { font-size: calc(2.1 * var(--u)); font-weight: 700; color: var(--ink); background: var(--hot-soft); border: 2px solid var(--hot); border-radius: calc(1.4 * var(--u)); padding: calc(1 * var(--u)) calc(1.4 * var(--u)); margin: 0; line-height: 1.3; }
+body.embed .line-tv { display: none !important; }
+@media (max-aspect-ratio: 4/3) { .line-tv { width: calc(40 * var(--u)); } }
+
 /* Narrow or portrait screens (a laptop window, a vertical TV): fewer columns, drop the tally. */
 @media (max-aspect-ratio: 4/3) { :root { --u: .75vw; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cols { grid-template-columns: minmax(0, 1fr); } header { grid-template-columns: minmax(0, 1fr) auto; } .tally { display: none; } }
 /* The clock (bottom right) is read from across the bar; longer warnings stay a bit smaller so they fit on one line. */
@@ -196,6 +229,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   <div class="qr"><b class="scan">Scan to join</b><div class="code" id="qr"></div><small id="host">okenight.com</small></div>
 </header>
 <div class="view" id="view"><div class="reel" id="reel"></div></div>
+<aside class="line-tv" id="line-tv" hidden aria-live="polite"></aside>
 <div class="status" id="status"></div>
 <div class="art-credit-tv">Album covers from Apple Music</div>
 <div class="rx-layer" id="rx-layer" aria-hidden="true"></div>
@@ -535,7 +569,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 200); });
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { lineSig = ""; layout(); if (base) try { renderLineTv(base, build(base)); } catch (e) {} }, 200); });
 
   // ---------- refresh ----------
   function setStatus(msg, bad) { const s = $("status"); s.textContent = msg; s.classList.toggle("bad", !!bad); }
@@ -576,6 +610,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
         const sig = JSON.stringify({ ...v, welcome: null }); // only redraw when something on screen would change, so the scroll doesn't jump
         if (sig !== lastView) { lastView = sig; render(v); }
       }
+      try { renderLineTv(data, v); } catch (e) { $("line-tv").hidden = true; }
       if (!v) return setStatus("");
       watchRx(v.current);
       secretMoment(data);
@@ -639,6 +674,121 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     clearTimeout(clapT); clapT = setTimeout(() => { $("clap-tv").hidden = true; }, 12000);
   }
 
+  // ---------- the line (the karaoke app's queue) and the end of the night ----------
+  // Same estimate as the phone page's "The line": the first queue item is the song on the mic once it starts,
+  // each queued song counts its length (4 min if unknown) plus a 25 s changeover. The host can reorder, so it's a guess.
+  const QUEUE_DEFAULT_LEN = 240, QUEUE_GAP_S = 25, LINE_ROWS = 7, LAST_CALL_S = 30 * 60;
+  function waitLabel(s) {
+    const m = Math.round(s / 60);
+    if (m < 1) return "< 1 min";
+    return m < 60 ? m + " min" : Math.floor(m / 60) + " hr" + (m % 60 ? " " + (m % 60) + " min" : "");
+  }
+  function clockText(left) {
+    left = Math.max(0, Math.round(left));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : String(m)) + ":" + String(s).padStart(2, "0");
+  }
+  const tzTime = (ts) => new Date(ts * 1000).toLocaleTimeString("en-US", { timeZone: VENUE.tz || "America/Chicago", hour: "numeric", minute: "2-digit" }).replace(":00", "");
+  // When tonight ends: the host's end time from /host, else the regular one. In overtime (past the regular end
+  // with nothing set) it counts down to the latest the bar can run.
+  function endInfo(sc) {
+    if (!sc) return null;
+    const t = now();
+    if (sc.status === "live") return { at: Number(sc.session_end), over: false };
+    if (sc.status === "overtime") return { at: Number(sc.latest_end), over: true };
+    const ne = Number(sc.next_end), ns = Number(sc.next_start); // between nights: only while the preview is up
+    return previewing && ne && ns && t > ns - PREVIEW_LEAD_S ? { at: ne, over: false, pre: true } : null;
+  }
+  let lineEnd = null, lineSig = "";
+  function tickEnd() {
+    const c = $("ln-count"); if (!c || !lineEnd) return;
+    c.textContent = clockText(lineEnd.at - now());
+    const box = c.parentElement; if (box) box.classList.toggle("soon", lineEnd.at - now() < LAST_CALL_S);
+  }
+  setInterval(tickEnd, 1000);
+  function renderLineTv(data, v) {
+    const box = $("line-tv"), sc = data.schedule || null;
+    const on = !PIN && !EMBED && (previewing || (v && v.live && v.isLatest) || (sc && (sc.status === "live" || sc.status === "overtime") && v && v.tonight));
+    const end = on ? endInfo(sc) : null;
+    // The queue, if the laptop sent one for tonight (not last week's leftovers) and isn't silent.
+    const sync = Number(data.last_sync_ts) || 0, quiet = sync && now() - sync > 15 * 60;
+    const q = data.queue, night0 = sc ? Number(sc.status === "off" ? sc.next_start : sc.session_start) - PREVIEW_LEAD_S : 0;
+    let items = on && !quiet && q && Array.isArray(q.items) && Number(q.updated_at) >= night0 ? q.items.slice() : null;
+    // The song on the mic (the latest play, while it can still be playing) is the queue's first item: skip it.
+    const last = data.plays && data.plays.length ? data.plays.reduce((a, p) => (Number(p.played_at) > Number(a.played_at) ? p : a)) : null;
+    const len = last ? Number(last.length_s) || QUEUE_DEFAULT_LEN : 0, el0 = last ? now() - Number(last.played_at) : 1e9;
+    const current = v && v.live && last && el0 < len + 180 ? last : null;
+    if (items && current && items.length && String(items[0].id) === String(current.song_id)) items.shift();
+    const show = !!(on && (items || end));
+    if (box.hidden === show) { box.hidden = !show; setTimeout(() => { layout(); fitLine(); }, 50); }
+    lineEnd = show ? end : null;
+    if (!show) { lineSig = ""; return; }
+    // Before the first song, waits count from the start time.
+    let t = current ? Math.max(0, len - el0) + QUEUE_GAP_S : previewing && sc ? Math.max(0, Number(sc.status === "off" ? sc.next_start : sc.session_start) - now()) : 0;
+    const rows = (items || []).map((x) => { const at = t; t += (Number(x.len) || QUEUE_DEFAULT_LEN) + QUEUE_GAP_S; return { name: String(x.singer || "").trim() || "Someone", at }; });
+    const endsAt = end && end.at, finish = now() + t; // when a new sign-up would sing
+    const sig = JSON.stringify([rows.map((r) => [r.name, Math.round(r.at / 60)]), Math.round(t / 60), !!items, endsAt, end && end.over]);
+    if (sig === lineSig) return tickEnd();
+    lineSig = sig; box.replaceChildren();
+    if (items) {
+      box.append(heading("Up next"));
+      const st = el("div", "ln-stats");
+      [[String(rows.length), rows.length === 1 ? "singer in line" : "singers in line"],
+       [rows.length || current ? "~" + waitLabel(t) : "None", "wait if you sign up now"]].forEach(([n, l]) => {
+        const d = el("div"); d.append(el("strong", null, n), document.createTextNode(l)); st.append(d); });
+      box.append(st);
+      if (!rows.length) box.append(el("p", "ln-empty", current ? "Nobody’s up after this song. Grab the mic!" : "Nobody’s in line. Grab the mic!"));
+      else {
+        const ol = el("ol");
+        rows.slice(0, LINE_ROWS).forEach((r, i) => {
+          const late = endsAt && now() + r.at > endsAt;
+          const li = el("li", late ? "late" : null);
+          li.append(el("span", "n", String(i + 1)), el("span", "nm", r.name),
+            el("span", "w", late ? "after close" : i === 0 && r.at < 60 ? "next!" : "~" + waitLabel(r.at)));
+          ol.append(li);
+        });
+        ol.dataset.total = rows.length; lineLis = [...ol.children]; box.append(ol);
+        if (rows.length > LINE_ROWS) box.append(el("p", "ln-more", "+ " + (rows.length - LINE_ROWS) + " more in line"));
+      }
+    }
+    if (end) {
+      const left = endsAt - now();
+      if (items && endsAt && finish > endsAt) box.append(el("p", "ln-warn", "⏰ The line already runs past " + tzTime(endsAt) + ". New sign-ups might not get on tonight."));
+      else if (items && left < LAST_CALL_S && left > 0) box.append(el("p", "ln-warn", "🔔 Last call for sign-ups! Get your slip in now."));
+      const e = el("div", "ln-end" + (left < LAST_CALL_S ? " soon" : ""));
+      if (end.pre) { // before the first song: just when tonight wraps up, no ticking clock
+        lineEnd = null; e.classList.remove("soon");
+        e.append(document.createTextNode("Tonight’s karaoke runs until"), el("strong", null, tzTime(endsAt)));
+      } else {
+        const c = el("strong", null, clockText(left)); c.id = "ln-count";
+        e.append(document.createTextNode(end.over ? "Bonus time · ends by " + tzTime(endsAt) : "Karaoke ends in"), c,
+          document.createTextNode(end.over ? "the latest it can go" : "at " + tzTime(endsAt)));
+      }
+      box.append(e);
+    }
+    if (items && rows.length) {
+      const note = el("p", "ln-note", "Wait times are estimates. The host may shuffle the order.");
+      const endBox = box.querySelector(".ln-end"); if (endBox) box.insertBefore(note, endBox); else box.append(note);
+    }
+    fitLine();
+  }
+  // Show as many singers as fit above the countdown; the rest become "+ N more in line".
+  // Runs again once the fonts load and on resize, starting from the full list each time.
+  let lineLis = [];
+  function fitLine() {
+    const box = $("line-tv"), ol = box.querySelector("ol"); if (!ol || box.hidden) return;
+    if (document.fonts && document.fonts.status !== "loaded") document.fonts.ready.then(() => setTimeout(fitLine, 50)); // measure again in the real fonts
+    const total = Number(ol.dataset.total) || lineLis.length;
+    ol.replaceChildren(...lineLis);
+    let more = box.querySelector(".ln-more");
+    if (more) { more.textContent = "+ " + (total - lineLis.length) + " more in line"; more.hidden = total <= lineLis.length; }
+    while (box.scrollHeight > box.clientHeight + 1 && ol.children.length > 1) {
+      ol.lastElementChild.remove();
+      if (!more) { more = el("p", "ln-more"); ol.after(more); }
+      more.hidden = false; more.textContent = "+ " + (total - ol.children.length) + " more in line";
+    }
+  }
+
   // ---------- live reactions overlay ----------
   // While a song is on, check its reaction counts every 4s and float up one emoji per new tap (at most 14 at a time).
   let rxPlay = null, rxSeen = null, rxT = 0;
@@ -698,9 +848,10 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   async function wake() { try { if (navigator.wakeLock && !document.hidden) await navigator.wakeLock.request("screen"); } catch (e) {} }
   wake(); document.addEventListener("visibilitychange", wake);
 
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layout(); fitLine(); });
   // Check every minute, or every 20 seconds during the preview so the live screen takes over fast once songs start.
-  (async function loop() { await refresh(); setTimeout(loop, previewing ? 20000 : REFRESH_MS); })();
+  // The line refreshes every 20 seconds too while it's on screen.
+  (async function loop() { await refresh(); setTimeout(loop, previewing || !$("line-tv").hidden ? 20000 : REFRESH_MS); })();
   // Reload every 6 hours so a TV left on all week picks up site updates.
   setTimeout(() => location.reload(), 6 * 3600 * 1000);
 })();

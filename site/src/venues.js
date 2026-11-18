@@ -107,16 +107,20 @@ export function km(aLat, aLng, bLat, bLng) {
 // Nights the host turned off on /host (host_config "nights_off": ["YYYY-MM-DD", ...]), added to the venue
 // as nights_off so scheduleStatus (schedule.js) treats them as off nights: no reminder push, no laptop alert,
 // no TV countdown, no report, and "next night" skips them. Kept for a minute per Worker instance.
+// The host's end time for one night (host_config "end_override": {date, hours}) rides along as end_override.
 const offCache = new Map();
 export function forgetNightsOff(v) { offCache.delete(v.slug); }
 export async function withNightsOff(env, v) {
   const hit = offCache.get(v.slug);
-  if (hit && Date.now() - hit.at < 60000) return { ...v, nights_off: hit.list };
-  let list = [];
+  if (hit && Date.now() - hit.at < 60000) return { ...v, nights_off: hit.list, end_override: hit.end };
+  let list = [], end = null;
   try {
-    const r = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(v, "nights_off")).first();
-    list = r ? JSON.parse(r.v).filter((d) => /^\d{4}-\d\d-\d\d$/.test(d)) : [];
+    const { results } = await env.DB.prepare("SELECT k, v FROM host_config WHERE k IN (?, ?)").bind(cfgKey(v, "nights_off"), cfgKey(v, "end_override")).all();
+    for (const r of results) {
+      if (r.k === cfgKey(v, "nights_off")) list = JSON.parse(r.v).filter((d) => /^\d{4}-\d\d-\d\d$/.test(d));
+      else { try { const o = JSON.parse(r.v); if (o && /^\d{4}-\d\d-\d\d$/.test(o.date) && Number(o.hours) > 0) end = { date: o.date, hours: Number(o.hours) }; } catch (e) {} }
+    }
   } catch (e) { return v; } // no host_config table yet, or bad JSON: the regular schedule
-  offCache.set(v.slug, { at: Date.now(), list });
-  return { ...v, nights_off: list };
+  offCache.set(v.slug, { at: Date.now(), list, end });
+  return { ...v, nights_off: list, end_override: end };
 }
