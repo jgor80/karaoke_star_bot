@@ -98,7 +98,28 @@ jobs:
         run: |
           set -o pipefail
           KEY="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
-          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          # Write the key file cleanly however the secret was pasted: Windows line endings, extra spaces,
+          # missing BEGIN/END lines, or the file base64-encoded. Prints only its shape, never the key.
+          KEY="$KEY" python3 - <<'PY'
+          import base64, os, re, sys
+          raw = os.environ["ASC_KEY_P8"].replace("\r", "").strip()
+          if "PRIVATE KEY" not in raw:
+              try:
+                  dec = base64.b64decode(re.sub(r"\s+", "", raw), validate=True).decode("utf-8", "strict")
+                  if "PRIVATE KEY" in dec: raw = dec.replace("\r", "").strip()
+              except Exception: pass
+          had_header = "BEGIN PRIVATE KEY" in raw
+          body = re.sub(r"-----[^-]*-----", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          print("ASC_KEY_P8 shape: header %s, %d key characters" % ("yes" if had_header else "no", len(body)))
+          try: der = base64.b64decode(body, validate=True)
+          except Exception: der = b""
+          if not (100 <= len(der) <= 400 and der[:1] == b"\x30"):
+              print("::error::ASC_KEY_P8 is not the contents of an AuthKey_XXXX.p8 file. Open the .p8 file in Notepad, copy all of it and save the secret again.")
+              sys.exit(1)
+          lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+          open(os.environ["KEY"], "w", newline="\n").write("-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n")
+          PY
           # Build number: the run number, so every upload is new. Version (1.0) comes from the project.
           BUILD="${{ github.run_number }}"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
