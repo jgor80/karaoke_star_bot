@@ -17,3 +17,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 autofile_pending.json
+
+# Android upload key (never commit)
+*.jks
+*.keystore
