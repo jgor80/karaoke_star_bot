@@ -54,7 +54,9 @@
       const path = String(d.path || "");
       if (slug && path && /^[a-z0-9?=&_-]+$/i.test(path)) { location.href = SITE + "/" + slug + "/" + path; return; }
       const v = (store.get("oke_app_venues") || []).find((x) => x.slug === slug);
-      if (v) { store.set("oke_app_venue", v); location.href = "venue.html"; }
+      // Resolved against the page's own address, not the document's base: the bar page has
+      // <base href="https://okenight.com/<bar>/">, so a bare "venue.html" would open okenight.com/<bar>/venue.html.
+      if (v) { store.set("oke_app_venue", v); location.href = new URL("venue.html", location.href).href; }
     });
   }
   // Register this phone for push with the home bar. hostKey (optional) turns on the host alerts too.
