@@ -11,7 +11,7 @@
 // Settings are per venue in host_config via cfgKey (songbook_source, songbook_count, songbook_updated).
 // Popularity: a song that's also in the full catalog gets that song's rank, so the Top 10 still means
 // something; the rest follow in file order.
-import { searchKey } from "./catalog_import.js";
+import { searchKey, MAX_SQL_BYTES } from "./catalog_import.js";
 import { DEFAULT_VENUE, cfgKey, venueConfig } from "./venues.js";
 
 export const OWN_BASE = 1000000000;
@@ -64,6 +64,20 @@ const truthy = (v) => /^(1|y|yes|true|x|duet|duo)$/i.test(String(v || "").trim()
 
 const staging = (venue) => venue.slug + "~new";
 
+// Join SQL pieces into as few statements as fit D1's size limit (100 KB a statement): head + piece,piece,...
+// A fixed count per statement isn't safe: 150 rows of long titles and accented letters can pass 100 KB.
+const enc = new TextEncoder();
+export function joinBySize(head, pieces, tail = "", max = MAX_SQL_BYTES) {
+  const out = []; let cur = [], size = enc.encode(head + tail).length;
+  for (const p of pieces) {
+    const n = enc.encode(p).length + 1;
+    if (cur.length && size + n > max) { out.push(head + cur.join(",") + tail); cur = []; size = enc.encode(head + tail).length; }
+    cur.push(p); size += n;
+  }
+  if (cur.length) out.push(head + cur.join(",") + tail);
+  return out;
+}
+
 export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
   await ensureSongbook(env);
   const set = (k, v) => env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(cfgKey(venue, k), String(v));
@@ -97,20 +111,18 @@ export async function hostSongbookAction(env, body, venue = DEFAULT_VENUE) {
     // the full-text table would be read in full for every 400 songs).
     const rank = new Map();
     for (let i = 0; i < songs.length; i += 400) {
-      const ks = songs.slice(i, i + 400).map((s) => s.k);
-      try {
-        const inList = ks.map(lit).join(",");
-        const { results } = await env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog_order WHERE k IN (" + inList + ") GROUP BY k").all()
-          .catch(() => env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog WHERE k IN (" + inList + ") GROUP BY k").all());
-        results.forEach((r) => rank.set(r.k, Number(r.pop)));
-      } catch (e) { break; } // no catalog: file order it is
+      for (const inList of joinBySize("", songs.slice(i, i + 400).map((s) => lit(s.k)), "", MAX_SQL_BYTES - 200)) {
+        try {
+          const { results } = await env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog_order WHERE k IN (" + inList + ") GROUP BY k").all()
+            .catch(() => env.DB.prepare("SELECT k, min(pop) AS pop FROM catalog WHERE k IN (" + inList + ") GROUP BY k").all());
+          results.forEach((r) => rank.set(r.k, Number(r.pop)));
+        } catch (e) { i = songs.length; break; } // no catalog: file order it is
+      }
     }
     const head = "INSERT INTO songbook (rowid, title, artist, k, year, duo, explicit, styles, languages, added, pop, venue) VALUES ";
-    const stmts = [];
-    for (let i = 0; i < songs.length; i += 150) {
-      stmts.push(env.DB.prepare(head + songs.slice(i, i + 150).map((s) =>
-        "(" + [s.id, s.title, s.artist, s.k, s.year, s.duo, 0, s.styles, "", "", rank.get(s.k) || UNRANKED + s.n, stage].map(lit).join(",") + ")").join(",")));
-    }
+    const stmts = joinBySize(head, songs.map((s) =>
+      "(" + [s.id, s.title, s.artist, s.k, s.year, s.duo, 0, s.styles, "", "", rank.get(s.k) || UNRANKED + s.n, stage].map(lit).join(",") + ")"))
+      .map((sql) => env.DB.prepare(sql));
     for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5));
     if (body.done) {
       // Swap the new songbook in and the old one out together (a D1 batch is one transaction).
