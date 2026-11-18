@@ -132,13 +132,22 @@ export async function eraseSinger(env, body, venue) {
 }
 
 // Songs a removed singer sang after the removal (uploaded later by the laptop) get their label too.
-// Only the last couple of nights are checked, so this stays cheap as the history grows.
-export async function sweepErased(env, venue) {
+// Every minute only the last couple of nights are checked, so this stays cheap as the history grows.
+// all=true (once a day, from the cron) checks every night: the host can correct an old play on the laptop,
+// and the laptop then re-uploads it with the name as typed. Public reads relabel too (relabelRows), so
+// such a row never shows the name even before the daily sweep fixes it in the database.
+export async function sweepErased(env, venue, all = false) {
   const list = await readList(env, venue);
   if (!list.length) return;
-  const since = new Date(Date.now() - 2 * 86400 * 1000).toISOString().slice(0, 10);
+  const since = all ? null : new Date(Date.now() - 2 * 86400 * 1000).toISOString().slice(0, 10);
   await relabelColumn(env, venue, list, "plays", "singer", null, since);
   await relabelColumn(env, venue, list, "reactions", "singer", null, since).catch(() => {});
+}
+
+// Rows about to be served publicly: any singer on the removed list shows as their label.
+export function relabelRows(list, rows, col = "singer") {
+  if (!list.length) return rows;
+  return rows.map((r) => { const to = r && r[col] ? relabelName(list, r[col]) : null; return to ? { ...r, [col]: to } : r; });
 }
 
 // Once a day (the cron calls it every minute). It runs in the first minute of 11:00-11:59 UTC (5 or 6am in

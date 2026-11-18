@@ -5,6 +5,7 @@
 // crowd = applause score 0-10 for that song (crowd_api.js), hype = how many phones sent a hype reaction.
 import { VENUES, venueConfig } from "./venues.js";
 import { withCacheControl } from "./net.js";
+import { erasedSingers, relabel } from "./privacy_api.js";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const HYPE = ["fire", "micdrop", "encore", "chills", "dance", "keychange"]; // same as OkeAwards.HYPE
@@ -30,12 +31,15 @@ export async function handleLeague(req, env, ctx, url) {
   ]);
   const cBy = new Map(crowd.map((c) => [c.uuid, Math.round(Math.max(0, Math.min(10, Number(c.over) / 2.5)) * 10) / 10]));
   const hBy = new Map(hype.map((h) => [h.uuid, Number(h.n) || 0]));
+  // Singers who asked to be removed show as their label here too, per bar (privacy_api.js).
+  const erasedBy = new Map(await Promise.all(VENUES.map(async (v) => [v.slug, await erasedSingers(env, v).catch(() => [])])));
+  const shown = (p) => { const l = erasedBy.get(p.venue || VENUES[0].slug) || []; return l.length ? relabel(l, p.singer) : p.singer; };
   const venues = await Promise.all(VENUES.map(async (v) => {
     const cfg = await venueConfig(env, v).catch(() => ({}));
     return { slug: v.slug, name: v.name, neighborhood: v.neighborhood, host: cfg.host_name === undefined ? v.host_default || "" : cfg.host_name };
   }));
   const body = { month, months: months.length ? months : [month], venues,
-    plays: plays.filter((p) => p.singer).map((p) => [p.venue || VENUES[0].slug, p.night, p.singer, Number(p.played_at), cBy.get(p.uuid) ?? null, hBy.get(p.uuid) || 0]) };
+    plays: plays.filter((p) => p.singer).map((p) => [p.venue || VENUES[0].slug, p.night, shown(p), Number(p.played_at), cBy.get(p.uuid) ?? null, hBy.get(p.uuid) || 0]) };
   res = new Response(JSON.stringify(body), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=120" } });
   ctx.waitUntil(cache.put(key, res.clone()));
   if (firstKey.url !== key.url) ctx.waitUntil(cache.put(firstKey, res.clone()));

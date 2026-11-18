@@ -33,7 +33,7 @@ import { updateDetails } from "./details_import.js";
 import { updateVoices } from "./voice_import.js";
 import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
-import { erasedSingers, relabel, sweepErased, dailyCleanup } from "./privacy_api.js";
+import { erasedSingers, relabel, relabelRows, sweepErased, dailyCleanup } from "./privacy_api.js";
 import PRIVACY from "./privacy.html";
 import TERMS from "./terms.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
@@ -145,9 +145,11 @@ async function handleApi(name, req, env, ctx, venue, url) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
       const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
-      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars] = await Promise.all([
+      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, erased] = await Promise.all([
         env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
-        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue)]);
+        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue),
+        erasedSingers(env, venue).catch(() => [])]);
+      plays.results = relabelRows(erased, plays.results); // a removed singer's name never goes out, even before the sweep
       res = new Response(
         JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
@@ -213,17 +215,17 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       await ensureCore(env);
+      const daily = await dailyCleanup(env, event.scheduledTime).catch(() => false); // drop old rate-limit IDs (privacy_api.js)
       for (const v0 of VENUES) {
         const v = await withNightsOff(env, v0); // nights the host turned off: no reminder, laptop alert or report
         await checkSecrets(env, v).catch(() => {});
         await scoreCrowd(env, v).catch(() => {}); // crowd meter
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic
-        await sweepErased(env, v).catch(() => {}); // new songs by singers who asked to be removed
+        await sweepErased(env, v, daily).catch(() => {}); // new songs by singers who asked to be removed (all nights once a day)
         await checkSyncAlerts(env, v).catch(() => {}); // host alert if the laptop or karaoke app isn't ready (health_api.js)
         await watchLine(env, v).catch(() => {}); // host alert when the line runs past tonight's end, and last call (line_api.js)
         await sendReports(env, v).catch(() => {}); // the morning-after numbers for the host and bar owner (report_api.js)
       }
-      await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
     })().catch(() => {}));
     // Weekly: refresh the Songbook's song list (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
