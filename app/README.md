@@ -32,7 +32,7 @@ npx cap sync         # copy www/ and plugins into ios/ and android/
 - **iPhone:** you need a Mac with Xcode, or a cloud Mac. Windows can't build iOS apps. `npm run ios` opens Xcode on a Mac. Then:
   1. Choose Signing & Capabilities > Team (Synthwave Web LLC).
   2. Choose Product > Archive, then Distribute > App Store Connect.
-- Without a Mac: a GitHub Actions `macos` runner (or Codemagic, or Ionic Appflow) can build and upload to TestFlight with an App Store Connect API key.
+- **Without a Mac (what we use):** the **iPhone app** GitHub workflow (`.github/workflows/ios-testflight.yml`) builds on a GitHub cloud Mac. On pull requests it does a simulator build to check that the app compiles. From Actions > iPhone app > Run workflow, it signs the app and uploads it to App Store Connect / TestFlight. The upload needs four repository secrets, listed at the top of that file.
 
 Bump the version in Xcode (Version/Build) and in `android/app/build.gradle` (`versionName`/`versionCode`) for each upload.
 
