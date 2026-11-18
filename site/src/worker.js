@@ -10,6 +10,7 @@
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 // Wireless buttons around the bar can send reactions too, each with its own secret link made on /host (buttons_api.js).
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
+// They can also get AI "rock-star looks" of that photo in a music era's style; the host OKs them for the TV (styled_api.js).
 import { watchLine } from "./line_api.js";
 import PAGE from "./index.html";
 import HOME from "./home.html";
@@ -51,6 +52,7 @@ import { DEMO_VENUE, handleDemoApi } from "./demo.js"; // okenight.com/demo/: an
 import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
+import { handleStyled, styledMap } from "./styled_api.js";
 import { handleButton } from "./buttons_api.js";
 // Installable web app (pwa/): manifest, service worker, offline screen and icons. Text/Data per [[rules]].
 import MANIFEST from "./pwa/manifest.webmanifest";
@@ -132,6 +134,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "crowd") { await ensureCore(env); return handleCrowd(req, env, venue); } // the /host phone's crowd meter (host key only)
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
   if (name === "avatar") { await ensureCore(env); return handleAvatar(req, env, ctx, venue, url); } // singer photos, see avatars_api.js
+  if (name === "styled") { await ensureCore(env); return handleStyled(req, env, ctx, venue, url); } // AI rock-star looks of a singer photo, see styled_api.js
   if (name === "art" && req.method === "POST") return handleArt(req, env, ctx); // a phone reports a cover it found (art.js)
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
   if (name === "reactions") return handleCounts(req, env, ctx);
@@ -157,13 +160,13 @@ async function handleApi(name, req, env, ctx, venue, url) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
       const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
-      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, erased] = await Promise.all([
+      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, styled, erased] = await Promise.all([
         env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
-        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue),
+        reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue), styledMap(env, venue),
         erasedSingers(env, venue).catch(() => [])]);
       plays.results = relabelRows(erased, plays.results); // a removed singer's name never goes out, even before the sweep
       res = new Response(
-        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars }),
+        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars, ...styled }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
       );
       ctx.waitUntil(cache.put(key, res.clone()));

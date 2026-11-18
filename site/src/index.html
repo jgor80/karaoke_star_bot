@@ -124,6 +124,20 @@ a.logo { text-decoration: none; }
 .ph-zoom input { flex: 1; accent-color: var(--hot); }
 .ph-msg { min-height: 1.3em; margin: 6px 0 0; font-size: 16px; color: var(--muted); text-align: center; }
 .ph-msg.bad { color: var(--hot); }
+/* rock-star looks (styled_api.js): pick an era, see the AI version of your photo */
+.rk-styles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; max-height: 38dvh; overflow-y: auto; }
+.rk-styles button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.rk-styles button[aria-pressed="true"] { border-color: var(--hot); box-shadow: 0 0 0 2px var(--hot) inset; }
+.rk-band { display: flex; gap: 8px; margin-top: 10px; }
+.rk-band input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg, #000); color: var(--ink); }
+.rk-ok { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; color: var(--muted); margin: 6px 0; }
+.rk-ok input { margin-top: 3px; accent-color: var(--hot); width: 20px; height: 20px; flex: none; }
+.rk-out { display: block; width: min(280px, 100%); aspect-ratio: 1; margin: 10px auto 0; border-radius: 14px; object-fit: cover; background: #000; }
+.rk-mine { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
+.rk-mine button { flex: none; padding: 0; border: 2px solid transparent; border-radius: 50%; background: none; cursor: pointer; }
+.rk-mine button[aria-pressed="true"] { border-color: var(--hot); }
+.rk-mine img, .rk-mine .plain { display: block; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.rk-mine .plain { display: grid; place-items: center; background: var(--line); font-size: 13px; color: var(--ink); }
 /* shelves: sideways rows of big covers (feed, song ideas, most-sung songs) */
 .shelf { list-style: none; margin: 0 -16px; padding: 2px 16px 6px; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: 16px; scrollbar-width: none; }
 .shelf::-webkit-scrollbar { display: none; }
@@ -873,8 +887,28 @@ html:not(.app) #tip-app-note { display: none; }
     <button class="act" id="ph-save" type="button" hidden>Use this photo</button>
     <button class="act" id="ph-pick" type="button">Choose a photo</button>
     <button class="act ghost" id="ph-remove" type="button" hidden>Remove my photo</button>
+    <button class="act ghost" id="ph-rock" type="button" hidden>🎸 Rock-star me</button>
     <button class="act ghost" id="ph-close" type="button">Cancel</button>
   </div>
+</dialog>
+
+<dialog id="rock-dlg" aria-labelledby="rock-h">
+  <h3 id="rock-h">🎸 Rock-star me</h3>
+  <p class="muted small" style="margin:0">Pick a music era and AI redraws your photo in that look. It’s inspired by the era, not a real band: no real musicians, band names or band photos.</p>
+  <div id="rk-pickers">
+    <div class="rk-band"><input id="rk-band" type="text" maxlength="60" placeholder="Favorite band (optional)" aria-label="Favorite band" autocomplete="off"><button class="act ghost" id="rk-find" type="button">Match</button></div>
+    <div class="rk-styles" id="rk-styles" role="group" aria-label="Looks"></div>
+    <label class="rk-ok"><input type="checkbox" id="rk-ok"><span>This is a photo of me, I’m 21 or over, and I’m OK with AI restyling it. It shows on the TV once the host OKs it.</span></label>
+  </div>
+  <img class="rk-out" id="rk-out" alt="Your rock-star look" hidden>
+  <p class="ph-msg" id="rk-msg" role="status" aria-live="polite"></p>
+  <div id="rk-mine-w" hidden><p class="muted small" style="margin:6px 0 0">Your looks (tap one to use it):</p><div class="rk-mine" id="rk-mine"></div></div>
+  <div class="btns" style="justify-content:center;flex-wrap:wrap">
+    <button class="act" id="rk-make" type="button">Make my look</button>
+    <button class="act ghost" id="rk-again" type="button" hidden>Try again</button>
+    <button class="act ghost" id="rk-close" type="button">Close</button>
+  </div>
+  <p class="muted small" style="margin:8px 0 0">Up to 3 new looks a day. The host can take any look down. <a href="/privacy">Privacy</a></p>
 </dialog>
 
 <dialog id="report-dlg" aria-labelledby="report-h">
@@ -956,7 +990,9 @@ html:not(.app) #tip-app-note { display: none; }
     const a = el("span", "av", (n.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase()); a.setAttribute("aria-hidden", "true");
     a.style.setProperty("--h", String(h)); if (size) a.style.setProperty("--s", size + "px");
     const src = photoSrc(n);
-    if (src) { const img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async"; img.src = src; img.onerror = () => { img.remove(); a.classList.remove("ph"); }; a.classList.add("ph"); a.append(img); }
+    if (src) { const img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async"; img.src = src; a.classList.add("ph"); a.append(img);
+      // A look the host took down falls back to the plain photo, then to the letter.
+      img.onerror = () => { const k = photoKey(n); if (/api\/styled/.test(img.src) && avatars[k]) { setMyLook(k, ""); img.src = "api/avatar?k=" + k + "&v=" + avatars[k]; } else { img.remove(); a.classList.remove("ph"); } }; }
     return a;
   }
   // Same folding as the server (privacy_api.js matchKey), so "Amy", "amy " and "Ámy" share a photo.
@@ -966,7 +1002,16 @@ html:not(.app) #tip-app-note { display: none; }
   const HIDDEN_KEY = "oke-hidden-photos";
   const hiddenPhotos = () => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"); } catch (e) { return []; } };
   function setHidden(k, on) { const l = hiddenPhotos().filter((x) => x !== k); if (on) l.push(k); try { l.length ? localStorage.setItem(HIDDEN_KEY, JSON.stringify(l)) : localStorage.removeItem(HIDDEN_KEY); } catch (e) {} }
-  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return v && !hiddenPhotos().includes(k) ? "api/avatar?k=" + k + "&v=" + v : null; }
+  // A rock-star look (styled_api.js) shows instead of the plain photo once the host OKs it. This phone also
+  // shows its own chosen look before that ("" = this phone went back to the plain photo). Hidden photos stay hidden.
+  let styled = {};
+  const myLooks = () => { try { return JSON.parse(store.get("oke-my-looks") || "{}"); } catch (e) { return {}; } };
+  function photoSrc(name) {
+    const k = photoKey(name), v = k && avatars[k];
+    if (!v || hiddenPhotos().includes(k)) return null;
+    const mine = myLooks()[k], look = mine !== undefined ? mine : styled[k];
+    return look ? "api/styled?k=" + k + "&id=" + look : "api/avatar?k=" + k + "&v=" + v;
+  }
   // ICON, awards and tally live in /awards.js so the TV screen (/tv) shares them.
   const icon = OkeAwards.icon;
   // Adds a "🎤 Host" tag after a name element when that name is the host's.
@@ -1362,6 +1407,7 @@ html:not(.app) #tip-app-note { display: none; }
       if (person) { const isMe = getMe() === key(e.name); const mb = el("button", "act me-btn" + (isMe ? " ghost" : ""), isMe ? "That’s not me" : "That’s me 🙋"); mb.type = "button";
         mb.addEventListener("click", () => { setMe(isMe ? null : key(e.name)); if (!isMe) show("tonight"); }); extra.push(mb); }
       if (person && getMe() === key(e.name)) { const pb = el("button", "act ghost me-btn", photoSrc(e.name) ? "📷 Change my photo" : "📷 Add my photo"); pb.type = "button"; pb.addEventListener("click", () => openPhoto(e.name)); extra.push(pb); }
+      if (person && getMe() === key(e.name) && avatars[photoKey(e.name)] && mineList().includes(photoKey(e.name))) { const rb = el("button", "act ghost me-btn", "🎸 Rock-star me"); rb.type = "button"; rb.addEventListener("click", () => openRock(e.name)); extra.push(rb); }
       if (person && getMe() !== key(e.name)) { // report or hide someone else's photo or name (app store rules for user content)
         const pk = photoKey(e.name), has = !!avatars[pk], hid = hiddenPhotos().includes(pk);
         const row = el("div", "safety");
@@ -1803,11 +1849,12 @@ html:not(.app) #tip-app-note { display: none; }
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (data.avatars) avatars = mergeAvatars(data.avatars);
+      if (data.styled) styled = data.styled;
       // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions, applause scores
       // or host changed. The response also carries served_at, the schedule and the sync time, which change every poll.
       // Applause (crowd) is scored by the Worker's cron about a minute after a song ends, often with nothing else
       // changing, so it has to be part of this check or the last song's 👏 score never shows until a reload.
-      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.crowd, data.host, avatars]);
+      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.crowd, data.host, avatars, styled]);
       if (sig !== lastJson) { lastJson = sig; load(data); } else renderTonight();
       if (draft) draft.update(data);
       if (duets) duets.update(data);
@@ -1928,6 +1975,7 @@ html:not(.app) #tip-app-note { display: none; }
     $("ph-stage").hidden = $("ph-zoom-l").hidden = $("ph-save").hidden = $("ph-agree-l").hidden = !editing;
     $("ph-pick").textContent = editing ? "Choose another" : "Choose a photo"; $("ph-pick").classList.toggle("ghost", editing);
     $("ph-remove").hidden = editing || !(avatars[photoKey(phName)] && mineList().includes(photoKey(phName)));
+    $("ph-rock").hidden = $("ph-remove").hidden;
   }
   function openPhoto(name) {
     phName = name; ph = null; phMsg(""); $("ph-zoom").value = "1"; $("photo-file").value = ""; $("ph-agree").checked = false;
@@ -1980,7 +2028,7 @@ html:not(.app) #tip-app-note { display: none; }
     if (!r.ok) throw new Error(d.error || "That didn’t work. Try again.");
     return d;
   }
-  function photoDone(k, v) { photoMine.fresh[k] = { v, at: Date.now() }; setMine(k, !!v); avatars = mergeAvatars(avatars); renderAll(); photoDlg.close(); ph = null; }
+  function photoDone(k, v) { const ml = myLooks(); if (k in ml) { delete ml[k]; store.set("oke-my-looks", JSON.stringify(ml)); } photoMine.fresh[k] = { v, at: Date.now() }; setMine(k, !!v); avatars = mergeAvatars(avatars); renderAll(); photoDlg.close(); ph = null; }
   $("ph-save").addEventListener("click", async () => {
     if (!ph) return;
     const out = document.createElement("canvas"); out.width = out.height = OUT_PX;
@@ -2024,6 +2072,78 @@ html:not(.app) #tip-app-note { display: none; }
     try { await photoPost({ action: "delete" }); photoDone(photoKey(phName), 0); }
     catch (e) { phMsg(e.message || "Couldn’t remove it. Try again.", true); }
   });
+
+  // ---------- rock-star looks (see styled_api.js) ----------
+  // The singer's own photo, redrawn by AI in a music era's look. Made once per look and kept by the Worker.
+  const rockDlg = $("rock-dlg");
+  let rkName = "", rkStyle = "", rkStyles = null;
+  function rkMsg(t, bad) { const m = $("rk-msg"); m.textContent = t; m.classList.toggle("bad", !!bad); }
+  function setMyLook(k, id) { const m = myLooks(); m[k] = id; store.set("oke-my-looks", JSON.stringify(m)); }
+  async function rockPost(body) {
+    let r;
+    try { r = await fetch("api/styled", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, name: rkName, key: photoSecret() }) }); }
+    catch (e) { throw new Error("Couldn’t reach the site. Check the connection and try again."); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "That didn’t work. Try again.");
+    return d;
+  }
+  function rkPick(id) { rkStyle = id; $("rk-styles").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.id === id))); }
+  function rkShow(look) {
+    const o = $("rk-out");
+    if (!look) { o.hidden = true; $("rk-again").hidden = true; return; }
+    o.src = look.src; o.hidden = false; $("rk-again").hidden = false; rkPick(look.style);
+    rkMsg(look.approved ? look.label + ": showing on the TV." : look.label + ": on your phone now, and on the TV once the host OKs it.");
+  }
+  function rkMine(looks) {
+    const w = $("rk-mine"), k = photoKey(rkName), cur = myLooks()[k];
+    w.replaceChildren(); $("rk-mine-w").hidden = !looks.length;
+    const chosen = cur !== undefined ? cur : ((looks.find((l) => l.chosen) || {}).id || "");
+    const plain = el("button"); plain.type = "button"; plain.setAttribute("aria-pressed", String(!chosen)); plain.setAttribute("aria-label", "My plain photo");
+    plain.append(el("span", "plain", "Plain")); plain.onclick = () => rkUse("", looks); w.append(plain);
+    for (const l of looks) {
+      const b = el("button"); b.type = "button"; b.setAttribute("aria-pressed", String(chosen === l.id)); b.setAttribute("aria-label", l.label);
+      const i = el("img"); i.alt = ""; i.loading = "lazy"; i.src = l.src; b.append(i); b.onclick = () => rkUse(l.id, looks); w.append(b);
+    }
+  }
+  async function rkUse(id, looks) {
+    try { await rockPost({ action: "use", id }); setMyLook(photoKey(rkName), id); rkMine(looks); rkShow(looks.find((l) => l.id === id) || null); if (!id) rkMsg("Back to your plain photo."); renderAll(); }
+    catch (e) { rkMsg(e.message, true); }
+  }
+  async function openRock(name) {
+    rkName = name; rkMsg(""); rkShow(null); $("rk-band").value = ""; $("rk-ok").checked = false;
+    if (photoDlg.open) photoDlg.close();
+    rockDlg.showModal();
+    if (!rkStyles) {
+      try { const d = await (await fetch("api/styled")).json(); rkStyles = d.styles || []; if (d.on === false) rkMsg("Rock-star looks aren’t switched on at this bar yet.", true); }
+      catch (e) { rkMsg("Couldn’t load the looks. Check the connection.", true); return; }
+      const g = $("rk-styles"); g.replaceChildren();
+      for (const s of rkStyles) { const b = el("button", null, s.emoji + " " + s.label); b.type = "button"; b.dataset.id = s.id; b.onclick = () => rkPick(s.id); g.append(b); }
+    }
+    rkPick("");
+    try { const d = await rockPost({ action: "mine" }); rkMine(d.looks || []); const c = (d.looks || []).find((l) => l.chosen); if (c) rkShow(c); }
+    catch (e) { rkMsg(e.message, true); }
+  }
+  $("ph-rock").addEventListener("click", () => openRock(phName));
+  $("rk-close").addEventListener("click", () => rockDlg.close());
+  $("rk-find").addEventListener("click", async () => {
+    const band = $("rk-band").value.trim(); if (!band) { rkMsg("Type a band, or just pick a look.", true); return; }
+    rkMsg("Matching…");
+    try { const d = await rockPost({ action: "suggest", band }); rkPick(d.style); rkMsg("Closest look: " + d.label + ". Tap “Make my look”."); }
+    catch (e) { rkMsg(e.message, true); }
+  });
+  async function rkMake(again) {
+    if (!rkStyle) { rkMsg("Pick a look first.", true); return; }
+    if (!$("rk-ok").checked) { rkMsg("Tick the box first.", true); return; }
+    $("rk-make").disabled = $("rk-again").disabled = true; rkMsg("Painting your look… about 10 seconds.");
+    try {
+      const d = await rockPost({ action: "make", style: rkStyle, consent: true, again: !!again });
+      setMyLook(photoKey(rkName), d.look.id); rkShow(d.look); renderAll();
+      const m = await rockPost({ action: "mine" }).catch(() => null); if (m) rkMine(m.looks || []);
+    } catch (e) { rkMsg(e.message, true); }
+    finally { $("rk-make").disabled = $("rk-again").disabled = false; }
+  }
+  $("rk-make").addEventListener("click", () => rkMake(false));
+  $("rk-again").addEventListener("click", () => rkMake(true));
 
   // ---------- tips ----------
   const tipDlg = $("tip-dlg");

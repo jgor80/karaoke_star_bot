@@ -202,6 +202,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       <p class="hint" id="ph-blocked" hidden></p>
     </section>
 
+    <section>
+      <h2 id="rk-h">Rock-star looks</h2>
+      <p class="hint" style="margin-bottom:8px">Singers can have AI redraw their photo in a music era’s look (70s glam, 90s grunge…). A new look shows only on the singer’s own phone until you tap “OK for TV”. Remove anything that isn’t OK, or that looks like a real famous person.</p>
+      <ul class="ph-list" id="rk-list"></ul>
+    </section>
+
     <section class="card">
       <h2>Songbook</h2>
       <p class="hint">Which songs people can search in the Songbook tab. Use your own list if your songs come from somewhere else, or add your extra songs on top of the full catalog.</p>
@@ -582,6 +588,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "duet_remove", id: x.id });
       const row = el("div", "row"); row.append(rm); li.append(row); dul.append(li); });
     renderPhotos(d.photos || [], d.reports || [], d.photo_approval !== false);
+    renderStyled(d.styled || []);
     renderButtons(d.buttons || []);
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
@@ -748,6 +755,25 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       blocked.forEach((p, i) => { if (i) bp.append(document.createTextNode(" ")); const b = el("button", "ghost small", "Allow " + p.name); b.type = "button";
         b.onclick = () => act({ action: "photo_unblock", k: p.k }); bp.append(b); });
     }
+  }
+
+  // Rock-star looks (styled_api.js): waiting ones first. Only redrawn when the list changes.
+  let styledSig = "";
+  function renderStyled(list) {
+    const sig = JSON.stringify(list); if (sig === styledSig) return; styledSig = sig;
+    const waiting = list.filter((x) => !x.approved).length, ul = $("rk-list");
+    $("rk-h").textContent = "Rock-star looks" + (waiting ? " (" + waiting + " waiting)" : list.length ? " (" + list.length + ")" : "");
+    ul.replaceChildren();
+    if (!list.length) ul.append(el("li", "s", "No rock-star looks yet."));
+    list.forEach((x) => {
+      const li = el("li"), img = el("img"); img.alt = x.label + " look for " + x.name; img.loading = "lazy"; img.src = x.src;
+      const row = el("div", "row");
+      if (!x.approved) { const ok = el("button", "small", "OK for TV"); ok.type = "button"; ok.onclick = () => act({ action: "styled_approve", id: x.id }); row.append(ok); }
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button";
+      rm.onclick = () => { if (confirm("Remove " + x.name + "’s " + x.label + " look?")) act({ action: "styled_remove", id: x.id }); };
+      row.append(rm);
+      li.append(img, el("span", "t", x.name + " · " + x.label), el("span", "s", (x.approved ? "On the TV" + (x.chosen ? "" : " (not in use)") : "Waiting for OK") + " · " + when(x.at)), row); ul.append(li);
+    });
   }
 
   // Wireless bar buttons (buttons_api.js). The secret link comes back only from button_add / button_rotate.

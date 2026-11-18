@@ -30,6 +30,7 @@ import { syncHealth } from "./health_api.js";
 import { lineCheck } from "./line_api.js";
 import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
+import { hostStyled, hostStyledAction } from "./styled_api.js";
 import { hostButtons, hostButtonAction } from "./buttons_api.js";
 
 const SCHEMA = [
@@ -296,6 +297,9 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (String(body.action || "").startsWith("photo_")) {
       const r = await hostPhotoAction(env, body, venue); // singer photos: remove one, block or unblock a name
       if (r.error) return json(r, 400);
+    } else if (String(body.action || "").startsWith("styled_")) {
+      const r = await hostStyledAction(env, body, venue); // AI rock-star looks: OK one for the TV, or remove it
+      if (r.error) return json(r, 400);
     } else if (String(body.action || "").startsWith("button_")) {
       const r = await hostButtonAction(env, body, venue); // wireless bar buttons: add, change, new link, remove
       if (r.error) return json(r, 400);
@@ -341,5 +345,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), ...(await lineCheck(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostStyled(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), ...(await lineCheck(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
