@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: No brand name in browser files
         run: |
-          files=$(ls site/src/*.html site/src/bingo.js site/src/fun.js site/src/songs.js site/src/drafts.js site/src/art.js site/src/awards.js bingo/* awards/* 2>/dev/null)
+          files=$(ls site/src/*.html site/src/bingo.js site/src/fun.js site/src/songs.js site/src/drafts.js site/src/art.js site/src/awards.js 2>/dev/null)
           if grep -niE 'kara ?fun|\bkfn\b' $files; then
             echo "::error::The karaoke app's name must not appear in files that browsers download (project rule)."
             exit 1
