@@ -1,4 +1,4 @@
-// Songbook tab: search the karaoke app's catalog (/api/catalog) and keep a list of songs you want to sing.
+// Songbook tab: search the song catalog (/api/catalog) and keep a list of songs you want to sing.
 // The list is saved on this phone only (localStorage), so there are no accounts.
 //
 // OkeSongs.mount({ find, mine, count, getPlays, getMyRows, onPick })
@@ -139,7 +139,29 @@
     const langs = pills("wrap", LANGS.map((l) => [l, l, null]), "lang", "Language");
     const sorts = pills("wrap", SORT_OPTS.map(([v, t]) => [v, t, null]), "sort", "Sort");
     const done = el("button", "act", "Show songs"); done.type = "button"; done.addEventListener("click", () => showPanel(false));
-    panel.append(el("div", "fl-h", "Era"), eras.row, el("div", "fl-h", "Voice"), quick, el("div", "fl-h", "More genres"), otherG.row, el("div", "fl-h", "Language"), langs.row, el("div", "fl-h", "Sort"), sorts.row, done);
+    const eraH = el("div", "fl-h", "Era"), otherH = el("div", "fl-h", "More genres"), langH = el("div", "fl-h", "Language");
+    panel.append(eraH, eras.row, el("div", "fl-h", "Voice"), quick, otherH, otherG.row, langH, langs.row, el("div", "fl-h", "Sort"), sorts.row, done);
+    // The song list may still be missing years, genres or languages (the API's facets list what has data).
+    // Filters with nothing behind them are hidden, so a tap never finds zero songs. null = show everything.
+    let facetsKey = "";
+    function applyFacets(fc) {
+      const key = JSON.stringify(fc || null);
+      if (key === facetsKey) return; facetsKey = key;
+      const g = fc ? new Set(fc.genres || []) : null, l = fc ? new Set(fc.langs || []) : null;
+      [genres, otherG].forEach((grp) => grp.btns.forEach((b) => { b.hidden = !!g && !g.has(b.dataset.v); }));
+      const anyOther = !g || otherG.btns.some((b) => !b.hidden);
+      otherH.hidden = otherG.row.hidden = !anyOther; moreG.hidden = !anyOther;
+      langs.btns.forEach((b) => { b.hidden = !!l && !l.has(b.dataset.v); });
+      langH.hidden = langs.row.hidden = !!l && !l.size;
+      const years = !fc || fc.years;
+      eraH.hidden = eras.row.hidden = !years;
+      sorts.btns.forEach((b) => { b.hidden = (!years && (b.dataset.v === "recent" || b.dataset.v === "old")) || (!!fc && !fc.added && b.dataset.v === "new"); });
+      if (g && f.genre && !g.has(f.genre)) f.genre = "";
+      if (l && f.lang && !l.has(f.lang)) f.lang = "";
+      if (!years) f.decade = "";
+      const sb = sorts.btns.find((b) => b.dataset.v === f.sort); if (sb && sb.hidden) f.sort = "pop";
+      sync();
+    }
     const showPanel = (on) => { panel.hidden = !on; moreBtnF.setAttribute("aria-expanded", String(on)); moreG.setAttribute("aria-expanded", String(on)); };
     moreBtnF.addEventListener("click", () => showPanel(panel.hidden));
     moreG.addEventListener("click", () => showPanel(true));
@@ -223,9 +245,24 @@
     function meta(s, count) {
       // Short on purpose: artist and year, then only what helps pick (duet, sung here).
       const bits = [s.artist || s.a, s.year || s.y].filter(Boolean);
+      if (s.len) bits.push(Math.floor(s.len / 60) + ":" + String(s.len % 60).padStart(2, "0"));
       if (s.duo) bits.push("👯 Duet");
       if (count) bits.push("🎤 " + count + "×");
       return bits.join(" · ");
+    }
+
+    // ▶ a 30-second preview of the backing track (from the song list's own preview links). One plays at a time.
+    let audio = null, playing = null;
+    function playButton(s) {
+      const b = el("button", "rm play", playing === s.preview ? "⏸" : "▶"); b.type = "button";
+      b.setAttribute("aria-label", "Hear a preview of “" + s.title + "”");
+      b.addEventListener("click", () => {
+        if (!audio) { audio = new Audio(); audio.preload = "none"; audio.addEventListener("ended", () => { playing = null; renderResults(); }); }
+        if (playing === s.preview) { audio.pause(); playing = null; }
+        else { audio.src = s.preview; audio.play().catch(() => { playing = null; renderResults(); }); playing = s.preview; }
+        renderResults();
+      });
+      return b;
     }
 
     function addButton(s) {
@@ -257,7 +294,9 @@
       (carousel ? results.slice(10) : results).forEach((s) => {
         const li = el("li");
         const m = el("span", "sub-t", meta(s, sung(s)));
-        li.append(el("span", "main-t", s.title), addButton(s), m);
+        let btns = addButton(s);
+        if (s.preview) { btns = el("div", "acts"); btns.append(playButton(s), addButton(s)); }
+        li.append(el("span", "main-t", s.title), btns, m);
         if (window.OkeArt) OkeArt.row(li, s);
         ol.append(li);
       });
@@ -339,6 +378,7 @@
         const d = await r.json();
         if (mySeq !== ctrl) return;
         ready = d.ready; total = d.count;
+        if ("facets" in d) applyFacets(d.facets);
         if (!d.ready) {
           results = localSearch(q).filter((s) => !f.duo || s.duo); more = false;
           note.textContent = results.length ? "The full song list isn’t loaded yet, so these are songs sung here." :

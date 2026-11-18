@@ -4,14 +4,14 @@ import { ensureVoiceTables } from "./voice_import.js";
 
 // Search the karaoke app's song catalog:
 //   GET /api/catalog?q=<words>&duo=1&hits=1&genre=<style>&lang=<language>&decade=<1980>&voice=m|f|mix&sort=pop|new|recent|old&page=<n>
-//   -> {ready, songs: [{id, title, artist, year, duo, explicit, styles}], more, count, updated[, voice: {done, total}]}
+//   -> {ready, songs: [{id, title, artist, year, duo, explicit, styles[, len, preview]}], more, count, updated, facets[, voice: {done, total}]}
 // voice filters on the singer (male / female / guy + girl duet), looked up on MusicBrainz by the cron
 // (voice_import.js); voice.done/total says how many artists have been looked up so far.
 //
-// The catalog is the karaoke app's own published song list (CSV), loaded into the D1 full-text table
-// `catalog` once a week by the Worker's cron (catalog_import.js). rowid is the karaoke app's song id, the same id as
-// plays.song_id. Results are ordered by the karaoke app's popularity rank and cached at the edge, so a
-// bar full of phones searching costs few D1 reads.
+// The catalog is Karaoke Version's affiliate song list, loaded into the D1 full-text table `catalog` once a
+// week by the Worker's cron (catalog_import.js). For songs sung at our bars, rowid is the same id as
+// plays.song_id. Results are ordered by popularity rank and cached at the edge, so a bar full of phones
+// searching costs few D1 reads.
 //
 // Read only. The search words are turned into a quoted FTS prefix query, so visitors can't send
 // FTS syntax, let alone SQL.
@@ -118,7 +118,7 @@ export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
     if (cq.fastSql && (await env.DB.prepare("SELECT 1 FROM catalog_order LIMIT 1").first().catch(() => null))) main = env.DB.prepare(cq.fastSql).bind(...cq.fastBind);
     const [found, meta, vc] = await env.DB.batch([
       main,
-      env.DB.prepare("SELECT k, v FROM catalog_meta WHERE k IN ('count', 'updated')"),
+      env.DB.prepare("SELECT k, v FROM catalog_meta WHERE k IN ('count', 'updated', 'source', 'facets')"),
       ...(cq.voice ? [env.DB.prepare("SELECT count(*) AS total, count(voice) AS done FROM artist_voice")] : []),
     ]);
     const m = Object.fromEntries(meta.results.map((r) => [r.k, r.v]));
@@ -127,12 +127,25 @@ export async function handleCatalog(req, env, ctx, venue = DEFAULT_VENUE) {
       duo: Number(r.duo) === 1, explicit: Number(r.explicit) === 1, styles: r.styles || "",
     }));
     const total = sb.source === "mine" ? sb.count : sb.source === "both" ? (Number(m.count) || 0) + sb.count : Number(m.count) || 0;
-    const body = { ready: total > 0, source: sb.source, songs, more: found.results.length > PAGE && cq.page < MAX_PAGE, count: total, updated: m.updated || null };
+    // facets: which filters have data, when the song list came without years, genres or languages
+    // (catalog_import.js) and those are still being filled in from open data (details_import.js).
+    // null = the old list, which had them all.
+    let facets = null;
+    if (m.source === "kv") { try { facets = JSON.parse(m.facets || "null"); } catch (e) {} facets = facets || { genres: [], years: false, langs: [] }; }
+    // Song length (seconds) and a 30-second preview, where known (details_import.js song_extra).
+    if (songs.length) {
+      const ids = songs.map((x) => x.id).filter((id) => Number.isFinite(id));
+      const ex = ids.length ? await env.DB.prepare("SELECT id, preview, len FROM song_extra WHERE id IN (" + ids.map(() => "?").join(",") + ")").bind(...ids).all().catch(() => null) : null;
+      const byId = new Map(((ex && ex.results) || []).map((r) => [Number(r.id), r]));
+      songs.forEach((x) => { const e = byId.get(x.id); if (e) { if (e.len) x.len = Number(e.len); if (e.preview) x.preview = "https://www.karaoke-version.com/preview/" + Number(e.preview) + "/"; } });
+    }
+    const body = { ready: total > 0, source: sb.source, songs, more: found.results.length > PAGE && cq.page < MAX_PAGE, count: total, updated: m.updated || null, facets };
     if (vc) body.voice = { done: Number(vc.results[0].done) || 0, total: Number(vc.results[0].total) || 0 };
     // The list changes at most once a week, so results can be cached for hours. Voice results grow
     // while the artists are still being looked up, so those are cached for 10 minutes until it's done.
     const voiceBusy = body.voice && body.voice.done < body.voice.total;
-    res = json(body, !body.ready ? 60 : voiceBusy ? 600 : 6 * 3600);
+    // While years and genres are still being filled in (facets), an hour.
+    res = json(body, !body.ready ? 60 : voiceBusy ? 600 : facets ? 3600 : 6 * 3600);
   } catch (e) {
     // No catalog table yet: the first import hasn't finished. The page falls back to songs sung here.
     res = json({ ready: false, songs: [], more: false, count: 0, updated: null }, 60);

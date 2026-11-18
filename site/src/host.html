@@ -295,6 +295,8 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   if (window.OKE_VENUE) document.getElementById("venue-name").textContent = "📍 " + window.OKE_VENUE.name;
 (function () {
   const $ = (id) => document.getElementById(id);
+  // The host's Recisio affiliate ID: Karaoke Version buy links earn a commission (affiliate.recisio.com).
+  const KV_AFF = "1507";
   // One saved key per bar, so a host of two bars doesn't overwrite one key with the other.
   const SLUG = (window.OKE_VENUE && window.OKE_VENUE.slug) || "wbl", KEY = "okenight-host-key:" + SLUG, SEEN = "okenight-host-seen";
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
@@ -518,9 +520,9 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       [["✅ Added", "added"], ["❌ Not available", "unavailable"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: st }); row.append(b); });
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => { if (confirm("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
       row.append(rm);
-      // Where to get it: a licensed karaoke store, and official karaoke channels on YouTube.
+      // Where to get it: a licensed karaoke store (an affiliate link, KV_AFF), and official karaoke channels on YouTube.
       const q = (x.title + " " + (x.artist || "")).trim(), links = el("div", "row req-buy");
-      [["🛒 Karaoke Version", "https://www.google.com/search?q=" + encodeURIComponent("site:karaoke-version.com " + q)],
+      [["🛒 Karaoke Version", "https://www.karaoke-version.com/afflink.html?" + new URLSearchParams({ aff: KV_AFF, action: "redirect", part: "karaoke", artist: x.artist || "", song: x.title })],
        ["▶️ YouTube", "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " karaoke")]].forEach(([t, href]) => {
         const l = el("a", "ghost small btn-link", t); l.href = href; l.target = "_blank"; l.rel = "noopener"; links.append(l); });
       li.append(row, links); rl.append(li); });
