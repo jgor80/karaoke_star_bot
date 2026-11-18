@@ -26,7 +26,7 @@ export const KV_ID_BASE = 3e9;  // ids of songs that only come from the file (ho
 const UA = "OkeNight/1.0 (affiliate catalog import; okenight.com)";
 const REFRESH_MS = 7 * 86400 * 1000;
 const RETRY_MS = 3600 * 1000;
-const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
+export const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
 const MIN_SONGS = 10000;     // a broken download must never wipe the catalog
 const VERSION = "3";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
 
