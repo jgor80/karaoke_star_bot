@@ -111,11 +111,12 @@
       return { row, btns, k };
     };
     const genreName = (g) => GENRE_LABEL[g] || g;
+    // One row up front: a Filters button, then genres. Eras, voices, duets, language and sort sit behind Filters.
     const genres = pills("genres", FEATURED.map(([g, e], i) => [g, e + " " + genreName(g), (i * 37) % 360]), "genre", "Genre");
-    const moreG = el("button", "sb-pill more-pill", "＋ More genres"); moreG.type = "button"; moreG.setAttribute("aria-expanded", "false");
+    const moreG = el("button", "sb-pill more-pill", "＋ More"); moreG.type = "button"; moreG.setAttribute("aria-expanded", "false");
     genres.row.append(moreG);
-    const eras = pills("eras", DECADES.map((d) => [String(d), d === 1900 ? "Oldies" : d >= 2000 ? d + "s" : "’" + String(d).slice(2) + "s", null]), "decade", "Era");
-    const quick = el("div", "pills quick");
+    const eras = pills("wrap eras", DECADES.map((d) => [String(d), d === 1900 ? "Oldies" : d >= 2000 ? d + "s" : "’" + String(d).slice(2) + "s", null]), "decade", "Era");
+    const quick = el("div", "pills wrap quick");
     const quickToggle = (text, k) => {
       const b = el("button", "sb-pill", text); b.type = "button";
       b.addEventListener("click", () => { f[k] = !f[k]; sync(); filtersChanged(); });
@@ -129,15 +130,16 @@
       quick.append(b); return b;
     });
     const hitsBtn = quickToggle("🔥 Top 1,000", "hits");
-    const moreBtnF = el("button", "sb-pill", "⚙️ More"); moreBtnF.type = "button"; moreBtnF.setAttribute("aria-expanded", "false");
+    const moreBtnF = el("button", "sb-pill filt-pill", "🎛️ Filters"); moreBtnF.type = "button"; moreBtnF.setAttribute("aria-expanded", "false");
     const clearF = el("button", "sb-pill clear-pill", "✕ Clear"); clearF.type = "button"; clearF.hidden = true;
-    quick.append(moreBtnF, clearF);
-    // "More": every other genre, language and sort, as wrapping pills.
+    genres.row.prepend(moreBtnF, clearF);
+    // Filters: era, voice, every other genre, language and sort, as wrapping pills.
     const panel = el("div", "cat-more"); panel.hidden = true;
     const otherG = pills("wrap", GENRES.filter((g) => !FEATURED.some(([x]) => x === g)).map((g) => [g, genreName(g), null]), "genre", "More genres");
     const langs = pills("wrap", LANGS.map((l) => [l, l, null]), "lang", "Language");
     const sorts = pills("wrap", SORT_OPTS.map(([v, t]) => [v, t, null]), "sort", "Sort");
-    panel.append(el("div", "me-kicker", "More genres"), otherG.row, el("div", "me-kicker", "Language"), langs.row, el("div", "me-kicker", "Sort"), sorts.row);
+    const done = el("button", "act", "Show songs"); done.type = "button"; done.addEventListener("click", () => showPanel(false));
+    panel.append(el("div", "fl-h", "Era"), eras.row, el("div", "fl-h", "Voice"), quick, el("div", "fl-h", "More genres"), otherG.row, el("div", "fl-h", "Language"), langs.row, el("div", "fl-h", "Sort"), sorts.row, done);
     const showPanel = (on) => { panel.hidden = !on; moreBtnF.setAttribute("aria-expanded", String(on)); moreG.setAttribute("aria-expanded", String(on)); };
     moreBtnF.addEventListener("click", () => showPanel(panel.hidden));
     moreG.addEventListener("click", () => showPanel(true));
@@ -146,23 +148,26 @@
       if (!f.sort) f.sort = "pop"; // tapping the lit sort pill goes back to the default
       groups.forEach((g) => g.btns.forEach((b) => b.setAttribute("aria-pressed", String(f[g.k] === b.dataset.v && !(g.k === "sort" && f.sort === "pop")))));
       duoBtn.setAttribute("aria-pressed", String(f.duo)); voiceBtns.forEach((b) => b.setAttribute("aria-pressed", String(f.voice === b.dataset.v))); hitsBtn.setAttribute("aria-pressed", String(f.hits));
-      moreBtnF.classList.toggle("dot", !!(f.lang || f.sort !== "pop" || (f.genre && !FEATURED.some(([x]) => x === f.genre))));
+      moreBtnF.classList.toggle("dot", !!(f.lang || f.decade || f.duo || f.hits || f.voice || f.sort !== "pop" || (f.genre && !FEATURED.some(([x]) => x === f.genre))));
       clearF.hidden = !filtersOn();
     }
     function filtersOn() { return f.duo || f.hits || f.voice || f.genre || f.decade || f.lang || f.sort !== "pop"; }
     function filtersChanged() { search(false); }
     clearF.addEventListener("click", () => { Object.assign(f, { duo: false, hits: false, voice: "", genre: "", decade: "", lang: "", sort: "pop" }); sync(); filtersChanged(); });
     sync();
-    const filters = el("div", "cat-filters"); filters.append(scroller(genres.row), scroller(eras.row), scroller(quick), panel);
+    const filters = el("div", "cat-filters"); filters.append(scroller(genres.row), panel);
     const note = el("p", "muted small cat-note"); note.setAttribute("role", "status");
     // With no search words, the top 10 show as a swipeable row of album covers above the list.
     const topWrap = el("div", "cat-top-wrap"); topWrap.hidden = true;
     const topH = el("h2", "cat-top-h"), top = el("ol", "cat-top");
     topWrap.append(topH, top);
     const ol = el("ol", "list songs");
+    const listH = el("h2", "cat-list-h", "More popular songs");
     const moreBtn = el("button", "act ghost more", "Show more"); moreBtn.type = "button"; moreBtn.hidden = true;
-    find.append(sw, filters, note, topWrap, ol, moreBtn, requestBox());
-    if (window.OkeArt) find.append(OkeArt.credit());
+    // opts.shelf: song ideas (picker.js), shown while browsing, hidden while searching or filtering.
+    find.append(sw, filters, note, topWrap);
+    if (opts.shelf) find.append(opts.shelf);
+    find.append(listH, ol, moreBtn, requestBox());
 
     // ---- my list ----
     mine.replaceChildren();
@@ -176,11 +181,13 @@
     const empty = el("button", "find-me");
     empty.type = "button";
     empty.append(el("span", "fm-ic", "📝"));
-    const et = el("span"); et.append(el("b", null, "Nothing on your list yet"), el("span", "small", "Search for songs and tap ＋ to save the ones you want to sing."));
+    const et = el("span"); et.append(el("b", null, "Your list is empty"), el("span", "small", "Tap ＋ on any song to save it here."));
     empty.append(et); empty.firstChild.setAttribute("aria-hidden", "true");
     empty.addEventListener("click", () => { if (opts.onPick) opts.onPick(); input.focus(); });
     const todoSec = el("div", "sec"), doneSec = el("div", "sec");
-    todoSec.append(el("h2", null, "Songs I want to sing"), mineNote, empty, mineTodo, btns);
+    const how = el("button", "act ghost", "✍️ How to sign up"); how.type = "button"; how.dataset.signup = "";
+    btns.append(how);
+    todoSec.append(el("h2", null, "Songs I want to sing"), empty, mineTodo, btns, mineNote);
     doneSec.append(doneH, mineDone);
     mine.append(todoSec, doneSec);
 
@@ -214,11 +221,10 @@
     }
 
     function meta(s, count) {
+      // Short on purpose: artist and year, then only what helps pick (duet, sung here).
       const bits = [s.artist || s.a, s.year || s.y].filter(Boolean);
-      if (s.styles) bits.push(s.styles.split(",").filter((x) => x !== "Duet").slice(0, 2).map((x) => GENRE_LABEL[x] || x).join("/"));
-      if (s.duo) bits.push("Duet");
-      if (s.explicit) bits.push("Explicit");
-      if (count) bits.push("sung here " + count + "×");
+      if (s.duo) bits.push("👯 Duet");
+      if (count) bits.push("🎤 " + count + "×");
       return bits.join(" · ");
     }
 
@@ -256,6 +262,10 @@
         ol.append(li);
       });
       ol.hidden = !ol.children.length;
+      const browsing = !q && !filtersOn();
+      listH.hidden = !browsing || ol.hidden;
+      if (opts.shelf) opts.shelf.hidden = !browsing;
+      note.hidden = browsing && ready !== false && results.length > 0;
       moreBtn.hidden = !more;
     }
     // "Top 10 Country", "Top 10 ’90s duets", "Top 10 right now"
@@ -291,9 +301,9 @@
       mineTodo.replaceChildren(...todo.map((i) => row(i, false)));
       mineDone.replaceChildren(...done.map((i) => row(i, true)));
       mineTodo.hidden = !todo.length; empty.hidden = !!list.length;
-      btns.hidden = !todo.length; clearDone.hidden = !done.length;
+      shareBtn.hidden = !todo.length; clearDone.hidden = !done.length;
       doneSec.hidden = !done.length;
-      mineNote.textContent = list.length ? "Saved on this phone. Songs tick off by themselves when you sing them, if you picked your name with “That’s me”." : "";
+      mineNote.textContent = list.length ? "Saved on this phone. Songs tick off when you sing them." : "";
       mineNote.hidden = !list.length;
       if (opts.count) opts.count.textContent = todo.length ? String(todo.length) : "";
     }

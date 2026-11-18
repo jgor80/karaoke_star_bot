@@ -41,12 +41,9 @@
   function mount(opts) {
     const box = opts.box;
     box.replaceChildren();
-    const head = el("div", "pk-head");
-    const h = el("h2", null, "🎲 What should I sing?");
-    const again = el("button", "act ghost pk-again", "Shuffle"); again.type = "button";
-    head.append(h, again);
+    const again = el("button", "see-all", "🎲 Shuffle"); again.type = "button";
     const body = el("div", "pk-body");
-    box.append(head, body);
+    box.append(body);
     let catalogIdeas = [], catalogFor = "";
 
     async function loadCatalogIdeas(artist) {
@@ -62,34 +59,34 @@
       } catch (e) { catalogIdeas = []; }
     }
 
-    function row(s, why) {
-      const li = el("li");
+    // A cover card: the cover with a ＋ in the corner, then title, artist and why it's suggested.
+    function card(s, why) {
+      const li = el("li", "card-s");
       const have = readList().some((x) => tkey(x.t) === tkey(s.title) && akey(x.a) === akey(s.artist));
-      const main = el("span", "main-t", "“" + s.title + "”");
-      const sub = el("span", "sub-t", [s.artist, why].filter(Boolean).join(" · "));
-      const add = el("button", "dr-vote" + (have ? " on" : ""), have ? "✓ On my list" : "＋ My list"); add.type = "button";
-      add.disabled = have;
+      const add = el("button", "add top-add" + (have ? " on" : ""), have ? "✓" : "＋"); add.type = "button";
+      add.disabled = have; add.setAttribute("aria-label", have ? "“" + s.title + "” is on my list" : "Add “" + s.title + "” to my list");
       add.addEventListener("click", () => {
         const list = readList();
         list.push({ id: s.id || null, t: s.title, a: s.artist || "", y: s.year || null, duo: !!s.duo, at: Date.now(), done: 0 });
         try { localStorage.setItem(STORE, JSON.stringify(list)); } catch (e) {}
-        add.textContent = "✓ On my list"; add.classList.add("on"); add.disabled = true;
+        add.textContent = "✓"; add.classList.add("on"); add.disabled = true;
         if (opts.onAdded) opts.onAdded();
       });
-      li.append(main, add, sub);
-      if (window.OkeArt) OkeArt.row(li, s);
+      const fig = el("div", "cs-fig"); fig.append(window.OkeArt ? OkeArt.el(s, { big: true }) : el("span", "art"), add);
+      li.append(fig, el("span", "cs-t", s.title), el("span", "cs-s", s.artist || ""));
+      if (why) li.append(el("span", "cs-m", why));
       return li;
     }
-    function group(title, items) {
+    function group(title, items, extra) {
       if (!items.length) return;
-      const g = el("div", "pk-group"); g.append(el("div", "me-kicker", title));
-      const ol = el("ol", "list"); items.forEach(([s, why]) => ol.append(row(s, why))); g.append(ol); body.append(g);
+      const g = el("div", "sec pk-group"); const h = el("h2"); h.append(el("span", null, title)); if (extra) h.append(extra); g.append(h);
+      const ol = el("ol", "shelf"); items.forEach(([s, why]) => ol.append(card(s, why))); g.append(ol); body.append(g);
     }
 
     function render() {
       const plays = opts.getPlays() || [];
       body.replaceChildren();
-      if (!plays.length) { body.append(el("p", "muted small", "Ideas show up once a few songs have been sung here.")); return; }
+      if (!plays.length) return;
       const tonight = plays[plays.length - 1].night;
       const stats = songStats(plays, opts.getReax(), opts.getCrowd());
       const me = opts.getMe ? opts.getMe() : null;
@@ -98,21 +95,20 @@
 
       // Crowd favorites: pick 3 from the top 12, so Shuffle gives new ideas.
       const top = fresh.slice().sort((a, b) => b.rank - a.rank).slice(0, 12);
-      const why = (e) => e.avg != null && e.avg >= 6 ? "👏 " + e.avg.toFixed(1) + "/10 applause here" : e.hypePer >= 3 ? "🔥 big reactions here" : "sung by " + e.singers.size + (e.singers.size === 1 ? " person" : " people") + " here";
-      group("Crowd favorites here", shuffle(top.slice()).slice(0, 3).map((e) => [e, why(e)]));
+      const why = (e) => e.avg != null && e.avg >= 6 ? "👏 " + e.avg.toFixed(1) + "/10" : e.hypePer >= 3 ? "🔥 big reactions" : "🎤 " + e.singers.size + " singer" + (e.singers.size === 1 ? "" : "s");
+      group("Crowd favorites here", shuffle(top.slice()).slice(0, 8).map((e) => [e, why(e)]), again);
 
       if (me && window.KaraokeFun) {
         const bands = KaraokeFun.favoriteBands(me.rows, 3).map((b) => akey(b.name));
-        const yours = fresh.filter((e) => bands.includes(akey(e.artist))).sort((a, b) => b.rank - a.rank).slice(0, 2).map((e) => [e, "you love " + e.artist]);
+        const yours = fresh.filter((e) => bands.includes(akey(e.artist))).sort((a, b) => b.rank - a.rank).slice(0, 6).map((e) => [e, "💜 you love them"]);
         const best = stats.filter((e) => mineK.has(e.k) && e.last !== tonight).sort((a, b) => b.rank - a.rank)[0];
-        if (best) yours.push([best, "your encore" + (best.avg != null ? " · 👏 " + best.avg.toFixed(1) + "/10" : "")]);
+        if (best) yours.unshift([best, "🔁 your encore"]);
         group("For " + me.name, yours);
         const fav = KaraokeFun.favoriteBands(me.rows, 1)[0];
         loadCatalogIdeas(fav ? fav.name : "");
       } else loadCatalogIdeas("");
-      const fromList = shuffle(catalogIdeas.slice()).slice(0, 3).map((s) => [s, "never sung here"]);
-      group(me ? "New from bands you like" : "Popular songs nobody’s sung here yet", fromList);
-      if (!me) body.append(el("p", "muted small", "Tip: find your name on the Singers tab and tap “That’s me” for ideas picked for you."));
+      const fromList = shuffle(catalogIdeas.slice()).slice(0, 8).map((s) => [s, "✨ never sung here"]);
+      group(me ? "New from bands you like" : "Nobody’s sung these here yet", fromList);
     }
     again.addEventListener("click", () => { catalogFor = ""; render(); });
     // The page refreshes every 10 seconds during karaoke: only redraw (and reshuffle) when something changed.

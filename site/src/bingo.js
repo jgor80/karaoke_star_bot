@@ -206,12 +206,13 @@
         grid.append(sq);
       });
       root.append(grid);
-      // A word wider than its square ("Margaritaville") shrinks that square's text a little, but never below
-      // 10px (unreadable in a dark bar): past that the word is hyphenated onto two lines instead (squares grow taller).
+      // A word wider than its square ("Margaritaville") shrinks that square's text a little (2-3px at most, never
+      // below 12px, so it stays readable in a dark bar): past that the word breaks onto two lines instead (squares grow taller).
       // The card can be drawn while its tab is hidden, so fit whenever the grid gets (or changes) a size.
       const fit = () => { if (!grid.clientWidth) return; grid.querySelectorAll(".kb-t").forEach((t) => {
         t.style.fontSize = ""; t.classList.remove("kb-break"); let size = parseFloat(getComputedStyle(t).fontSize), n = 0;
-        while (t.scrollWidth > t.clientWidth + 1 && size - 0.5 >= 10 && n++ < 24) { size -= 0.5; t.style.fontSize = size + "px"; }
+        const floor = Math.max(12, size - 2.5);
+        while (t.scrollWidth > t.clientWidth + 1 && size - 0.5 >= floor && n++ < 24) { size -= 0.5; t.style.fontSize = size + "px"; }
         if (t.scrollWidth > t.clientWidth + 1) t.classList.add("kb-break");
       }); };
       if (window.ResizeObserver) { let w = 0; new ResizeObserver(() => { if (grid.clientWidth !== w) { w = grid.clientWidth; fit(); } }).observe(grid); }
