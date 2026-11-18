@@ -8,6 +8,7 @@
 import { cfgKey, venueConfig } from "./venues.js";
 import { scheduleStatus } from "./schedule.js";
 import { withCacheControl } from "./net.js";
+import { hostPush } from "./push_api.js";
 
 const json = (body, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": cache } });
@@ -132,7 +133,7 @@ export async function sendReports(env, venue, nowTs = Math.floor(Date.now() / 10
   if (!claim.meta.changes) return;
   const link = "https://okenight.com/" + venue.slug + "/report?night=" + last.night;
   const day = new Date(last.night + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
-  let ok = false;
+  let ok = await hostPush(env, venue, venue.name + " karaoke report", Number(last.n) + (Number(last.n) === 1 ? " song " : " songs ") + day + ". Tap for singers, first-timers, busiest hour and how it compares.", "report?night=" + last.night);
   for (const t of topics) {
     ok = (await fetch("https://ntfy.sh/" + t, { method: "POST", body: Number(last.n) + (Number(last.n) === 1 ? " song " : " songs ") + day + ". Tap for singers, first-timers, busiest hour and how it compares.",
       headers: { Title: venue.name + " karaoke report", Tags: "bar_chart", Click: link } }).then((r) => r.ok).catch(() => false)) || ok;

@@ -1,6 +1,9 @@
-// Shared by the app's two pages (index.html, venue.html): the bar list and karaoke-night reminders.
+// Shared by the app's two pages (index.html, venue.html): the bar list, karaoke-night reminders and push.
 // Reminders are local notifications scheduled on the phone from the bar's next start time, and are
 // rescheduled every time the app opens, so a night the host cancels drops off once the app has seen it.
+// Push (Firebase, see site/src/push_api.js) is turned on with the same switch: the phone's push token is
+// registered with the bar on okenight.com ("karaoke is live", "your request is in"), and a host who enters
+// the bar's host key also gets the host alerts. The token is registered again every time the app opens.
 (function () {
   "use strict";
   const SITE = "https://okenight.com";
@@ -21,6 +24,67 @@
         .formatToParts(new Date(ms)).forEach((x) => { p[x.type] = x.value; });
       return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - Math.floor(ms / 60e3) * 60e3;
     } catch (e) { return 0; }
+  }
+
+  // ---------- push ----------
+  const Push = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseMessaging) || null;
+  const platform = () => { try { return window.Capacitor.getPlatform(); } catch (e) { return ""; } };
+  // The same random phone ID the singer page uses (localStorage "oke-device"), so "your request is in" finds this phone.
+  function deviceId() {
+    let d = null; try { d = localStorage.getItem("oke-device"); } catch (e) {}
+    if (!/^[a-f0-9]{32}$/.test(d || "")) {
+      const a = new Uint8Array(16); crypto.getRandomValues(a); d = [...a].map((x) => x.toString(16).padStart(2, "0")).join("");
+      try { localStorage.setItem("oke-device", d); } catch (e) {}
+    }
+    return d;
+  }
+  let pushReady = false;
+  function pushSetup() {
+    const F = Push(); if (!F || pushReady) return; pushReady = true;
+    if (platform() === "android") {
+      F.createChannel({ id: "default", name: "Karaoke nights", description: "Karaoke is live, your song requests", importance: 4 }).catch(() => {});
+      F.createChannel({ id: "host", name: "Host alerts", description: "Only for the host: secret songs, requests, the laptop, the line", importance: 5 }).catch(() => {});
+    }
+    // A new token (Firebase rotates them now and then): register it again.
+    F.addListener("tokenReceived", () => { if (store.get("oke_app_remind")) pushRegister().catch(() => {}); });
+    // Tapped: host alerts open the bar's host page in the browser, everything else opens the bar in the app.
+    F.addListener("notificationActionPerformed", (ev) => {
+      const d = (ev && ev.notification && ev.notification.data) || {};
+      const slug = /^[a-z0-9-]+$/.test(d.venue || "") ? d.venue : store.get("oke_app_home");
+      const path = String(d.path || "");
+      if (slug && path && /^[a-z0-9?=&_-]+$/i.test(path)) { location.href = SITE + "/" + slug + "/" + path; return; }
+      const v = (store.get("oke_app_venues") || []).find((x) => x.slug === slug);
+      if (v) { store.set("oke_app_venue", v); location.href = "venue.html"; }
+    });
+  }
+  // Register this phone for push with the home bar. hostKey (optional) turns on the host alerts too.
+  // Returns {ok, host} or {error: "app" | "bar" | "perm" | "token" | "net" | <the site's message>}.
+  async function pushRegister(hostKey) {
+    const F = Push(); if (!F) return { error: "app" };
+    pushSetup();
+    const home = store.get("oke_app_home");
+    if (!home || home === "demo") return { error: "bar" };
+    let p = { receive: "prompt" };
+    try { p = await F.checkPermissions(); if (p.receive !== "granted") p = await F.requestPermissions(); } catch (e) {}
+    if (p.receive !== "granted") return { error: "perm" };
+    let token = "";
+    try { token = (await F.getToken()).token || ""; } catch (e) {}
+    if (!token) return { error: "token" };
+    const body = { token, platform: platform(), dev: deviceId() };
+    if (hostKey) body.host_key = hostKey; else body.host = "keep";
+    try {
+      const r = await fetch(SITE + "/" + home + "/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return { error: j.error || "net" };
+      store.set("oke_app_push", { token, home, host: !!j.host });
+      return { ok: true, host: !!j.host };
+    } catch (e) { return { error: "net" }; }
+  }
+  // Switch turned off: the site forgets this phone's token.
+  async function pushOff() {
+    const saved = store.get("oke_app_push"); store.set("oke_app_push", null);
+    if (!saved || !saved.token) return;
+    try { await fetch(SITE + "/" + saved.home + "/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: saved.token, on: false }) }); } catch (e) {}
   }
 
   async function cancel() { const N = Notes(); if (N) try { await N.cancel({ notifications: NOTE_IDS.map((id) => ({ id })) }); } catch (e) {} }
@@ -59,8 +123,10 @@
     } catch (e) {}
     if (list) store.set("oke_app_venues", list);
     await schedule();
+    pushSetup();
+    if (list && store.get("oke_app_remind")) pushRegister().catch(() => {}); // fresh token, and follows a change of bar
     return list;
   }
 
-  window.OkeApp = { SITE, store, Notes, schedule, cancel, refresh, test };
+  window.OkeApp = { SITE, store, Notes, schedule, cancel, refresh, test, Push, pushRegister, pushOff };
 })();

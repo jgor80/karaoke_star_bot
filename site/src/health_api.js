@@ -10,6 +10,7 @@
 // watch_ts/watch_version and the crowd mic's state, so /host can tell "a test ran" apart from "the live sync is running".
 import { scheduleStatus, localStampToUnix } from "./schedule.js";
 import { cfgKey, venueConfig, DEFAULT_SLUG } from "./venues.js";
+import { hostPush } from "./push_api.js";
 
 // Keep in step with HEALTH_TABLE / HEALTH_ADD in sync/karaoke_sync.py.
 const HEALTH_TABLE = "CREATE TABLE IF NOT EXISTS sync_health (venue text primary key, ts integer not null, version text, karafun integer, device text, watch_ts integer, watch_version text, mic text, mic_ts integer)";
@@ -71,10 +72,12 @@ export async function syncHealth(env, venue) {
   } catch (e) { return { sync_health: null }; }
 }
 
-export async function push(topic, title, body, venue, priority = "high", tags = "computer,warning") {
+// The app on the host's phone (push_api.js), and the ntfy topic as a backup. True if either took it.
+export async function push(env, topic, title, body, venue, priority = "high", tags = "computer,warning") {
+  const app = await hostPush(env, venue, title, body);
   const r = await fetch("https://ntfy.sh/" + topic, { method: "POST", body,
-    headers: { Title: title, Priority: priority, Tags: tags, Click: "https://okenight.com/" + venue.slug + "/host" } });
-  return r.ok;
+    headers: { Title: title, Priority: priority, Tags: tags, Click: "https://okenight.com/" + venue.slug + "/host" } }).catch(() => null);
+  return app || !!(r && r.ok);
 }
 
 // Send one alert of `kind` per session: host_config "sync_alert_<kind>" holds the session start it was sent for.
@@ -117,12 +120,12 @@ export async function checkSyncAlerts(env, venue, nowTs = Math.floor(Date.now() 
   const when = new Date(start * 1000).toLocaleTimeString("en-US", { timeZone: venue.tz, hour: "numeric", minute: "2-digit" }).replace(":00", "");
   if (age > STALE_S) {
     const last = ts ? "Last check-in " + Math.round(age / 60) + " min ago." : "It has never checked in.";
-    await once(env, venue, "offline", start, () => push(cfg.ntfy_topic, "Karaoke laptop is offline",
+    await once(env, venue, "offline", start, () => push(env, cfg.ntfy_topic, "Karaoke laptop is offline",
       (pre ? "Karaoke starts at " + when + ". " : "") + "The laptop isn’t syncing, so phones and the TV won’t update. " + last + " Check it’s on, awake and on wifi.", venue));
     return;
   }
   if (await sentFor(env, venue, "offline", start)) {
-    await once(env, venue, "back", start, () => push(cfg.ntfy_topic, "Karaoke laptop is back", "The laptop is syncing again. 👍", venue, "default"));
+    await once(env, venue, "back", start, () => push(env, cfg.ntfy_topic, "Karaoke laptop is back", "The laptop is syncing again. 👍", venue, "default"));
   }
   const kfLead = pre ? st.next_start - nowTs <= 15 * 60 : true;
   // During the night: songs are coming but no crowd-meter levels arrive from the laptop or the /host phone.
@@ -131,12 +134,12 @@ export async function checkSyncAlerts(env, venue, nowTs = Math.floor(Date.now() 
     const lv = await lastLevels(env, venue);
     if (p && Number(p.n) >= 2 && nowTs - Number(p.first) >= MIC_QUIET_S && nowTs - Math.max(lv.laptop, lv.phone) > MIC_QUIET_S) {
       const why = row && row.mic && nowTs - Number(row.watch_ts || 0) < STALE_S ? " The laptop says: " + row.mic + "." : " The laptop’s live sync isn’t reporting, so an old copy may be running: sign out of Windows and back in.";
-      await once(env, venue, "mic", start, () => push(cfg.ntfy_topic, "Crowd meter can’t hear the room",
+      await once(env, venue, "mic", start, () => push(env, cfg.ntfy_topic, "Crowd meter can’t hear the room",
         "Songs are coming in but no applause readings for " + Math.round(MIC_QUIET_S / 60) + " minutes, so songs get no crowd score." + why + " Or open /host on a phone and start its crowd mic.", venue, "default"));
     }
   }
   if (row && Number(row.karafun) === 0 && nowTs - Number(row.ts) < STALE_S && kfLead) {
-    await once(env, venue, "karafun", start, () => push(cfg.ntfy_topic, "Open the karaoke app",
+    await once(env, venue, "karafun", start, () => push(env, cfg.ntfy_topic, "Open the karaoke app",
       "The laptop is online but the karaoke app isn’t open" + (pre ? ", and the night starts at " + when : "") + ". Songs only reach the site while it’s running.", venue));
   }
 }

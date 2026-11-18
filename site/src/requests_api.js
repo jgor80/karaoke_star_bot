@@ -5,12 +5,13 @@
 // hostRequests(env, venue)                            -> open + recently handled requests, for /api/host
 // hostRequestAction(env, body, venue)                 -> {action: "request_done", id, status: "added"|"unavailable"|"open"} | {action: "request_remove", id}
 //
-// Requests only go to the host (the /host page and a push to the host's ntfy topic). Nothing typed here is
+// Requests only go to the host (the /host page, the app on the host's phone and the host's ntfy topic). Nothing typed here is
 // shown to the crowd, so there's nothing to moderate in public. Limits per phone and per network keep it sane.
 import { cleanName } from "./reactions_api.js";
 import { DEFAULT_VENUE, cfgKey, ensureVenueColumn } from "./venues.js";
 import { networkHash } from "./net.js";
 import { okOrigin } from "./origins.js";
+import { hostPush, sendPush } from "./push_api.js";
 
 export const REQ_LIMITS = { perPhone: 5, perIp: 40 }; // per day
 const STATUSES = ["open", "added", "unavailable"];
@@ -110,6 +111,7 @@ export async function handleRequest(req, env, ctx, venue = DEFAULT_VENUE) {
     // At most PUSHES_PER_HOUR request alerts an hour, so a flood of requests can't flood the host's phone.
     const recent = await env.DB.prepare("SELECT count(*) AS n FROM song_requests WHERE venue = ? AND created_at > ?").bind(venue.slug, now - 3600).first();
     if (recent && recent.n > PUSHES_PER_HOUR) return;
+    await hostPush(env, venue, "Song request", "“" + title + "”" + (artist ? " by " + artist : "") + (name ? "\nFrom " + name : ""));
     await fetch("https://ntfy.sh/" + t.v, { method: "POST", body: "“" + title + "”" + (artist ? " by " + artist : "") + (name ? "\nFrom " + name : "") + "\nSee okenight.com/" + venue.slug + "/host",
       headers: { Title: "Song request", Tags: "musical_note" } });
   })().catch(() => {}));
@@ -131,7 +133,14 @@ export async function hostRequestAction(env, body, venue = DEFAULT_VENUE) {
   const id = Number(body.id) || 0;
   if (body.action === "request_done") {
     if (!STATUSES.includes(body.status)) return { error: "bad status" };
+    const was = await env.DB.prepare("SELECT title, artist, status FROM song_requests WHERE id = ? AND venue = ?").bind(id, venue.slug).first();
     await env.DB.prepare("UPDATE song_requests SET status = ?, updated_at = ? WHERE id = ? AND venue = ?").bind(body.status, nowS(), id, venue.slug).run();
+    // Tell the phones that asked for it (app only, by the phone's random ID; no names are used).
+    if (was && was.status !== "added" && body.status === "added") {
+      const { results } = await env.DB.prepare("SELECT device_id FROM song_request_asks WHERE request_id = ?").bind(id).all();
+      await sendPush(env, venue, { to: { devices: results.map((r) => r.device_id) }, kind: "request", title: "Your song request is in 🎶",
+        body: "“" + was.title + "”" + (was.artist ? " by " + was.artist : "") + " is in the song list now. Put your slip in!", path: "" }).catch(() => {});
+    }
   } else if (body.action === "request_remove") {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM song_request_asks WHERE request_id = (SELECT id FROM song_requests WHERE id = ? AND venue = ?)").bind(id, venue.slug),

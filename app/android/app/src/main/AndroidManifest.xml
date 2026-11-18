@@ -20,6 +20,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Push (Firebase): the white mic in the status bar, the pink accent, and the channel for pushes without one. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_okenight" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/oke_pink" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

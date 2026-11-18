@@ -54,6 +54,7 @@ import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
 import { handleStyled, styledMap } from "./styled_api.js";
 import { handleButton } from "./buttons_api.js";
+import { handlePush, pushLive } from "./push_api.js";
 // Installable web app (pwa/): manifest, service worker, offline screen and icons. Text/Data per [[rules]].
 import MANIFEST from "./pwa/manifest.webmanifest";
 import SW from "./pwa/sw.js";
@@ -132,6 +133,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "duet") { await ensureCore(env); return handleDuet(req, env, venue); } // duet finder, see duets_api.js
   if (name === "host") { await ensureCore(env); return handleHost(req, env, venue); }
   if (name === "crowd") { await ensureCore(env); return handleCrowd(req, env, venue); } // the /host phone's crowd meter (host key only)
+  if (name === "push") return handlePush(req, env, venue); // the phone app's push notifications, see push_api.js
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
   if (name === "avatar") { await ensureCore(env); return handleAvatar(req, env, ctx, venue, url); } // singer photos, see avatars_api.js
   if (name === "styled") { await ensureCore(env); return handleStyled(req, env, ctx, venue, url); } // AI rock-star looks of a singer photo, see styled_api.js
@@ -252,6 +254,7 @@ export default {
         await checkSyncAlerts(env, v).catch(() => {}); // host alert if the laptop or karaoke app isn't ready (health_api.js)
         await watchLine(env, v).catch(() => {}); // host alert when the line runs past tonight's end, and last call (line_api.js)
         await sendReports(env, v).catch(() => {}); // the morning-after numbers for the host and bar owner (report_api.js)
+        await pushLive(env, v).catch(() => {}); // "karaoke is live" to the app's phones at the first song (push_api.js)
       }
     })().catch(() => {}));
     // Weekly: refresh the Songbook's song list (no-op unless due, see catalog_import.js).

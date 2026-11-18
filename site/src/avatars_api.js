@@ -28,6 +28,7 @@
 // - Hiding a singer's photo on one phone is done on the phone itself (index.html "Hide photo").
 import { matchKey, erasedSingers } from "./privacy_api.js";
 import { networkHash } from "./net.js";
+import { hostPush } from "./push_api.js";
 import { cfgKey } from "./venues.js";
 import { objectionable } from "./wordfilter.js";
 
@@ -64,6 +65,7 @@ async function approvalOn(env, venue) {
 
 // A push to the host's phone (same ntfy topic as secret songs and requests). Best effort.
 async function tellHost(env, venue, title, body) {
+  await hostPush(env, venue, title, body);
   const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(venue, "ntfy_topic")).first().catch(() => null);
   if (!t || !t.v) return;
   await fetch("https://ntfy.sh/" + t.v, { method: "POST", body: body + "\nSee okenight.com/" + venue.slug + "/host",

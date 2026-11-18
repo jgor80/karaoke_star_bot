@@ -1740,6 +1740,7 @@ html:not(.app) #tip-app-note { display: none; }
       A.store.set("oke_app_remind", true);
       if (!A.store.get("oke_app_home")) A.store.set("oke_app_home", VENUE.slug);
       await A.schedule();
+      if (A.pushRegister) A.pushRegister().catch(() => {}); // "karaoke is live" and "your request is in" pushes too
       b.textContent = "🔔 Reminders on"; note.textContent = "On. You’ll get a notification a few hours before karaoke starts.";
     };
   }

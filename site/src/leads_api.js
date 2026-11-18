@@ -6,6 +6,7 @@
 import { DEFAULT_VENUE, cfgKey } from "./venues.js";
 import { cleanText } from "./requests_api.js";
 import { networkHash } from "./net.js";
+import { hostPush } from "./push_api.js";
 
 const PER_IP_PER_DAY = 5;
 const SCHEMA = [
@@ -46,6 +47,7 @@ export async function handleLead(req, env, ctx) {
   if (!ins.meta.changes) return json({ error: "Thanks, we already have a few messages from you today. We’ll be in touch!" }, 429);
 
   ctx.waitUntil((async () => {
+    await hostPush(env, DEFAULT_VENUE, "New bar interested in Oke Night", lead.bar + (lead.city ? " (" + lead.city + ")" : "") + ". Details on the host page.");
     const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(DEFAULT_VENUE, "ntfy_topic")).first().catch(() => null);
     if (!t || !t.v) return;
     const body = lead.bar + (lead.city ? " (" + lead.city + ")" : "") + "\nDetails on okenight.com/" + DEFAULT_VENUE.slug + "/host";

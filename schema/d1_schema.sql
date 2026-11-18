@@ -146,3 +146,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS songbook USING fts5(title, artist, k, year UN
 -- (per venue) lists singers who asked to be taken off the site; their plays show "Removed singer NNNN".
 -- A daily cron blanks device_id/ip_hash on reactions, drafts, draft_votes and song_request_asks after
 -- 90 days, and deletes leads after a year.
+
+-- Push to the Oke Night phone app (site/src/push_api.js, created by the Worker itself). token = the phone's
+-- Firebase token; device_id = the singer page's random phone ID (for "your request is in"); host = 1 when the
+-- phone entered the bar's host key (gets the host alerts). Dropped on unsubscribe, when Firebase says the token
+-- is gone, or after 120 days without the app opening.
+CREATE TABLE IF NOT EXISTS push_devices (
+  token text primary key, venue text not null, platform text not null, device_id text,
+  host integer not null default 0, created_at integer not null, updated_at integer not null);
+CREATE INDEX IF NOT EXISTS push_devices_venue ON push_devices (venue, host);
+CREATE INDEX IF NOT EXISTS push_devices_dev ON push_devices (device_id);
