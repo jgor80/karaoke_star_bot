@@ -45,11 +45,11 @@ import { SAMPLE_REPORT } from "./sample_report.js";
 import { handleDuet, duetBoard } from "./duets_api.js";
 import DUETS from "./duets.js";
 import PICKER from "./picker.js";
+import { DEMO_VENUE, handleDemoApi } from "./demo.js"; // okenight.com/demo/: an always-on sample night
 import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
 import { handleButton } from "./buttons_api.js";
-import { DEMO_VENUE, handleDemoApi } from "./demo.js"; // okenight.com/demo/: an always-on sample night
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
