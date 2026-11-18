@@ -21,6 +21,7 @@ import { singerKey } from "./drafts_api.js";
 
 export const RETAIN_DAYS = 90;
 export const LEAD_DAYS = 365;
+export const CROWD_KEEP_DAYS = 45; // raw crowd loudness samples (crowd_api.js), only needed to score each song
 const KEY = "erased_singers";
 const MAX_NAME = 80;
 
@@ -171,6 +172,8 @@ export async function dailyCleanup(env, when = Date.now()) {
     ["UPDATE song_request_asks SET device_id = 'old' || rowid, ip_hash = NULL WHERE created_at < ? AND device_id NOT LIKE 'old%'", cut],
     ["UPDATE duets SET device_id = '', partner_device = NULL, ip_hash = NULL WHERE created_at < ? AND (device_id <> '' OR ip_hash IS NOT NULL OR partner_device IS NOT NULL)", cut],
     ["DELETE FROM leads WHERE created_at < ?", leadCut],
+    // Every day, whether or not any bar had karaoke (scoring alone only runs when there are songs to score).
+    ["DELETE FROM crowd_levels WHERE ts < ?", now - CROWD_KEEP_DAYS * 86400],
     ["UPDATE leads SET ip_hash = NULL WHERE created_at < ? AND ip_hash IS NOT NULL", cut],
     // Song requests stay counted, but the typed "from" names go once a request is 90 days old.
     ["UPDATE song_requests SET names = NULL WHERE updated_at < ? AND names IS NOT NULL", cut],
