@@ -144,7 +144,9 @@ Two mics can feed it. Only loudness numbers (one per second) are sent, never sou
 
 - **The karaoke laptop** (main one). `karaoke_sync.py --watch` reads the laptop's mic while
   karaoke is on (a song in the last 45 minutes, or people in the queue) and closes it after.
-  It needs `python -m pip install sounddevice` (`install_live_sync.bat` does this).
+  It needs `python -m pip install sounddevice` (`install_live_sync.bat` does this, and the live sync
+  installs it by itself if it's missing). Test the mic any time: `python karaoke_sync.py --mic-test`
+  (clap while it prints levels; the installer runs it too).
   Turn off anything that evens out loudness, or loud cheers get squashed:
   - Windows 11: Settings > System > Sound > your mic > **Audio enhancements: Off**, and keep the
     input volume fixed (around 70-80%). Windows 10: Control Panel > Sound > Recording > mic >
@@ -155,6 +157,12 @@ Two mics can feed it. Only loudness numbers (one per second) are sent, never sou
   - To use a USB mic instead of the built-in one, add `"crowd_mic_device": "part of its name"`
     to `karaoke_sync_config.json`. `"crowd_mic": false` turns the meter off.
   - `sync_log.txt` says "crowd meter: listening on ..." when it starts.
+  - `/host` > Karaoke laptop shows "Live sync running" and the crowd mic's state ("Crowd mic live",
+    "ready", or what's wrong). If songs come in but no readings do for 10 minutes, the host gets a push.
+  - Only one live sync runs at a time, and a newly started one stops any older copy. If `/host` says
+    the live sync hasn't reported, an old copy is probably still running (Nov 2026: one from Nov 9 kept
+    syncing songs without the mic for a week because the laptop only slept): run `install_live_sync.bat`
+    again or sign out of Windows and back in.
 - **A phone at the host table** (backup or second spot). Open `/host`, tap
   **Start listening** under "Crowd meter mic" and leave the page open and the phone plugged
   in. The browser's auto gain, noise suppression and echo cancelling are turned off.
