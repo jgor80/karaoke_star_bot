@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#170d1c">
 <title>Oke Night TV</title>
 <meta name="description" content="The latest karaoke night's awards and badges, scrolling on a TV.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/icons/favicon-48.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
@@ -31,6 +31,10 @@ header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-i
   padding: calc(3 * var(--u)) calc(4 * var(--u)) calc(2.4 * var(--u)); border-bottom: 2px solid var(--line); }
 .logo { font-family: var(--f-display); font-size: calc(4.6 * var(--u)); color: var(--hot); line-height: 1; white-space: nowrap; }
 .logo span { color: var(--gold); }
+.logo .word { color: var(--hot); }
+.logo { display: inline-flex; align-items: center; gap: .22em; }
+.logo .mark { width: 1.45em; height: 1.45em; flex: none; }
+
 .title { font-size: calc(5.4 * var(--u)); font-weight: 800; line-height: 1.05; margin-top: calc(1 * var(--u)); overflow-wrap: anywhere; }
 .kicker { font-family: var(--f-mono); font-size: calc(2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: calc(.8 * var(--u)); }
 .kicker.live { color: var(--hot); }
@@ -225,7 +229,7 @@ body.embed .line-tv { display: none !important; }
 <body>
 <header>
   <div>
-    <div class="logo">Oke <span>Night</span></div>
+    <div class="logo"><img class="mark" src="/icons/mark-96.png" alt="" width="48" height="48"><span class="word">Oke <span>Night</span></span></div>
     <div class="title" id="title">Loading the awards…</div>
     <div class="kicker" id="kicker"></div>
   </div>

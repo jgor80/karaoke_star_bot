@@ -63,7 +63,10 @@ import ICON_192 from "./pwa/icon-192.png";
 import ICON_512 from "./pwa/icon-512.png";
 import ICON_MASK from "./pwa/icon-maskable-512.png";
 import ICON_APPLE from "./pwa/apple-touch-icon.png";
-const ICONS = { "/icons/icon-192.png": ICON_192, "/icons/icon-512.png": ICON_512, "/icons/icon-maskable-512.png": ICON_MASK, "/apple-touch-icon.png": ICON_APPLE, "/icons/apple-touch-icon.png": ICON_APPLE };
+import ICON_FAV from "./pwa/favicon-48.png";
+import ICON_MARK from "./pwa/mark-96.png";
+const ICONS = { "/icons/icon-192.png": ICON_192, "/icons/icon-512.png": ICON_512, "/icons/icon-maskable-512.png": ICON_MASK, "/apple-touch-icon.png": ICON_APPLE, "/icons/apple-touch-icon.png": ICON_APPLE,
+  "/favicon.ico": ICON_FAV, "/favicon.png": ICON_FAV, "/icons/favicon-48.png": ICON_FAV, "/icons/mark-96.png": ICON_MARK };
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";

@@ -28,6 +28,7 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 copyFileSync(join(SHELL, "index.html"), join(OUT, "index.html"));
 copyFileSync(join(SHELL, "remind.js"), join(OUT, "remind.js"));
+copyFileSync(join(SITE_SRC, "pwa", "mark-96.png"), join(OUT, "mark-96.png")); // logo on the first screen
 
 // Firebase (push): the config files from the Firebase console, kept out of git. Put them in app/firebase/, or
 // pass them base64-encoded in FIREBASE_IOS_PLIST_B64 / FIREBASE_ANDROID_JSON_B64 (GitHub Actions secrets).
