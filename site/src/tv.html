@@ -87,6 +87,9 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .rank .nm small { display: block; font-size: calc(2.1 * var(--u)); font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .rank li.has-art { padding-left: calc(10.5 * var(--u)) !important; min-height: 0; align-items: center; }
 .rank li.has-art > .art { left: calc(2 * var(--u)); width: calc(7 * var(--u)); height: calc(7 * var(--u)); --art-note: calc(3 * var(--u)); }
+/* singer photos (avatars_api.js), when the singer added one on their phone */
+.tv-av { display: inline-block; vertical-align: middle; width: calc(4.6 * var(--u)); height: calc(4.6 * var(--u)); border-radius: 50%; object-fit: cover; margin: calc(-.6 * var(--u)) calc(1.2 * var(--u)) 0 0; background: var(--line); }
+.award .tv-av { width: calc(9 * var(--u)); height: calc(9 * var(--u)); margin: calc(.6 * var(--u)) 0; display: block; }
 .rank .v { font-family: var(--f-mono); font-size: calc(2.4 * var(--u)); color: var(--hot); white-space: nowrap; }
 h3 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: calc(2.2 * var(--u)); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 
@@ -230,6 +233,13 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const names = (list, max) => list.slice(0, max).join(", ") + (list.length > max ? " and " + (list.length - max) + " more" : "");
   let clockSkew = 0, lastView = "", previewing = false;
+  // Singer photos: match key (same folding as privacy_api.js matchKey) -> version, from /api/plays "avatars".
+  let avatars = {};
+  const photoKey = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return v ? "api/avatar?k=" + k + "&v=" + v : null; }
+  // Awards whose "who" is an artist, a decade or a typed reaction name rather than a singer.
+  const NOT_SINGER = new Set(["artist", "decade", "s-hype", "rx-hype", "rx-critic"]);
+  function photoImg(src) { const i = el("img", "tv-av"); i.alt = ""; i.src = src; i.onerror = () => i.remove(); return i; }
   const now = () => Date.now() / 1000 + clockSkew;
 
   // ---------- data -> what to show ----------
@@ -249,7 +259,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const reax = OkeAwards.reactionIndex(data);
     const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null, reax.bySong) : null;
     const totals = (r) => OkeAwards.personTotals(r, people, plays);
-    const awards = OkeAwards.awardsFor(rows, totals, reax).sort((a, b) => !!b.headline - !!a.headline);
+    const awards = OkeAwards.awardsFor(rows, totals, reax).sort((a, b) => !!b.headline - !!a.headline).map((a) => ({ ...a, photo: NOT_SINGER.has(a.id) ? null : photoSrc(a.who) }));
     // Crowd reactions for the night: totals per emoji and the most-reacted songs
     const rxTot = {}; const rxSongs = [];
     rows.forEach((p) => { const c = p.uuid && reax.bySong.get(p.uuid); if (!c) return; Object.entries(c).forEach(([k, n]) => { rxTot[k] = (rxTot[k] || 0) + n; });
@@ -270,7 +280,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     if (debut.length) badges.push({ id: "debut", name: "First time on the mic", desc: "Welcome to Oke Night!", who: debut });
     // Leaderboards for the night
     // The host isn't ranked with the singers (they're on the mic all night).
-    const singers = totals(rows).filter((e) => !OkeAwards.isHost(e.name)).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60) }));
+    const singers = totals(rows).filter((e) => !OkeAwards.isHost(e.name)).slice(0, 8).map((e) => ({ name: e.name, n: e.n, mins: Math.round(e.secs / 60), photo: photoSrc(e.name) }));
     const count = (keyOf, label) => { const m = new Map(); rows.forEach((p) => { const k = keyOf(p); if (!k) return; const e = m.get(k) || { ...label(p), n: 0, who: new Set() }; e.n++; e.who.add(p.singer); m.set(k, e); });
       return [...m.values()].sort((a, b) => b.n - a.n || b.who.size - a.who.size); };
     const songs = count((p) => p.title && key(p.title), (p) => ({ name: p.title, sub: p.artist || "", song: { song_id: p.song_id, title: p.title } })).filter((e) => e.n > 1).slice(0, 6);
@@ -309,7 +319,9 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
     const c = el("article", "award" + (a.headline ? " headline" : ""));
     const lb = el("div", "label"); const ic = el("span", "ic", OkeAwards.icon(a.id)); ic.setAttribute("aria-hidden", "true");
     lb.append(ic, document.createTextNode(a.label));
-    c.append(lb, el("div", "who", a.who.replace(/\//g, "/\u200b")), el("div", "what", a.what), el("div", "stat", a.stat));
+    c.append(lb);
+    if (a.photo) c.append(photoImg(a.photo));
+    c.append(el("div", "who", a.who.replace(/\//g, "/\u200b")), el("div", "what", a.what), el("div", "stat", a.stat));
     return c;
   }
   function badgeCard(g) {
@@ -321,7 +333,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
   function heading(text, aside) { const h = el("h2", null, text); if (aside) h.append(el("small", null, aside)); return h; }
   function rankList(items, sub, val) {
     const ol = el("ol", "rank");
-    items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm", e.name); if (e.host) nm.append(el("span", "host-tag", "🎤 Host")); const s = sub(e); if (s) nm.append(el("small", null, s));
+    items.forEach((e, i) => { const li = el("li"); const nm = el("div", "nm"); if (e.photo) nm.append(photoImg(e.photo)); nm.append(document.createTextNode(e.name)); if (e.host) nm.append(el("span", "host-tag", "🎤 Host")); const s = sub(e); if (s) nm.append(el("small", null, s));
       li.append(el("span", "n", String(i + 1)), nm, el("span", "v", val(e))); if (e.song && window.OkeArt) OkeArt.row(li, e.song); ol.append(li); });
     return ol;
   }
@@ -544,6 +556,7 @@ body.embed header { grid-template-columns: minmax(0, 1fr) auto; }
       if (data.since && base) data = mergeSince(base, data); else baseAt = Date.now();
       base = data;
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
+      avatars = data.avatars || {};
       const v = build(data);
       // Pre-show preview (see previewInfo). If anything in it goes wrong, fall back to the normal screen.
       let pv = null;

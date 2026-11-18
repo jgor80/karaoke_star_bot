@@ -118,6 +118,7 @@ export async function eraseSinger(env, body, venue) {
     () => relabelColumn(env, venue, [e], "duets", "by_name", "Anon", null),
     () => relabelColumn(env, venue, [e], "duets", "partner", "Anon", null),
     () => cleanRequestNames(env, venue, [e]),
+    () => env.DB.prepare("DELETE FROM avatars WHERE venue = ? AND k = ?").bind(venue.slug, e.k).run(), // their photo (avatars_api.js)
     async () => {
       const { results } = await env.DB.prepare("SELECT DISTINCT singer, singer_key FROM drafts WHERE venue = ? AND removed_at IS NULL").bind(venue.slug).all();
       for (const r of results) if (relabelName([e], r.singer)) {
