@@ -25,7 +25,7 @@ export const MAX_BUTTONS = 24;
 export const BUTTON_WHO = "Bar button";
 
 // Keep in sync with REACTIONS in awards.js.
-const EMOJI = { fire: "🔥", micdrop: "🎤", encore: "🔁", chills: "😭", dance: "💃", keychange: "📈", cringe: "😬", offkey: "🙉", tomato: "🍅", snooze: "😴" };
+const EMOJI = { fire: "🔥", micdrop: "🎤", encore: "🔁", chills: "😭", dance: "💃", keychange: "📈", cringe: "😅", offkey: "🎶", tomato: "🍅", snooze: "😴" };
 const HYPE = ["fire", "micdrop", "encore", "chills", "dance", "keychange"];
 const ROAST = ["cringe", "offkey", "tomato", "snooze"];
 const BY_EMOJI = Object.fromEntries(Object.entries(EMOJI).map(([k, e]) => [e.replace(/️/g, ""), k]));

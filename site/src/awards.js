@@ -37,10 +37,11 @@
     { k: "chills", e: "😭", name: "Chills", hype: true },
     { k: "dance", e: "💃", name: "Dance", hype: true },
     { k: "keychange", e: "📈", name: "Key change", hype: true },
-    { k: "cringe", e: "😬", name: "Cringe" },
-    { k: "offkey", e: "🙉", name: "Off-key" },
+    // The teasing ones laugh with the singer, never at them (Jeff, 2026-11-18). Keys stay for old taps.
+    { k: "cringe", e: "😅", name: "Bold choice" },
+    { k: "offkey", e: "🎶", name: "Own key" },
     { k: "tomato", e: "🍅", name: "Tomato" },
-    { k: "snooze", e: "😴", name: "Snooze" },
+    { k: "snooze", e: "😴", name: "Slow burn" },
   ];
   const HYPE = new Set(REACTIONS.filter((x) => x.hype).map((x) => x.k));
   const ROAST = new Set(["cringe", "offkey", "tomato", "snooze"]);

@@ -104,6 +104,10 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 .scan-full .code { width: min(88vw, 72vh, 560px); aspect-ratio: 1; }
 .scan-full .url { color: #1a0710; }
 .scan-full small { font-size: 15px; color: #555; }
+#ask-dlg { background: var(--panel, #241530); color: var(--ink, #fff); border: 1px solid var(--line); border-radius: 16px; padding: 18px; max-width: min(420px, calc(100vw - 32px)); }
+#ask-dlg::backdrop { background: rgba(0,0,0,.6); }
+#ask-dlg p { margin: 0 0 14px; font-size: 17px; line-height: 1.4; }
+#ask-dlg .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -505,7 +509,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   }
   $("sb-go").addEventListener("click", async () => {
     const rows = sbTable.rows.map(mapped).filter((r) => r[0]);
-    if (sbCount && !confirm("This replaces your current songbook (" + sbCount.toLocaleString("en-US") + " songs). Go ahead?")) return;
+    if (sbCount && !await ask("This replaces your current songbook (" + sbCount.toLocaleString("en-US") + " songs). Go ahead?")) return;
     $("sb-go").disabled = true;
     for (let i = 0; i < rows.length; i += 2000) {
       $("sb-progress").textContent = "Uploading " + Math.min(i + 2000, rows.length).toLocaleString("en-US") + " / " + rows.length.toLocaleString("en-US") + "…";
@@ -516,7 +520,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     $("sb-progress").textContent = "Done ✓"; $("sb-step").hidden = true; $("sb-file").value = ""; sbSet = false; load();
   });
   document.querySelectorAll('input[name="sb-src"]').forEach((r) => r.addEventListener("change", () => act({ action: "songbook_source", source: r.value })));
-  $("sb-clear").addEventListener("click", () => { if (confirm("Delete your songbook? The Songbook tab goes back to the full catalog.")) act({ action: "songbook_clear" }); });
+  $("sb-clear").addEventListener("click", async () => { if (await ask("Delete your songbook? The Songbook tab goes back to the full catalog.")) act({ action: "songbook_clear" }); });
   let sbCount = 0, sbSource = "catalog", sbCatalogCount = 0, sbSet = false;
   function renderSongbook(d) {
     const sb = d.songbook || { source: "catalog", count: 0 };
@@ -599,7 +603,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
         el("span", "s", (x.votes > 1 ? "🙋 " + x.votes + " asked · " : "") + (x.names ? "from " + x.names + " · " : "") + when(x.created_at)));
       const row = el("div", "row");
       [["✅ Added", "added"], ["❌ Not available", "unavailable"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "request_done", id: x.id, status: st }); row.append(b); });
-      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => { if (confirm("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = async () => { if (await ask("Remove this request? The person who asked won’t see an answer.")) act({ action: "request_remove", id: x.id }); };
       row.append(rm);
       // Where to get it: a licensed karaoke store (an affiliate link, KV_AFF), and official karaoke channels on YouTube.
       const q = (x.title + " " + (x.artist || "")).trim(), links = el("div", "row req-buy");
@@ -627,7 +631,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
         if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) { const a = el("a", "ghost small btn-link", "✉️ Email"); a.href = "mailto:" + c + "?subject=" + encodeURIComponent("Oke Night at " + x.bar); row.append(a); }
         else if (/^[+\d][\d\s().-]{6,}$/.test(c)) { const a = el("a", "ghost small btn-link", "📞 Call"); a.href = "tel:" + c.replace(/[^\d+]/g, ""); row.append(a); }
         const rm = el("button", "ghost small", "Remove"); rm.type = "button";
-        rm.onclick = () => { if (confirm("Remove this lead? Their contact details are deleted.")) act({ action: "lead_remove", id: x.id }); };
+        rm.onclick = async () => { if (await ask("Remove this lead? Their contact details are deleted.")) act({ action: "lead_remove", id: x.id }); };
         row.append(rm); li.append(row); ll.append(li); });
     }
     // Singers taken off the site (privacy): only the label and when, never the name
@@ -642,7 +646,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       const row = el("div", "row");
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "draft_remove", id: x.id });
       const bl = el("button", "ghost small", "Block " + x.singer); bl.type = "button";
-      bl.onclick = () => { if (confirm("Stop anyone drafting " + x.singer + "? Their picks come off the board.")) act({ action: "draft_block", singer: x.singer }); };
+      bl.onclick = async () => { if (await ask("Stop anyone drafting " + x.singer + "? Their picks come off the board.")) act({ action: "draft_block", singer: x.singer }); };
       row.append(rm, bl); li.append(row); dl.append(li); });
     const blk = d.draft_blocked || [], bp = $("draft-blocked"); bp.replaceChildren(); bp.hidden = !blk.length;
     if (blk.length) { bp.append(document.createTextNode("Can’t be drafted: "));
@@ -660,14 +664,14 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     const row = el("div", "row");
     if (found) { const b = el("button", "ghost small", "Hide it again"); b.type = "button"; b.onclick = () => act({ action: "reset", id: s.id }); row.append(b); }
     const rm = el("button", "ghost small", "Remove"); rm.type = "button";
-    rm.onclick = () => { if (confirm("Remove “" + s.title + "”?")) act({ action: "remove", id: s.id }); }; row.append(rm);
+    rm.onclick = async () => { if (await ask("Remove “" + s.title + "”?")) act({ action: "remove", id: s.id }); }; row.append(rm);
     return row;
   }
   $("erase-form").onsubmit = async (e) => {
     e.preventDefault();
     const name = $("erase-name").value.trim(), m = $("erase-msg");
     if (!name) return;
-    if (!confirm("Take “" + name + "” off this bar’s pages? Their songs will show as a removed singer. This can’t be undone.")) return;
+    if (!await ask("Take “" + name + "” off this bar’s pages? Their songs will show as a removed singer. This can’t be undone.")) return;
     m.dataset.busy = "1"; m.textContent = "Removing…";
     const r = await api("POST", { action: "singer_erase", singer: name }).catch(() => ({ ok: false, d: { error: "Couldn’t reach the site. Check the connection and try again." } }));
     m.textContent = r.ok ? "Done. “" + name + "” now shows as " + r.d.label + ". Phones that already have the page open catch up within about 10 minutes." : (r.d.error || "That didn’t work.");
@@ -708,12 +712,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   }
   $("owner-btn").addEventListener("click", async () => {
     let t = ownerTopic;
-    if (!t) { const r = await api("POST", { action: "owner_topic", on: true }); if (!r.ok) return alert(r.d.error || "That didn’t work."); t = r.d.owner_topic; renderOwner(t); }
+    if (!t) { const r = await api("POST", { action: "owner_topic", on: true }); if (!r.ok) return tell(r.d.error || "That didn’t work."); t = r.d.owner_topic; renderOwner(t); }
     const link = "https://ntfy.sh/" + t;
     if (navigator.share) { try { await navigator.share({ title: "Karaoke night report", text: "Subscribe in the ntfy app to get the karaoke report after each night:", url: link }); return; } catch (e) {} }
     try { await navigator.clipboard.writeText(link); $("owner-btn").textContent = "Link copied"; } catch (e) {}
   });
-  $("owner-off").addEventListener("click", async () => { if (confirm("Stop sending the report to the owner’s link?")) { await api("POST", { action: "owner_topic", on: false }); load(); } });
+  $("owner-off").addEventListener("click", async () => { if (await ask("Stop sending the report to the owner’s link?")) { await api("POST", { action: "owner_topic", on: false }); load(); } });
 
   // Singer photos (avatars_api.js). Only redrawn when the list changes, so the pictures don't flicker every poll.
   let photosSig = "";
@@ -723,8 +727,8 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     const li = el("li"), img = el("img"); img.alt = "Photo for " + p.name; img.loading = "lazy"; img.src = "api/avatar?k=" + encodeURIComponent(p.k) + "&v=" + p.v;
     const row = el("div", "row");
     if (waiting) row.append(btn("Approve", () => act({ action: "photo_approve", k: p.k })));
-    row.append(btn(waiting ? "Reject" : "Remove", () => { if (confirm("Remove " + p.name + "’s photo?")) act({ action: "photo_remove", k: p.k }); }),
-      btn("Remove and block", () => { if (confirm("Remove " + p.name + "’s photo and stop new photos for that name?")) act({ action: "photo_remove", k: p.k, name: p.name, block: true }); }));
+    row.append(btn(waiting ? "Reject" : "Remove", async () => { if (await ask("Remove " + p.name + "’s photo?")) act({ action: "photo_remove", k: p.k }); }),
+      btn("Remove and block", async () => { if (await ask("Remove " + p.name + "’s photo and stop new photos for that name?")) act({ action: "photo_remove", k: p.k, name: p.name, block: true }); }));
     li.append(img, el("span", "t", p.name), el("span", "s", when(p.at)), row);
     return li;
   }
@@ -779,7 +783,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   // Wireless bar buttons (buttons_api.js). The secret link comes back only from button_add / button_rotate.
   // Keep in sync with REACTIONS in awards.js (this page doesn't load it).
   const BTN_RX = [["fire", "🔥", "Fire"], ["micdrop", "🎤", "Mic drop"], ["encore", "🔁", "Encore"], ["chills", "😭", "Chills"], ["dance", "💃", "Dance"],
-    ["keychange", "📈", "Key change"], ["cringe", "😬", "Cringe"], ["offkey", "🙉", "Off-key"], ["tomato", "🍅", "Tomato"], ["snooze", "😴", "Snooze"]].map(([k, e, name]) => ({ k, e, name }));
+    ["keychange", "📈", "Key change"], ["cringe", "😅", "Bold choice"], ["offkey", "🎶", "Own key"], ["tomato", "🍅", "Tomato"], ["snooze", "😴", "Slow burn"]].map(([k, e, name]) => ({ k, e, name }));
   const BTN_CHOICES = [["hype", "🎉 Random hype"], ["roast", "🍅 Random roast"], ["random", "🎲 Anything"],
     ...BTN_RX.map((x) => [x.k, x.e + " " + x.name])];
   const btnName = (r) => (BTN_CHOICES.find((c) => c[0] === r) || [r, r])[1];
@@ -820,12 +824,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       sel.onchange = () => act({ action: "button_set", id: b.id, r: sel.value });
       const nl = el("button", "ghost small", "New link"); nl.type = "button";
       nl.onclick = async () => {
-        if (!confirm("Make a new link for " + b.label + "? The old link stops working, so you’ll need to paste the new one into the button.")) return;
-        const r = await api("POST", { action: "button_rotate", id: b.id }); if (!r.ok) return alert(r.d.error || "That didn’t work.");
+        if (!await ask("Make a new link for " + b.label + "? The old link stops working, so you’ll need to paste the new one into the button.")) return;
+        const r = await api("POST", { action: "button_rotate", id: b.id }); if (!r.ok) return tell(r.d.error || "That didn’t work.");
         showSecret(b.label, r.d.secret); load();
       };
       const rm = el("button", "ghost small", "Remove"); rm.type = "button";
-      rm.onclick = () => { if (confirm("Remove " + b.label + "? Its link stops working right away.")) act({ action: "button_remove", id: b.id }); };
+      rm.onclick = async () => { if (await ask("Remove " + b.label + "? Its link stops working right away.")) act({ action: "button_remove", id: b.id }); };
       row.append(sel, nl, rm); li.append(row); ul.append(li);
     });
   }
@@ -838,7 +842,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       const isOff = offSet.has(n.date), li = el("li", isOff ? "off" : null);
       const b = el("button", "ghost small", isOff ? "Turn back on" : "No karaoke"); b.type = "button";
       b.setAttribute("aria-label", (isOff ? "Turn karaoke back on for " : "No karaoke on ") + n.label);
-      b.onclick = () => { if (isOff || confirm("No karaoke on " + n.label + "? The crowd won’t get the reminder and the site will show the next night.")) act({ action: "night_off", date: n.date, off: !isOff }); };
+      b.onclick = async () => { if (isOff || await ask("No karaoke on " + n.label + "? The crowd won’t get the reminder and the site will show the next night.")) act({ action: "night_off", date: n.date, off: !isOff }); };
       li.append(el("span", "t", n.label + (isOff ? " · off" : "")), b); list.append(li);
     });
   }
@@ -873,7 +877,17 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       o.selected = en.hours ? c.hours === en.hours : c.regular; sel.append(o); });
   }
   $("end-time").addEventListener("change", (ev) => act({ action: "end_time", hours: Number(ev.target.value) }));
-  async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
+  // Our own yes/no and notice boxes instead of confirm() and alert(), which some phone web views don't show.
+  function ask(msg, yes = "Yes", no = "Cancel") {
+    return new Promise((done) => {
+      const d = $("ask-dlg"); $("ask-msg").textContent = msg; $("ask-yes").textContent = yes;
+      $("ask-no").textContent = no; $("ask-no").hidden = !no; d.returnValue = "";
+      d.onclose = () => done(d.returnValue === "yes");
+      if (d.showModal) d.showModal(); else done(window.confirm(msg)); // very old browsers
+    });
+  }
+  const tell = (msg) => ask(msg, "OK", "");
+  async function act(body) { const r = await api("POST", body); if (!r.ok) await tell(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {
     ev.preventDefault(); $("add-err").textContent = "";
@@ -988,5 +1002,11 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   if (key) load(); else { showLogin(false); api("GET").then((r) => { if (r.status === 401 && r.d.needs_setup) showLogin(true); }).catch(() => {}); }
 })();
 </script>
+<dialog id="ask-dlg" aria-labelledby="ask-msg">
+  <form method="dialog">
+    <p id="ask-msg"></p>
+    <div class="row"><button class="ghost" id="ask-no" value="no" type="submit">Cancel</button><button id="ask-yes" value="yes" type="submit">OK</button></div>
+  </form>
+</dialog>
 </body>
 </html>

@@ -32,6 +32,8 @@
   // ---------- weekly streaks ----------
   // A karaoke week runs Monday to Sunday, so a Saturday party and the Sunday after it are the same week.
   // Streaks count weeks that had karaoke at all, so a week the bar skips doesn't break anyone's streak.
+  // Today's date at the bar (YYYY-MM-DD), in its time zone, rolling over at 6 AM so a late night stays one night.
+  const barDay = () => { try { return new Date(Date.now() - 6 * 3600e3).toLocaleDateString("en-CA", { timeZone: (global.OKE_VENUE && global.OKE_VENUE.tz) || "America/Chicago" }); } catch (e) { return new Date(Date.now() - 6 * 3600e3).toISOString().slice(0, 10); } };
   const weekOf = (night) => { const t = Date.parse(night + "T12:00:00Z") / 86400000; return Math.floor((t + 3) / 7); }; // Mon-start week number
   // Consecutive karaoke weeks ending at week w, counting only weeks in mine (a Set of week numbers).
   function runEndingAt(w, mine, weeks) {
@@ -312,7 +314,7 @@
     weeks.forEach((w) => { run = mine.has(w) ? run + 1 : 0; best = Math.max(best, run); });
     const lastW = weekOf(e.rows[e.rows.length - 1].night), latest = weeks[weeks.length - 1];
     const current = runEndingAt(lastW, mine, weeks);
-    const thisWeek = weekOf(new Date(Date.now() - 6 * 3600000).toISOString().slice(0, 10)); // about Central, good enough for a week
+    const thisWeek = weekOf(barDay()); // the bar's own date, so a night past midnight still counts
     const onTheLine = lastW !== latest && weeks.indexOf(lastW) === weeks.length - 2 && latest === thisWeek;
     return { current, best, alive: lastW === latest || onTheLine, onTheLine };
   }
