@@ -21,6 +21,10 @@ on:
         description: "Upload to App Store Connect / TestFlight"
         type: boolean
         default: true
+      no_push:
+        description: "Upload without push (testing only: never for App Review)"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "app/**"
@@ -78,7 +82,14 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          FIREBASE_IOS_PLIST_B64: ${{ secrets.FIREBASE_IOS_PLIST_B64 }}
+          NO_PUSH: ${{ inputs.no_push }}
         run: |
+          # The review notes promise push, so a build without the Firebase file must not reach App Store Connect.
+          if [ -z "$FIREBASE_IOS_PLIST_B64" ] && [ "$NO_PUSH" != "true" ]; then
+            echo "::error::FIREBASE_IOS_PLIST_B64 isn't set, so this build would have no push. Add the secret (see app/README.md, Push notifications), or tick 'Upload without push' for a test build."
+            exit 1
+          fi
           missing=""
           for s in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do [ -n "${!s}" ] || missing="$missing $s"; done
           if [ -n "$missing" ]; then

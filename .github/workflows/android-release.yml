@@ -10,11 +10,17 @@
 #   ANDROID_KEYSTORE_PASSWORD  its password (the key inside, alias "upload", has the same password)
 # Google Play keeps the real app signing key (Play App Signing). If the upload key is ever lost, Play Console
 # can reset it, so it can't lock the app out.
-# Push needs FIREBASE_ANDROID_JSON_B64 (the base64 of google-services.json). Without it the app builds without push.
+# Push needs FIREBASE_ANDROID_JSON_B64 (the base64 of google-services.json). Pull-request builds work without it, but
+# a release bundle stops with an error unless "Build without push" is ticked (the store notes promise push).
 name: Android app
 
 on:
   workflow_dispatch:
+    inputs:
+      no_push:
+        description: "Build without push (testing only: never for the store)"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "app/**"
@@ -61,6 +67,16 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         working-directory: app/android
         run: ./gradlew --no-daemon assembleDebug
+
+      - name: Check push is set up
+        if: github.event_name == 'workflow_dispatch' && !inputs.no_push
+        env:
+          FIREBASE_ANDROID_JSON_B64: ${{ secrets.FIREBASE_ANDROID_JSON_B64 }}
+        run: |
+          if [ -z "$FIREBASE_ANDROID_JSON_B64" ]; then
+            echo "::error::FIREBASE_ANDROID_JSON_B64 isn't set, so this bundle would have no push, and the store listing promises it. Add the secret (see app/README.md, Push notifications), or tick 'Build without push' for a test build."
+            exit 1
+          fi
 
       - name: Signed release bundle for Google Play
         if: github.event_name == 'workflow_dispatch'
