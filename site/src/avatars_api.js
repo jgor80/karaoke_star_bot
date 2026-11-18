@@ -9,7 +9,8 @@
 // The phone crops and shrinks the photo itself (a square, PHOTO_PX wide, re-encoded as JPEG), which also drops
 // the camera's hidden data such as the location. The Worker only checks it is a small square JPEG.
 // Photos are stored in D1 (a few tens of KB each) and served with a version number in the link, so phones and
-// the edge cache can keep them for a year and a new photo gets a new link (the version never repeats for a name).
+// the edge cache can keep them for a year (each cache hit is checked against the current version, so a removed
+// photo's link stops working at once; phones keep a copy a day) and a new photo gets a new link (the version never repeats for a name).
 //
 // POST /<slug>/api/avatar {action: "upload", name, key, image: base64 JPEG}  -> {ok, k, v}
 // POST /<slug>/api/avatar {action: "delete", name, key}                      -> {ok}
@@ -214,8 +215,16 @@ async function servePhoto(req, env, ctx, venue, url) {
   if (!/^[a-z0-9]{1,80}$/.test(k)) return new Response("Not found", { status: 404 });
   const cache = caches.default;
   const cacheKey = new Request(url.origin + "/" + venue.slug + "/api/avatar?k=" + k + "&v=" + v);
+  // A cached copy is only served while that exact version is still the approved photo: once the host or the
+  // singer removes it (or it's blocked, reported into pending, or the singer erased), the old link stops working
+  // at once. The check is a one-row read; the image itself still comes from the cache.
   const hit = await cache.match(cacheKey);
-  if (hit) return hit;
+  if (hit) {
+    const cur = await env.DB.prepare("SELECT ver FROM avatars WHERE venue = ? AND k = ? AND img IS NOT NULL AND blocked = 0 AND pending = 0").bind(venue.slug, k).first().catch(() => null);
+    if (cur && cur.ver === v) return hit;
+    ctx.waitUntil(cache.delete(cacheKey).catch(() => {}));
+    if (cur) return new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } }); // an old version
+  }
   const row = await env.DB.prepare("SELECT img, ver, pending FROM avatars WHERE venue = ? AND k = ? AND img IS NOT NULL AND blocked = 0").bind(venue.slug, k).first();
   if (!row || !row.img) return new Response("Not found", { status: 404, headers: { "cache-control": "public, max-age=60" } });
   // A photo waiting for the host is only served to whoever has its exact link (the phone that sent it, and
@@ -228,8 +237,9 @@ async function servePhoto(req, env, ctx, venue, url) {
   const exact = row.ver === v;
   const res = new Response(new Uint8Array(row.img), { headers: {
     "content-type": "image/jpeg", "x-content-type-options": "nosniff",
-    "cache-control": exact ? "public, max-age=31536000, immutable" : "public, max-age=60" } });
-  if (exact) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+    "cache-control": exact ? "public, max-age=86400" : "no-store" } });
+  // Phones keep it a day (so a removed photo drops off them soon too); the edge keeps it a year.
+  if (exact) { const keep = res.clone(); keep.headers.set("cache-control", "public, s-maxage=31536000"); ctx.waitUntil(cache.put(cacheKey, keep)); }
   return res;
 }
 
