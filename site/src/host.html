@@ -496,7 +496,17 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     }
     if (r.status === 401 && r.d.needs_setup) return showLogin(true);
     if (r.status === 403) { store.set(KEY, null); return showLogin(false, "That key didn’t work."); }
-    if (!r.ok) { pollT = setTimeout(load, 10000); return; }
+    // Locked out: too many wrong tries from this network (at the bar, everyone on its wifi shares one).
+    // Say so instead of leaving the page blank, keep the saved key, and keep trying in the background.
+    if (r.status === 429) {
+      showLogin(false, (r.d.error || "Too many wrong tries from this network.") + " Turn off wifi and use mobile data to get in now.");
+      if (key) $("key").value = key;
+      pollT = setTimeout(load, 60000); return;
+    }
+    if (!r.ok) {
+      if ($("app").hidden && $("login").hidden) showLogin(false, "The site had a problem. Trying again…");
+      pollT = setTimeout(load, 10000); return;
+    }
     $("login").hidden = true; $("app").hidden = false;
     render(r.d);
     pollT = setTimeout(load, document.hidden ? 30000 : 8000);
