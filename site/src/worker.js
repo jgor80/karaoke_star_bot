@@ -8,6 +8,7 @@
 // draft picks and seconds, also rate limited (see drafts_api.js).
 // The host's phone can also send crowd noise levels for the applause meter (crowd_api.js, host key only).
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
+// Wireless buttons around the bar can send reactions too, each with its own secret link made on /host (buttons_api.js).
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
 import PAGE from "./index.html";
 import HOME from "./home.html";
@@ -44,6 +45,7 @@ import PICKER from "./picker.js";
 import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
+import { handleButton } from "./buttons_api.js";
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
@@ -103,6 +105,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
     await ensureCore(env);
     return handleReact(req, env, venue);
   }
+  if (name === "button") { await ensureCore(env); return handleButton(req, env, venue); } // wireless bar buttons, see buttons_api.js
   if (name === "draft") {
     if (req.method !== "POST") return new Response("POST only", { status: 405 });
     await ensureCore(env);
