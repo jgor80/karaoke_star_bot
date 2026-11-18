@@ -25,7 +25,7 @@
 // Host (via /api/host): styled_approve {id}, styled_remove {id}; hostStyled() lists them.
 import { matchKey, erasedSingers } from "./privacy_api.js";
 import { networkHash } from "./net.js";
-import { jpegSize } from "./avatars_api.js";
+import { jpegSize, tellHost } from "./avatars_api.js";
 import { okOrigin } from "./origins.js";
 
 const MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
@@ -218,20 +218,28 @@ export async function handleStyled(req, env, ctx, venue, url) {
   if (old) stmts.unshift(env.DB.prepare("DELETE FROM styled_looks WHERE id = ?").bind(old.id));
   await env.DB.batch(stmts);
   if (old && env.STYLED) ctx.waitUntil(env.STYLED.delete(objKey(venue, k, old.id)).catch(() => {}));
+  ctx.waitUntil(tellHost(env, venue, "New rock-star look to check", name + " made a " + style.label + " look. It shows on the TV once you OK it on /host.").catch(() => {}));
   return json({ ok: true, look: lookOut({ id, k, style: style.id, approved: 0, chosen: 1 }) });
 }
 
 // The look id is a random 128-bit value, so only the singer's phone (and the host) can find a look before the
-// host approves it. Removed looks are gone from storage, so their links stop working.
+// host approves it. A look is only served while the photo it was made from is still the one showing: once that
+// photo is changed, removed, blocked, hidden after reports or waiting for the host, or the singer is erased,
+// its looks' links stop working too. Removed looks are gone from storage.
 async function serveLook(env, venue, url) {
   const k = String(url.searchParams.get("k") || ""), id = String(url.searchParams.get("id") || "");
   if (!/^[a-z0-9]{1,80}$/.test(k) || !/^[a-f0-9]{32}$/.test(id)) return new Response("Not found", { status: 404 });
-  const row = await env.DB.prepare("SELECT ctype, img FROM styled_looks WHERE id = ? AND venue = ? AND k = ?").bind(id, venue.slug, k).first();
-  if (!row) return new Response("Not found", { status: 404, headers: { "cache-control": "public, max-age=60" } });
+  const gone = new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } });
+  const row = await env.DB.prepare("SELECT s.ctype, s.img, s.approved FROM styled_looks s JOIN avatars a ON a.venue = s.venue AND a.k = s.k AND a.ver = s.pver" +
+    " AND a.img IS NOT NULL AND a.blocked = 0 AND a.pending = 0 WHERE s.id = ? AND s.venue = ? AND s.k = ?").bind(id, venue.slug, k).first().catch(() => null);
+  if (!row) return gone;
+  if ((await erasedSingers(env, venue)).some((x) => x.k === k)) return gone;
   let bytes = row.img ? new Uint8Array(row.img) : null;
   if (!bytes && env.STYLED) { const o = await env.STYLED.get(objKey(venue, k, id)); if (o) bytes = o.body; }
-  if (!bytes) return new Response("Not found", { status: 404, headers: { "cache-control": "public, max-age=60" } });
-  return new Response(bytes, { headers: { "content-type": row.ctype, "x-content-type-options": "nosniff", "cache-control": "public, max-age=86400" } });
+  if (!bytes) return gone;
+  // Approved looks: phones keep them 10 minutes, so a look taken down drops off them soon. A look still waiting
+  // for the host is never cached.
+  return new Response(bytes, { headers: { "content-type": row.ctype, "x-content-type-options": "nosniff", "cache-control": row.approved ? "public, max-age=600" : "private, no-store" } });
 }
 
 // {styled: {k: look id}}: approved, chosen looks made from the photo that is showing now.

@@ -66,7 +66,7 @@ async function approvalOn(env, venue) {
 }
 
 // A push to the host's phone (same ntfy topic as secret songs and requests). Best effort.
-async function tellHost(env, venue, title, body) {
+export async function tellHost(env, venue, title, body) {
   await hostPush(env, venue, title, body);
   const t = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(venue, "ntfy_topic")).first().catch(() => null);
   if (!t || !t.v) return;
@@ -205,8 +205,11 @@ async function reportContent(req, env, ctx, venue, body, name, k) {
       hidden = true;
     }
   }
-  ctx.waitUntil(tellHost(env, venue, "Report: " + (kind === "photo" ? "a singer photo" : "a singer name"),
-    name + " — " + REPORT_REASONS[reason] + (hidden ? "\nThe photo is hidden until you look at it." : "")));
+  // Which picture the reporter saw: the photo, or the AI rock-star look shown in its place.
+  const look = kind === "photo" ? await env.DB.prepare("SELECT style FROM styled_looks WHERE venue = ? AND k = ? AND chosen = 1 AND approved = 1").bind(venue.slug, k).first().catch(() => null) : null;
+  ctx.waitUntil(tellHost(env, venue, "Report: " + (kind === "photo" ? (look ? "a rock-star look" : "a singer photo") : "a singer name"),
+    name + " — " + REPORT_REASONS[reason] + (look ? "\nThey were showing a rock-star look (" + look.style + "). Remove it on /host if it's the problem." : "") +
+    (hidden ? "\nThe photo" + (look ? " and its looks are" : " is") + " hidden until you look at it." : "")));
   return json({ ok: true, hidden });
 }
 
@@ -237,8 +240,9 @@ async function servePhoto(req, env, ctx, venue, url) {
   const exact = row.ver === v;
   const res = new Response(new Uint8Array(row.img), { headers: {
     "content-type": "image/jpeg", "x-content-type-options": "nosniff",
-    "cache-control": exact ? "public, max-age=86400" : "no-store" } });
-  // Phones keep it a day (so a removed photo drops off them soon too); the edge keeps it a year.
+    "cache-control": exact ? "public, max-age=3600" : "no-store" } });
+  // Phones keep it an hour (so a removed or reported photo drops off them soon too); the edge keeps it a year
+  // but rechecks the database on every hit (above).
   if (exact) { const keep = res.clone(); keep.headers.set("cache-control", "public, s-maxage=31536000"); ctx.waitUntil(cache.put(cacheKey, keep)); }
   return res;
 }
