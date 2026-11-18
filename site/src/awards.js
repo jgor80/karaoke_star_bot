@@ -22,7 +22,7 @@
   const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", streak3: "🔥", streak5: "🔥", streak10: "🫁", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
     duet: "👯", plusone: "🫶", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
     mvp: "🎤", dejavu: "🔁", speed: "⚡", time: "🕰️", squad: "👯", open: "🚪", last: "🌙", artist: "🎸", decade: "📼",
-    crowd: "👑", loud: "👏", "s-loud": "📢", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "🙉", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
+    crowd: "👑", loud: "👏", "s-loud": "📢", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "💪", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
     "b-crowd": "🔥", "b-drop": "🎤", "b-encore": "🔁", "b-tomato": "🍅", "s-crowd": "👑", "s-hype": "📣",
     "s-mvp": "🏆", "s-loyal": "📅", "s-mic": "⏱️", "s-badges": "🎖️", "s-range": "🌈", "s-duet": "👯", "s-onesong": "🔁", "s-crate": "📦", "s-trend": "📈" };
   // Genre badge icons come from KaraokeFun.GENRES (fun.js) when it's loaded.
@@ -93,14 +93,14 @@
     if ((w = topSong(one("micdrop"), 2))) out.push({ id: "rx-micdrop", label: "Mic Drop Moment", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: pl(w.v, "mic drop") });
     if ((w = topSong(one("encore"), 2))) out.push({ id: "rx-encore", label: "Encore! Encore!", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: w.v + " begged for more" });
     if ((w = topSong(one("keychange"), 2))) out.push({ id: "rx-key", label: "Truck Driver’s Gear Change", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: pl(w.v, "key change") + " called" });
-    if ((w = topSinger(one("tomato"), 2))) out.push({ id: "rx-tomato", label: "Produce Aisle", who: w.e.name, what: "Most tomatoes thrown (with love)", stat: pl(w.v, "tomato").replace("tomatos", "tomatoes") });
-    if ((w = topSinger((c) => (c.offkey || 0) + (c.cringe || 0), 2))) out.push({ id: "rx-pitch", label: "Pitch Police Report", who: w.e.name, what: "Most off-key and cringe calls", stat: pl(w.v, "citation") });
-    if ((w = topSong(one("snooze"), 2))) out.push({ id: "rx-snooze", label: "Snooze Button", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: w.v + " people nodded off" });
+    if ((w = topSinger(one("tomato"), 2))) out.push({ id: "rx-tomato", label: "Farmers Market Favorite", who: w.e.name, what: "The crowd’s favorite target, all in love", stat: pl(w.v, "tomato").replace("tomatos", "tomatoes") + " of pure affection" });
+    if ((w = topSinger((c) => (c.offkey || 0) + (c.cringe || 0), 2))) out.push({ id: "rx-pitch", label: "Fearless Notes Award", who: w.e.name, what: "Went for every note, and the room loved it", stat: pl(w.v, "brave note") });
+    if ((w = topSong(one("snooze"), 2))) out.push({ id: "rx-snooze", label: "Lullaby Legend", who: clean(w.p.singer) || "Someone", what: songLine(w.p), stat: "So smooth " + w.v + (w.v === 1 ? " person" : " people") + " got cozy" });
     const night = rows[0] && rows[0].night, giv = new Map(), crit = new Map();
     reax.reactors.forEach((x) => { if (x.night !== night) return; giv.set(x.who, (giv.get(x.who) || 0) + x.n); if (ROAST.has(x.r)) crit.set(x.who, (crit.get(x.who) || 0) + x.n); });
     const best = (m, min) => [...m.entries()].filter(([who, n]) => n >= min && !/^Anon /.test(who)).sort((a, b) => b[1] - a[1])[0];
     if ((w = best(giv, 5))) out.push({ id: "rx-hype", label: "Hype Machine", who: w[0], what: "Sent the most reactions", stat: pl(w[1], "reaction") });
-    if ((w = best(crit, 3))) out.push({ id: "rx-critic", label: "Resident Critic", who: w[0], what: "Most tomatoes, snoozes and cringes sent", stat: pl(w[1], "roast") });
+    if ((w = best(crit, 3))) out.push({ id: "rx-critic", label: "Friendliest Heckler", who: w[0], what: "Most playful tomatoes, snoozes and cringes sent", stat: pl(w[1], "friendly roast") });
     return out;
   }
 
