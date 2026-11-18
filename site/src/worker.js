@@ -34,6 +34,7 @@ import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { erasedSingers, relabel, sweepErased, dailyCleanup } from "./privacy_api.js";
 import PRIVACY from "./privacy.html";
+import TERMS from "./terms.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
@@ -185,6 +186,7 @@ export default {
       });
     }
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
+    if (path === "/terms" || path === "/terms/") return html(TERMS, "public, max-age=3600");
     if (path === "/league" || path === "/league/") return html(LEAGUE, "public, max-age=300");
     if (path === "/api/league") return handleLeague(req, env, ctx, url); // monthly table across every bar, see league_api.js
     if (path === "/api/lead") return handleLead(req, env, ctx); // "bring Oke Night to your bar" form on the intro page
