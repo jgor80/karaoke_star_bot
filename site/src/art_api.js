@@ -214,6 +214,7 @@ const needsLookup = (row, sources, now) =>
 
 export async function handleArt(req, env, ctx) {
   const url = new URL(req.url);
+  if (req.method === "POST") return saveFromPhone(req, env, ctx, url);
   const id = Number(url.searchParams.get("id"));
   const tk = norm(url.searchParams.get("t"));
   const big = url.searchParams.get("s") === "big";
@@ -245,6 +246,36 @@ export async function handleArt(req, env, ctx) {
   }
   ctx.waitUntil(cache.put(cacheKey, res.clone()).catch(() => {}));
   return res;
+}
+
+// POST /api/art {id, t, url, link, artist}: a phone found a cover at Apple itself (art.js does this when
+// we have none, since Apple turns most of our own lookups away). Only Apple artwork addresses are taken,
+// only for songs we know whose artist matches, and never over a cover we already have.
+const APPLE_IMG = /^https:\/\/is\d-ssl\.mzstatic\.com\/image\/thumb\/[A-Za-z0-9._/%-]+\/300x300bb\.(jpg|png|webp)$/;
+const APPLE_LINK = /^https:\/\/(music|itunes)\.apple\.com\/[A-Za-z0-9._/%?=&-]+$/;
+async function saveFromPhone(req, env, ctx, url) {
+  const origin = req.headers.get("origin");
+  if (origin && new URL(origin).host !== url.host) return none(403, 0);
+  let b;
+  try { b = await req.json(); } catch (e) { return none(400, 0); }
+  const id = Number(b && b.id), tk = norm(b && b.t), cover = String((b && b.url) || ""), link = String((b && b.link) || "");
+  if (!Number.isInteger(id) || id <= 0 || id > 2e9 || !tk || cover.length > 400 || !APPLE_IMG.test(cover)) return none(400, 0);
+  try {
+    await ensureTable(env);
+    const row = await env.DB.prepare("SELECT url FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
+    if (row && row.url) return none(204, 0);
+    const song = await findSong(env, id, tk);
+    if (!song || !sameArtist(song.artist || "", String((b && b.artist) || ""))) return none(422, 0);
+    const now = Math.floor(Date.now() / 1000);
+    await env.DB.prepare("INSERT OR REPLACE INTO song_art (id, tk, url, src, checked, link) VALUES (?, ?, ?, 'itunes', ?, ?)")
+      .bind(id, tk, cover, now, link.length <= 400 && APPLE_LINK.test(link) ? link : null).run();
+    // Drop the short "try later" answers the edge may be holding for this song.
+    const cache = caches.default, base = url.origin + "/api/art?v=2&src=" + artSources(env).join(",") + "&id=" + id + "&t=" + encodeURIComponent(tk);
+    ctx.waitUntil(Promise.all([cache.delete(new Request(base)), cache.delete(new Request(base + "&s=big"))]).catch(() => {}));
+    return none(204, 0);
+  } catch (e) {
+    return none(503, 0);
+  }
 }
 
 // Cron: look up a few covers ahead of time, inside Apple's budget, so phones mostly find them saved.

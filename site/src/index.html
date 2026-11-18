@@ -11,14 +11,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400..800&family=DM+Mono&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <style>
-/* Phone first: a sticky header, one scrolling panel per tab, and a bottom tab bar in thumb reach. */
+/* Phone first: a sticky header, one scrolling panel per tab, and a bottom tab bar in thumb reach.
+   Type: body 18px, nothing a guest needs to read under 15px. Section titles are plain bold headings. */
 :root {
   --bg: #170d1c; --panel: #23152a; --panel-2: #2d1b36; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843;
   --hot: #ff5c9d; --hot-soft: #3d1a2c; --gold: #f5b84a; --gold-soft: #3a2a14; --good: #5fd39a;
   --f-display: "Bungee", "Impact", "Arial Black", sans-serif;
   --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --tabbar: 60px; --on: #4a1d35; --win: #4a3514;
+  --tabbar: 64px; --on: #4a1d35; --win: #4a3514;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -37,16 +38,16 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .logo { font-family: var(--f-display); font-size: clamp(19px, 5.6vw, 24px); color: var(--hot); letter-spacing: .01em; white-space: nowrap; }
 .logo span { color: var(--gold); }
 a.logo { text-decoration: none; }
-.where { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); margin: 12px 0 10px; }
-.where b { color: var(--ink); font-weight: 600; }
-.where a { color: var(--gold); margin-left: auto; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin-block: -12px; }
-.pill { font-family: var(--f-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+.where { display: flex; align-items: center; gap: 8px; font-size: 17px; color: var(--muted); margin: 6px 0 4px; min-height: 44px; text-decoration: none; }
+.where b { color: var(--ink); font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where .where-ch { color: var(--gold); margin-left: auto; font-size: 16px; font-weight: 600; white-space: nowrap; }
+.pill { font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .bands { margin: 10px 0 4px; }
 .band-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .band { font: inherit; font-size: 17px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
 .secret { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 16px; padding: 12px 14px; display: grid; gap: 6px; }
-.secret .sc-h { font-family: var(--f-mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.secret .sc-h { font-size: 16px; font-weight: 800; color: var(--gold); }
 .secret .sc-f { font-size: 17px; overflow-wrap: anywhere; }
 .secret .sc-f b { color: #fff; }
 .secret .sc-rw { color: var(--gold); font-weight: 700; }
@@ -62,16 +63,23 @@ a.logo { text-decoration: none; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .recap { display: grid; gap: 8px; }
 .recap-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.recap h2 { margin: 0; font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); font-weight: 500; }
+.recap h2 { margin: 0; font-size: 21px; font-weight: 800; }
 .recap iframe { width: 100%; height: min(78vh, 680px); border: 1px solid var(--line); border-radius: 18px; background: var(--bg); display: block; }
-.promo { border-radius: 18px; padding: 22px 18px; border: 1px solid var(--gold); display: grid; gap: 6px;
-  background: radial-gradient(120% 90% at 100% 0%, #4a2a14 0%, transparent 60%), var(--panel); }
-.promo-k { font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
-.promo-when { font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; color: #fff; overflow-wrap: anywhere; }
+.promo { position: relative; overflow: hidden; border-radius: 20px; border: 1px solid var(--gold); background: var(--panel); }
+/* a faint wall of last night's covers behind the countdown */
+.promo-bg { position: absolute; inset: -20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; transform: rotate(-6deg) scale(1.15); opacity: .45; }
+.promo-bg .art { width: 100%; height: auto; aspect-ratio: 1; border-radius: 8px; }
+.promo-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(23,13,28,.55), rgba(23,13,28,.92) 70%); }
+.promo-in { position: relative; padding: 22px 18px 18px; display: grid; gap: 6px; }
+.promo-k { justify-self: start; font-size: 15px; font-weight: 800; color: #1a0710; background: var(--gold); border-radius: 999px; padding: 3px 12px; }
+.promo-when { font-family: var(--f-display); font-size: clamp(32px, 10vw, 44px); line-height: 1.05; color: #fff; overflow-wrap: anywhere; margin-top: 4px; }
 .promo-where { font-size: 20px; font-weight: 700; }
-.promo-count { font-size: 18px; color: var(--hot); font-weight: 700; }
-.promo-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.promo-acts .act { text-decoration: none; font-size: 16px; }
+.count { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.count div { background: rgba(0,0,0,.4); border-radius: 12px; padding: 8px 4px; text-align: center; font-size: 15px; color: #eadff0; }
+.count b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 30px; line-height: 1.1; color: #fff; }
+.promo-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.promo-acts .act { text-decoration: none; font-size: 17px; min-height: 52px; }
+.promo .act.ghost { background: rgba(0,0,0,.35); }
 .act.ghost, a.act.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .pill.live { border-color: var(--hot); color: var(--hot); }
 .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); margin-right: 6px; vertical-align: 1px; }
@@ -79,6 +87,29 @@ a.logo { text-decoration: none; }
 @keyframes blink { 50% { opacity: .25; } }
 .spacer { flex: 1; }
 @media (max-width: 380px) { .icon-btn .lbl { display: none; } }
+.quick-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-acts .act { min-height: 52px; font-size: 17px; }
+.see-all { background: none; border: 0; padding: 6px 0 6px 10px; margin: -6px 0; font: 700 16px var(--f-body); color: var(--hot); cursor: pointer; white-space: nowrap; }
+.rule { margin: 0; font-size: 16px; color: var(--muted); text-align: center; }
+.foot { text-align: center; margin: 18px 0 0; font-size: 15px; color: var(--muted); }
+.foot a { color: inherit; }
+/* singer avatar: first letter on a color picked from the name */
+.av { --s: 40px; flex: none; width: var(--s); height: var(--s); border-radius: 50%; display: inline-grid; place-items: center;
+  background: hsl(var(--h, 330) 70% 62%); color: #1a0710; font-weight: 800; font-size: calc(var(--s) * .45); line-height: 1; }
+/* shelves: sideways rows of big covers (feed, song ideas, most-sung songs) */
+.shelf { list-style: none; margin: 0 -16px; padding: 2px 16px 6px; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: 16px; scrollbar-width: none; }
+.shelf::-webkit-scrollbar { display: none; }
+.card-s { flex: none; width: 132px; scroll-snap-align: start; display: grid; gap: 1px; align-content: start; cursor: pointer; }
+.cs-fig { position: relative; margin-bottom: 6px; }
+.cs-fig .art { width: 132px; height: 132px; border-radius: 12px; --art-note: 44px; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+.cs-fig .add.top-add { position: absolute; right: 6px; bottom: 6px; width: 40px; height: 40px; font-size: 20px; background: rgba(23,13,28,.8); backdrop-filter: blur(4px); }
+.cs-fig .add.top-add.on { background: var(--hot); }
+.cs-rank { position: absolute; left: 6px; bottom: 2px; font-family: var(--f-display); font-size: 38px; line-height: 1; color: #fff; text-shadow: 0 2px 0 var(--hot), 0 0 12px rgba(0,0,0,.8); pointer-events: none; }
+.cs-rx { position: absolute; left: 6px; right: 6px; bottom: 6px; font-size: 14px; background: rgba(0,0,0,.6); border-radius: 8px; padding: 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-t { font-weight: 700; font-size: 17px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-s { font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-m { font-size: 15px; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-s.mine .cs-t { color: var(--gold); }
 .icon-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 600; cursor: pointer; }
 
 /* panels */
@@ -86,32 +117,39 @@ main { padding-block: 16px 24px; }
 .panel { display: none; gap: 20px; }
 .panel.on { display: grid; grid-template-columns: minmax(0, 1fr); }
 .sec { display: grid; gap: 10px; min-width: 0; }
-.sec > h2 { font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.sec > h2 .aside { letter-spacing: .04em; text-transform: none; color: var(--muted); opacity: .8; }
+.sec > h2, .tally-cap { font-size: 21px; font-weight: 800; color: var(--ink); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; line-height: 1.2; }
+.sec > h2 .aside { font-size: 16px; font-weight: 500; color: var(--muted); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
 .muted { color: var(--muted); }
-.small { font-size: 15px; }
+.small { font-size: 16px; }
 .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
-.status { font-family: var(--f-mono); font-size: 14px; color: var(--muted); text-align: center; padding: 6px 0 0; }
+.status { font-size: 15px; color: var(--muted); text-align: center; padding: 16px 0 0; }
 .status.bad { color: var(--hot); }
 .stale { background: var(--gold-soft); border: 1px solid var(--gold); color: var(--ink); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin-bottom: 12px; }
 .stale b { color: var(--gold); }
-.host-tag { display: inline-block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
+.host-tag { display: inline-block; font-size: 14px; font-weight: 700; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
 .hero .who .host-tag { font-size: 13px; vertical-align: 6px; }
 
 /* hero: who's on the mic */
-.hero { position: relative; overflow: hidden; border-radius: 18px; padding: 18px 18px 20px; border: 1px solid var(--hot);
+.hero { position: relative; overflow: hidden; border-radius: 20px; padding: 18px 16px 16px; border: 1px solid var(--hot);
   background: radial-gradient(120% 90% at 50% -20%, rgba(245,184,74,.22), transparent 60%), linear-gradient(180deg, #34163f, #1d0f24); }
-.hero .label { font-family: var(--f-mono); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
-.hero .who { cursor: pointer; font-family: var(--f-display); font-size: clamp(28px, 9vw, 40px); line-height: 1.05; margin: 8px 0 6px; overflow-wrap: anywhere; color: #fff; }
-.hero .song { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
-.hero .artist { color: var(--muted); overflow-wrap: anywhere; }
-.bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin-top: 14px; overflow: hidden; }
+/* the song's own cover, blurred, fills the box */
+.hero-bg { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(30px) saturate(1.4) brightness(.5); transform: scale(1.1); }
+.hero-bg:not([style*="url"]) { display: none; }
+.hero-in { position: relative; display: grid; justify-items: center; text-align: center; gap: 4px; }
+.hero .label { font-size: 15px; font-weight: 800; color: #fff; background: var(--hot); border-radius: 999px; padding: 3px 12px; margin-bottom: 8px; }
+.hero.idle .label { background: rgba(255,255,255,.14); color: var(--ink); }
+.hero .who { cursor: pointer; font-family: var(--f-display); font-size: clamp(30px, 10vw, 44px); line-height: 1.05; margin: 10px 0 2px; overflow-wrap: anywhere; color: #fff; }
+.hero .song { font-size: 21px; font-weight: 700; overflow-wrap: anywhere; }
+.hero .artist { color: #e6d8ea; font-size: 17px; overflow-wrap: anywhere; }
+.hero .wins { justify-content: center; }
+.hero .rx { position: relative; }
+.bar { width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,.16); margin-top: 14px; overflow: hidden; }
 .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--hot), var(--gold)); width: 0; transition: width 1s linear; }
-.hero-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-family: var(--f-mono); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hero-meta { width: 100%; display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 15px; color: #e6d8ea; font-variant-numeric: tabular-nums; }
 .hero.idle { border-color: var(--line); background: linear-gradient(180deg, #2a1731, #1d0f24); }
 .hero.idle .who { font-size: clamp(24px, 7.5vw, 32px); }
-.offnote { font-size: 16px; color: var(--muted); margin-top: 10px; }
+.offnote { font-size: 16px; color: var(--muted); margin-top: 8px; }
 
 /* the singer's awards and badges, on the live box */
 .wins { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin-top: 10px; }
@@ -126,12 +164,12 @@ main { padding-block: 16px 24px; }
 /* live reactions on the "on the mic" box */
 .rx { margin-top: 14px; display: grid; gap: 8px; }
 .rx-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.rx-b { position: relative; display: grid; justify-items: center; gap: 1px; padding: 7px 2px 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14);
+.rx-b { position: relative; display: grid; justify-items: center; gap: 1px; padding: 8px 2px 6px; min-height: 60px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14);
   background: rgba(0,0,0,.22); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
-.rx-b .e { font-size: 26px; line-height: 1.1; }
-.rx-b .t { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.rx-b .e { font-size: 28px; line-height: 1.1; }
+.rx-b .t { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .rx-b .c { position: absolute; top: -6px; right: -4px; min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--hot); color: #fff;
-  font-family: var(--f-mono); font-size: 13px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+  font-size: 14px; font-weight: 800; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
 .rx-b .c:empty { display: none; }
 .rx-b.roast .c { background: #7a5bd6; }
 .rx-b:active { transform: scale(.92); }
@@ -151,10 +189,10 @@ main { padding-block: 16px 24px; }
 @media (max-width: 360px) { .rx-b .t { display: none; } .rx-b .e { font-size: 24px; } }
 
 .tally { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.tally div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; font-size: 13px; color: var(--muted); }
-.tally-wrap { display: grid; gap: 6px; }
-.tally-cap { font-family: var(--f-mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.tally strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: var(--ink); line-height: 1.15; }
+.tally div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 4px; text-align: center; font-size: 15px; color: var(--muted); }
+.tally-wrap { display: grid; gap: 10px; }
+.tally-cap { margin: 0; }
+.tally strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 26px; color: var(--ink); line-height: 1.15; }
 
 /* lists */
 .list { list-style: none; margin: 0; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
@@ -164,11 +202,16 @@ main { padding-block: 16px 24px; }
 .list li:nth-child(1) .rank { color: var(--gold); }
 .list .main-t { font-weight: 600; overflow-wrap: anywhere; }
 .list .sub-t { grid-column: 2; color: var(--muted); font-size: 16px; overflow-wrap: anywhere; }
-.list .val { font-family: var(--f-mono); font-size: 16px; color: var(--hot); text-align: right; white-space: nowrap; }
-.list .time { font-family: var(--f-mono); font-size: 14px; color: var(--muted); min-width: 52px; }
+.list .val { font-size: 16px; font-weight: 700; color: var(--hot); text-align: right; white-space: nowrap; }
+.list .time { font-size: 15px; color: var(--muted); min-width: 52px; }
+/* leaderboard: medal, avatar + name, songs */
+.list.board li { padding: 10px 14px; }
+.list.board .main-t { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.list.board .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
+.list.board .rank { font-size: 22px; }
 .list.feed li { grid-template-columns: auto minmax(0, 1fr); }
 .list li.mine { background: linear-gradient(90deg, var(--gold-soft), transparent 80%); }
-.list li.mine .main-t::after { content: "you"; font-family: var(--f-mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+.list li.mine .main-t::after { content: "you"; font-size: 14px; font-weight: 800; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
 .list .rank.medal { font-size: 20px; }
 .list .val.dim { color: var(--muted); }
 .toggle-more { background: none; border: 0; color: var(--hot); font-weight: 600; font-size: 16px; padding: 10px 14px; cursor: pointer; width: 100%; text-align: center; border-top: 1px solid var(--line); }
@@ -178,22 +221,22 @@ main { padding-block: 16px 24px; }
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: 0 0 auto; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 12px; text-align: left; cursor: pointer; display: grid; }
-.chip b { font-family: var(--f-display); font-weight: 400; font-size: 16px; }
-.chip small { font-family: var(--f-mono); color: var(--muted); font-size: 13px; }
+.chip b { font-weight: 800; font-size: 17px; }
+.chip small { color: var(--muted); font-size: 15px; }
 .chip[aria-pressed="true"] { border: 1px solid var(--hot); background: var(--hot-soft); }
 .awards { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 479px) { .awards { grid-template-columns: minmax(0, 1fr); } }
 .awards .award.headline, .awards .card { grid-column: 1 / -1; }
-.award:not(.headline) { padding: 10px 12px; }
-.award:not(.headline) .who { font-size: 18px; }
-.award:not(.headline) .what { font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.award .ic { font-size: 20px; line-height: 1; margin-right: 6px; }
-.award { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; }
-.award.headline { border-color: var(--gold); background: linear-gradient(180deg, var(--gold-soft), var(--panel) 70%); }
-.award .label { font-family: var(--f-mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
-.award .who { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
-.award .what { color: var(--muted); font-size: 16px; overflow-wrap: anywhere; }
-.award .stat { font-family: var(--f-mono); font-size: 15px; color: var(--hot); }
+/* award card: big icon, award name, winner, what for */
+.award { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.award .ic { font-size: 34px; line-height: 1.1; margin-bottom: 4px; }
+.award .label { font-size: 15px; font-weight: 800; color: var(--gold); }
+.award .who { font-size: 20px; font-weight: 800; overflow-wrap: anywhere; line-height: 1.2; }
+.award .what { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.award .stat { font-size: 15px; font-weight: 700; color: var(--hot); }
+.award.headline { border-color: var(--gold); background: linear-gradient(135deg, var(--win), var(--panel) 75%); grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; }
+.award.headline .ic { grid-row: 1 / span 4; font-size: 52px; align-self: center; }
+.award.headline .who { font-size: 26px; }
+.awards.mini .what, .awards.mini .stat { display: none; }
 canvas#card { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .act { background: var(--hot); color: #1a0710; border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 700; cursor: pointer; }
@@ -201,7 +244,7 @@ canvas#card { width: 100%; height: auto; border-radius: 12px; border: 1px solid 
 
 /* segmented control (Awards, Records) */
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
-.seg button { background: none; border: 0; border-radius: 9px; padding: 9px 4px; font-weight: 600; font-size: clamp(13px, 4.2vw, 16px); white-space: nowrap; color: var(--muted); cursor: pointer; }
+.seg button { background: none; border: 0; border-radius: 9px; padding: 11px 2px; min-height: 46px; font-weight: 700; font-size: clamp(15px, 4.3vw, 17px); white-space: nowrap; color: var(--muted); cursor: pointer; }
 .seg button[aria-selected="true"] { background: var(--hot-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hot); }
 .sub { display: none; gap: 20px; }
 .sub.on { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -211,16 +254,20 @@ canvas#card { width: 100%; height: auto; border-radius: 12px; border: 1px solid 
 .search::placeholder { color: var(--muted); }
 details.singer { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 details.singer + details.singer { margin-top: 8px; }
-details.singer summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; padding: 12px 14px; }
+details.singer summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; padding: 12px 14px; align-items: center; }
+details.singer:not(.song) summary { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+details.singer:not(.song) summary .av { grid-row: 1 / span 2; }
+details.singer:not(.song) summary .sub-t { grid-column: 2 / -1; }
+details.singer:not(.song) summary .chev { grid-column: 4; }
 details.singer summary::-webkit-details-marker { display: none; }
 details.singer summary .main-t { font-weight: 600; overflow-wrap: anywhere; }
-details.singer summary .val { font-family: var(--f-mono); color: var(--hot); font-size: 16px; }
-details.singer summary .sub-t { color: var(--muted); font-size: 15px; grid-column: 1 / -1; }
+details.singer summary .val { color: var(--hot); font-size: 16px; font-weight: 700; }
+details.singer summary .sub-t { color: var(--muted); font-size: 16px; grid-column: 1 / -1; }
 details.singer[open] summary { border-bottom: 1px solid var(--line); }
 .sbody { padding: 10px 14px 14px; display: grid; gap: 8px; font-size: 16px; }
 .sbody ol { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 6px; }
 .sbody li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
-.sbody li .time { font-family: var(--f-mono); color: var(--muted); font-size: 14px; min-width: 64px; padding-top: 2px; }
+.sbody li .time { color: var(--muted); font-size: 15px; min-width: 64px; padding-top: 2px; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { font-size: 14px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--gold-soft); color: var(--gold); }
 .more { width: 100%; margin-top: 8px; }
@@ -247,49 +294,50 @@ details.singer.song summary .main-t { font-weight: 600; }
 /* the line: how many are waiting in the karaoke app's queue and about how long a new sign-up waits */
 .line { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
 .line-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.line-row div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 13px; color: var(--muted); }
+.line-row div { background: var(--panel-2); border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 15px; color: var(--muted); }
 .line-row strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 22px; color: var(--ink); line-height: 1.15; }
 .line-next { font-size: 16px; color: var(--muted); overflow-wrap: anywhere; }
 .line-next b { color: var(--ink); font-weight: 600; }
 .line-mine { font-size: 16px; color: var(--gold); font-weight: 600; }
-.line-note { font-size: 13px; color: var(--muted); }
+.line-note { font-size: 15px; color: var(--muted); }
 
 /* "that's me" card */
 .me { border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); display: grid; gap: 8px; }
 .me-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .me-name { font-family: var(--f-display); font-size: 20px; overflow-wrap: anywhere; min-width: 0; }
-.me-kicker { font-family: var(--f-mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.me-kicker, .fl-h { font-size: 16px; font-weight: 800; color: var(--gold); }
 .me-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.me-row div { background: rgba(0,0,0,.18); border-radius: 10px; padding: 6px 4px; text-align: center; font-size: 13px; color: var(--muted); }
+.me-row div { background: rgba(0,0,0,.18); border-radius: 10px; padding: 6px 4px; text-align: center; font-size: 15px; color: var(--muted); }
 .me-row strong { display: block; font-family: var(--f-display); font-weight: 400; font-size: 20px; color: var(--ink); line-height: 1.2; }
 .find-me { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--panel); border: 1px dashed var(--gold); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
 .find-me .fm-ic { font-size: 22px; }
 .find-me b { display: block; }
 .find-me span.small { color: var(--muted); }
-.me-stats { font-family: var(--f-mono); font-size: 15px; color: var(--muted); }
+.me-stats { font-size: 16px; color: var(--muted); }
 .prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; font-size: 16px; }
 .prog .pb { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .prog .pb i { display: block; height: 100%; background: var(--gold); }
-.prog .n { font-family: var(--f-mono); font-size: 14px; color: var(--muted); }
-.linkish { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 15px; text-decoration: underline; cursor: pointer; justify-self: start; }
+.prog .n { font-size: 15px; color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 16px; text-decoration: underline; cursor: pointer; justify-self: start; }
 
 /* Sunday reminder + hot streaks */
-.remind { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); display: grid; gap: 8px; }
-.remind b { display: block; font-size: 17px; }
-.remind .rm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
-.remind .rm-acts a { text-decoration: none; font-size: 15px; padding: 9px 12px; }
+.remind { display: grid; gap: 10px; }
+.remind h3 { margin: 0; }
+.remind .rm-acts { display: grid; gap: 8px; }
+.remind .rm-acts a { text-decoration: none; font-size: 17px; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+#remind-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .remind .streaks { font-size: 15px; color: var(--muted); }
 .remind .streaks strong { color: var(--ink); font-weight: 600; }
 
 /* badge book */
 .book { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bk { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
-.bk .ic { font-size: 24px; line-height: 1.1; }
+.bk .ic { font-size: 32px; line-height: 1.1; }
 .bk.got { border-color: var(--gold); background: linear-gradient(180deg, var(--gold-soft), var(--panel) 80%); }
 .bk .nm { font-weight: 700; font-size: 17px; }
-.bk .pc { font-family: var(--f-mono); font-size: 14px; color: var(--hot); white-space: nowrap; }
+.bk .pc { font-size: 15px; font-weight: 700; color: var(--hot); white-space: nowrap; }
 .bk .ds { color: var(--muted); font-size: 15px; line-height: 1.3; }
-.bk .hd { font-size: 14px; overflow-wrap: anywhere; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bk .hd { font-size: 15px; overflow-wrap: anywhere; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bk.none { border-style: dashed; }
 .bk.none .ic { filter: grayscale(1); opacity: .5; }
 .bk.none .hd { color: var(--gold); }
@@ -298,7 +346,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 .dares { display: grid; gap: 8px; }
 .dare { background: var(--panel); border: 1px dashed var(--gold); border-radius: 12px; padding: 11px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
 .dare .txt { font-weight: 700; overflow-wrap: anywhere; }
-.dare .state { font-family: var(--f-mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
+.dare .state { font-size: 15px; font-weight: 800; color: var(--gold); white-space: nowrap; }
 .dare .by { grid-column: 1 / -1; color: var(--muted); font-size: 16px; overflow-wrap: anywhere; }
 .dare.done { border-style: solid; border-color: var(--hot); background: var(--hot-soft); }
 .dare.done .state { color: var(--hot); }
@@ -308,7 +356,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 
 .unl { display: grid; gap: 8px; }
 .ub { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 12px; align-items: center; }
-.ub .ic { font-size: 26px; grid-row: span 2; }
+.ub .ic { font-size: 32px; grid-row: span 2; }
 .ub .nm { font-weight: 700; }
 .ub .nm small { font-weight: 400; color: var(--muted); font-size: 15px; margin-left: 6px; }
 .ub .hd { font-size: 16px; color: #e6d6ea; overflow-wrap: anywhere; }
@@ -316,12 +364,12 @@ details.singer.song summary .main-t { font-weight: 600; }
 /* records */
 .records { display: grid; gap: 8px; }
 .rec { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
-.rec .label { grid-column: 1 / -1; font-family: var(--f-mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.rec .who { font-weight: 700; overflow-wrap: anywhere; }
-.rec .stat { font-family: var(--f-mono); font-size: 15px; color: var(--hot); white-space: nowrap; }
+.rec .label { grid-column: 1 / -1; font-size: 15px; font-weight: 800; color: var(--gold); }
+.rec .who { font-weight: 800; font-size: 19px; overflow-wrap: anywhere; }
+.rec .stat { font-size: 16px; font-weight: 700; color: var(--hot); white-space: nowrap; }
 .rec .what { grid-column: 1 / -1; color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
 .decades { display: grid; gap: 6px; }
-.dec { display: grid; grid-template-columns: 48px minmax(0, 1fr) 36px; gap: 10px; align-items: center; font-family: var(--f-mono); font-size: 15px; }
+.dec { display: grid; grid-template-columns: 48px minmax(0, 1fr) 36px; gap: 10px; align-items: center; font-size: 16px; font-weight: 600; }
 .dec i { display: block; height: 14px; border-radius: 4px; background: var(--hot); min-width: 3px; }
 .dec span:last-child { color: var(--muted); text-align: right; }
 
@@ -329,9 +377,9 @@ details.singer.song summary .main-t { font-weight: 600; }
 .kb { display: grid; gap: 12px; }
 .kb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .kb-night { font-family: var(--f-display); font-size: 20px; }
-.kb-count { font-family: var(--f-mono); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kb-count { font-size: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .kb-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-.kb-letter { font-family: var(--f-display); text-align: center; font-size: 22px; color: var(--hot); }
+.kb-letter { font-family: var(--f-display); text-align: center; font-size: 26px; color: var(--hot); }
 .kb-sq { font: inherit; cursor: pointer; aspect-ratio: 1; max-width: 100%; min-width: 0; padding: 4px; border-radius: 6px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; text-align: center; overflow: hidden; }
@@ -350,7 +398,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 .kb-sq.t-deep .kb-tier { color: var(--gold); }
 .kb-sq.t-guilty .kb-tier { color: var(--hot); }
 .kb-sq.on .kb-tier { color: #ffd1e3; }
-.kb-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; color: var(--muted); }
+.kb-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 15px; color: var(--muted); }
 .kb-key span { display: inline-flex; align-items: center; gap: 6px; }
 .kb-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); }
 .kb-sw.k-guilty { border: 2px solid var(--hot); }
@@ -359,16 +407,16 @@ details.singer.song summary .main-t { font-weight: 600; }
 /* Phones: drop the tier words and names inside squares (the key and the tap-for-details box cover them)
    so the square text can be as big as possible. */
 @media (max-width: 559px) {
-  .kb-grid { gap: 4px; margin: 0 -6px; }
+  .kb-grid { gap: 4px; margin: 0 -10px; }
   /* Squares grow taller when the text needs it, so nothing gets cut off. */
-  .kb-sq { padding: 4px 3px; border-radius: 8px; aspect-ratio: auto; min-height: 62px; }
+  .kb-sq { padding: 5px 3px; border-radius: 10px; aspect-ratio: auto; min-height: 74px; }
   .kb-tier, .kb-w { display: none; }
-  .kb-t { font-size: clamp(11px, 3.4vw, 15px); line-height: 1.12; overflow-wrap: normal; word-break: normal; -webkit-hyphens: manual; hyphens: manual; max-width: 100%; }
+  .kb-t { font-size: clamp(13px, 3.75vw, 16px); line-height: 1.12; overflow-wrap: normal; word-break: normal; -webkit-hyphens: manual; hyphens: manual; max-width: 100%; }
   .kb-sq.t-guilty { border: 2px solid var(--hot); }
   .kb-sq.t-deep { border-width: 2px; }
   .kb-letter { font-size: 20px; }
 }
-@media (max-width: 359px) { .kb-t { font-size: 10.5px; } }
+@media (max-width: 359px) { .kb-t { font-size: 12px; } }
 .kb-t.kb-break { overflow-wrap: anywhere; -webkit-hyphens: auto; hyphens: auto; }
 .kb-sq.free { background: var(--hot); border-color: var(--hot); color: #fff; }
 .kb-sq.free .kb-t { font-family: var(--f-display); font-weight: 400; text-decoration: none; }
@@ -376,7 +424,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 .kb-sq:focus-visible, .kb-new:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .kb-info { min-height: 3.2em; font-size: 17px; line-height: 1.4; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
 .kb-info.bingo { font-family: var(--f-display); font-size: 22px; color: #1a0710; background: var(--gold); border-color: var(--gold); text-align: center; }
-.kb-new { justify-self: start; font: 600 15px var(--f-body); cursor: pointer; min-height: 44px; padding: 9px 16px; border-radius: 6px; border: 1px solid var(--hot); background: transparent; color: var(--hot); }
+.kb-new { justify-self: start; font: 700 16px var(--f-body); cursor: pointer; min-height: 44px; padding: 9px 16px; border-radius: 6px; border: 1px solid var(--hot); background: transparent; color: var(--hot); }
 @media (prefers-reduced-motion: no-preference) {
   .kb.kb-pop .kb-grid { animation: pop .6s ease-out; }
   @keyframes pop { 0% { transform: scale(1); } 30% { transform: scale(1.04) rotate(-1deg); } 60% { transform: scale(.99) rotate(1deg); } 100% { transform: none; } }
@@ -384,7 +432,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 
 /* songbook (songs.js) */
 .list.songs li { grid-template-columns: minmax(0, 1fr) auto; padding: 9px 8px 9px 14px; }
-.list.songs .sub-t { grid-column: 1; font-size: 15px; }
+.list.songs .sub-t { grid-column: 1; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list.songs .main-t { grid-column: 1; grid-row: 1; }
 .list.songs .add, .list.songs .acts { grid-column: 2; grid-row: 1 / span 2; }
 .acts { display: flex; gap: 2px; }
@@ -397,11 +445,11 @@ details.singer.song summary .main-t { font-weight: 600; }
 .req { display: grid; gap: 10px; }
 .req-lead { margin: 0; }
 .req-form { display: grid; gap: 10px; }
-.req-l { display: grid; gap: 4px; font-size: 15px; color: var(--muted); }
+.req-l { display: grid; gap: 4px; font-size: 16px; color: var(--muted); }
 .req-mine { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .req-mine li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .req-t { overflow-wrap: anywhere; min-width: 0; }
-.req-s { flex: none; font-size: 14px; color: var(--muted); }
+.req-s { flex: none; font-size: 15px; color: var(--muted); }
 .req-s.req-added { color: var(--gold); font-weight: 700; }
 /* Songbook filters: swipeable pill rows (songs.js). Genre pills each get their own hue (--h). */
 .cat-filters { display: grid; gap: 8px; min-width: 0; }
@@ -416,20 +464,22 @@ details.singer.song summary .main-t { font-weight: 600; }
 .ps-next { right: 0; justify-content: flex-end; padding-right: 8px; background: linear-gradient(270deg, var(--bg) 35%, transparent); }
 .pill-scroll.at-start .ps-prev, .pill-scroll.at-end .ps-next { opacity: 0; pointer-events: none; }
 .pills.wrap { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
-.sb-pill { flex: none; min-height: 44px; scroll-snap-align: start; font: 600 15px var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+.sb-pill { flex: none; min-height: 44px; scroll-snap-align: start; font: 700 16px var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
   border-radius: 999px; padding: 8px 14px; cursor: pointer; white-space: nowrap; position: relative; }
-.pills.genres .sb-pill { --h: 330; font-size: 16px; padding: 10px 16px; border: 0;
+.pills.genres .sb-pill { --h: 330; font-size: 17px; padding: 10px 16px; border: 0;
   background: linear-gradient(135deg, hsl(var(--h) 55% 28%), hsl(calc(var(--h) + 40) 50% 18%)); box-shadow: inset 0 0 0 1px hsl(var(--h) 60% 40% / .5); }
-.pills.genres .sb-pill.more-pill { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
-.pills.eras .sb-pill { font-family: var(--f-display); font-weight: 400; font-size: 15px; letter-spacing: .02em; }
+.pills.genres .sb-pill.more-pill, .pills.genres .sb-pill.filt-pill, .pills.genres .sb-pill.clear-pill { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); }
+.pills.genres .sb-pill.clear-pill { color: var(--muted); }
+.cat-list-h { margin-top: 6px; }
+.cat-more .act { justify-self: stretch; margin-top: 6px; min-height: 50px; }
 .sb-pill[aria-pressed="true"] { background: var(--hot) !important; color: #1a0710; border-color: var(--hot); box-shadow: 0 0 0 2px rgba(255, 92, 157, .35) !important; }
 .sb-pill.clear-pill { color: var(--muted); border-style: dashed; }
 .sb-pill.dot::after { content: ""; position: absolute; top: 4px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--hot); }
 .sb-pill:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.cat-more { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.cat-more { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
 /* Top 10 album-cover carousel */
 .cat-top-wrap { display: grid; gap: 8px; min-width: 0; }
-.cat-top-h { font-family: var(--f-display); font-size: 20px; color: var(--gold); }
+.cat-top-h { font-size: 21px; font-weight: 800; }
 .cat-top { list-style: none; margin: 0 -16px; padding: 2px 16px 6px; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; }
 .cat-top::-webkit-scrollbar { display: none; }
 .top-card { flex: none; width: 136px; scroll-snap-align: start; display: grid; gap: 2px; }
@@ -439,30 +489,27 @@ details.singer.song summary .main-t { font-weight: 600; }
   text-shadow: 0 2px 0 var(--hot), 0 0 12px rgba(0, 0, 0, .8); pointer-events: none; }
 .top-fig .add.top-add { position: absolute; right: 6px; bottom: 6px; width: 38px; height: 38px; font-size: 20px; background: rgba(23, 13, 28, .8); backdrop-filter: blur(4px); }
 .top-fig .add.top-add.on { background: var(--hot); }
-.top-t { font-weight: 700; font-size: 15px; line-height: 1.25; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.top-a { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tab-n { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--hot); color: #1a0710; font: 700 11px/18px var(--f-body); }
+.top-t { font-weight: 700; font-size: 17px; line-height: 1.25; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.top-a { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab-n { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--hot); color: #1a0710; font: 800 13px/20px var(--f-body); }
 .tab-n:empty { display: none; }
 
 /* tab bar */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: #12091a; border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px); }
-nav.tabs .wrap { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); height: var(--tabbar); }
-nav.tabs button { background: none; border: 0; cursor: pointer; display: grid; place-content: center; gap: 2px; justify-items: center; color: var(--muted); font-size: clamp(12px, 3.5vw, 14px); font-weight: 600; min-width: 0; white-space: nowrap; }
-nav.tabs button svg { width: 22px; height: 22px; padding: 2px 10px; box-sizing: content-box; }
+nav.tabs .wrap { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: var(--tabbar); padding-inline: 4px; }
+nav.tabs button { background: none; border: 0; cursor: pointer; display: grid; place-content: center; gap: 3px; justify-items: center; color: var(--muted); font-size: clamp(13px, 3.7vw, 15px); font-weight: 700; min-width: 0; white-space: nowrap; }
+nav.tabs button svg { width: 24px; height: 24px; padding: 3px 14px; box-sizing: content-box; }
 nav.tabs button { position: relative; }
 nav.tabs button[aria-selected="true"] { color: var(--hot); }
-nav.tabs button[aria-selected="true"] svg { background: var(--hot-soft); border-radius: 999px; padding: 2px 10px; box-sizing: content-box; }
+nav.tabs button[aria-selected="true"] svg { background: var(--hot-soft); border-radius: 999px; }
 nav.tabs button:active svg, .act:active, .seg button:active, .chip:active { transform: scale(.96); }
 button:focus-visible, summary:focus-visible, .search:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 .league-link { display: block; text-align: center; text-decoration: none; margin-top: 12px; }
 /* song ideas (picker.js) */
-.pk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pk-head h2 { margin: 0; }
-.pk-again { padding: 7px 12px; font-size: 14px; }
-.pk-body { display: grid; gap: 12px; }
-.pk-group .list { margin-top: 6px; }
+.pk-body { display: grid; gap: 20px; }
+.pk { display: grid; }
 /* crowd draft */
 .dr-go { justify-self: start; }
 .dr-msg:empty { display: none; }
@@ -506,21 +553,17 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 .tip-item:active { transform: scale(.98); }
 .tip-item .te { font-size: 24px; text-align: center; }
 .tip-item b { display: block; font-size: 17px; line-height: 1.25; }
-.tip-item small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; }
-.tip-item .ta { font-family: var(--f-mono); font-weight: 500; font-size: 17px; color: var(--gold); white-space: nowrap; }
+.tip-item small { display: block; color: var(--muted); font-size: 15px; line-height: 1.3; }
+.tip-item .ta { font-weight: 800; font-size: 18px; color: var(--gold); white-space: nowrap; }
 /* how to sign up */
 @media (max-width: 350px) { .top { gap: 8px; } .icon-btn { padding: 0 9px; } }
-.sg-signup { width: 100%; margin: 0 0 4px; }
 #signup-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
 .steps { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; counter-reset: st; }
 .steps li { counter-increment: st; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; font-size: 17px; line-height: 1.35; }
 .steps li::before { content: counter(st); display: grid; place-content: center; width: 34px; height: 34px; border-radius: 999px; background: var(--hot-soft); color: var(--hot); font-family: var(--f-display); font-size: 18px; }
 .steps b { display: block; }
-.steps small { display: block; color: var(--muted); font-size: 14px; line-height: 1.3; margin-top: 2px; }
-.signup-card { border: 1px solid var(--hot); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
-.signup-card .steps { margin: 8px 0 4px; }
-.signup-card .linkish { font-size: 15px; }
-.url { font-family: var(--f-mono); font-size: 15px; text-align: center; overflow-wrap: anywhere; margin-bottom: 12px; }
+.steps small { display: block; color: var(--muted); font-size: 15px; line-height: 1.3; margin-top: 2px; }
+.url { font-size: 17px; font-weight: 600; text-align: center; overflow-wrap: anywhere; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -538,8 +581,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 </header>
 
 <main class="wrap">
-  <div class="where" id="where"><span aria-hidden="true">📍</span><b id="where-name"></b><a href="/?pick=1">Change bar</a></div>
-  <!-- TONIGHT -->
+  <a class="where" id="where" href="/?pick=1" title="Pick another bar"><span aria-hidden="true">📍</span><b id="where-name"></b><span class="where-ch">Change</span></a>
+  <!-- LIVE: what's happening now, short enough to take in at a glance. Games live on Play, winners on Winners. -->
   <section class="panel on" id="p-tonight" role="tabpanel" aria-labelledby="t-tonight">
     <div class="stale" id="stale" role="status" hidden></div>
     <!-- After a session: the night's recap scrolls like the TV. From the next morning: promote the next session. -->
@@ -548,26 +591,31 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       <iframe id="recap-tv" title="Tonight’s awards and stats, scrolling" loading="lazy"></iframe>
     </section>
     <section class="promo" id="promo" hidden aria-labelledby="promo-when">
-      <div class="promo-k" id="promo-k">Next karaoke</div>
-      <div class="promo-when" id="promo-when"></div>
-      <div class="promo-where" id="promo-where"></div>
-      <div class="promo-count" id="promo-count"></div>
-      <div class="promo-acts">
-        <button class="act" id="promo-remind" type="button" hidden>Remind me</button>
-        <button class="act ghost" id="promo-share" type="button">Invite friends</button>
-        <a class="act ghost" id="promo-recap" href="tv">Last week’s recap</a>
+      <div class="promo-bg" id="promo-bg" aria-hidden="true"></div>
+      <div class="promo-in">
+        <div class="promo-k" id="promo-k">Next karaoke</div>
+        <div class="promo-when" id="promo-when"></div>
+        <div class="promo-where" id="promo-where"></div>
+        <div class="count" id="promo-count" aria-live="off"></div>
+        <div class="promo-acts">
+          <button class="act" id="promo-remind" type="button">🔔 Remind me</button>
+          <button class="act ghost" id="promo-share" type="button">📲 Invite</button>
+        </div>
       </div>
     </section>
     <div class="hero" id="hero">
-      <div class="hero-art" id="hero-art"></div>
-      <div class="label" id="hero-label">On the mic</div>
-      <div class="who" id="hero-who">…</div>
-      <div class="song" id="hero-song"></div>
-      <div class="artist" id="hero-artist"></div>
-      <div class="wins" id="hero-wins" aria-label="Awards and badges" hidden></div>
-      <div class="bar" id="hero-bar" hidden><i id="hero-fill"></i></div>
-      <div class="hero-meta" id="hero-meta" hidden></div>
-      <div class="offnote" id="hero-off" hidden></div>
+      <div class="hero-bg" id="hero-bg" aria-hidden="true"></div>
+      <div class="hero-in">
+        <div class="label" id="hero-label">On the mic</div>
+        <div class="hero-art" id="hero-art"></div>
+        <div class="who" id="hero-who">…</div>
+        <div class="song" id="hero-song"></div>
+        <div class="artist" id="hero-artist"></div>
+        <div class="wins" id="hero-wins" aria-label="Awards and badges" hidden></div>
+        <div class="bar" id="hero-bar" hidden><i id="hero-fill"></i></div>
+        <div class="hero-meta" id="hero-meta" hidden></div>
+        <div class="offnote" id="hero-off" hidden></div>
+      </div>
       <div class="rx" id="rx" hidden>
         <div class="rx-grid" id="rx-grid" role="group" aria-label="React to this song"></div>
         <div class="rx-foot"><span id="rx-as"></span><span class="rx-msg" id="rx-msg" role="status" aria-live="polite"></span></div>
@@ -578,185 +626,178 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       </div>
     </div>
     <div class="line" id="line" hidden aria-live="polite"></div>
-    <section class="signup-card" id="signup-card" hidden aria-labelledby="signup-card-h">
-      <div class="me-kicker" id="signup-card-h">Want to sing? Here’s how</div>
-      <ol class="steps" data-steps></ol>
-      <button class="linkish" type="button" data-find-song>Need a song? Browse the songbook</button>
-    </section>
+    <div class="quick-acts" id="signup-card" hidden>
+      <button class="act" type="button" data-signup>✍️ How to sign up</button>
+      <button class="act ghost" type="button" data-find-song>🎵 Find a song</button>
+    </div>
     <div class="secret" id="secret" hidden></div>
     <div class="tally-wrap">
-      <div class="tally-cap" id="tally-cap"></div>
+      <h2 class="tally-cap" id="tally-cap"></h2>
       <div class="tally" id="tally"></div>
     </div>
-    <div class="me" id="me" hidden></div>
-    <div class="remind" id="remind" hidden>
-      <div><b id="rm-h">🗓️ Karaoke every week</b><span class="muted small" id="rm-sub"></span></div>
-      <div class="rm-acts">
-        <a class="act" id="rm-ics" href="sunday.ics">Add to my calendar</a>
-        <a class="act ghost" id="rm-gcal" target="_blank" rel="noopener">Google Calendar</a>
-        <a class="act ghost" id="rm-push" target="_blank" rel="noopener">Phone alert</a>
-      </div>
-      <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app: open the link, tap Subscribe, and you’ll get a heads-up 2 hours before each night starts.</div>
-      <div class="streaks" id="rm-streaks" hidden></div>
-    </div>
-    <button class="find-me" id="find-me" type="button" hidden>
-      <span class="fm-ic" aria-hidden="true">🎟️</span>
-      <span><b>Sung here before?</b><span class="small">Find your name to track your badges and see where you rank.</span></span>
-    </button>
-    <div class="sec" id="draft"></div>
-    <div class="sec" id="duets"></div>
     <p class="hint" id="no-songs" hidden>No songs yet. The first song of the night shows up here.</p>
     <div class="sec night-sec">
-      <h2 id="dares-h">Tonight's dares</h2>
-      <div class="dares" id="dares"></div>
-      <div class="watch" id="watch" hidden></div>
-    </div>
-    <div class="sec night-sec">
       <h2 id="lb-h">Tonight's leaderboard</h2>
-      <ol class="list" id="leaderboard"></ol>
+      <ol class="list board" id="leaderboard"></ol>
     </div>
     <div class="sec night-sec">
       <h2 id="feed-h">Earlier tonight</h2>
-      <ol class="list feed" id="feed"></ol>
-      <div id="feed-credit"></div>
-    </div>
-    <div class="sec" id="unlocked-sec" hidden>
-      <h2>Badges unlocked tonight</h2>
-      <div class="unl" id="unlocked"></div>
+      <ol class="shelf feed" id="feed"></ol>
     </div>
     <div class="sec night-sec">
-      <h2 id="aw-h">Awards so far</h2>
-      <div class="awards" id="tonight-awards"></div>
+      <h2><span id="aw-h">Awards so far</span><button class="see-all" type="button" data-go="awards">All awards ›</button></h2>
+      <div class="awards mini" id="tonight-awards"></div>
     </div>
+    <button class="find-me" id="find-me" type="button" hidden>
+      <span class="fm-ic" aria-hidden="true">🙋</span>
+      <span><b>Sung here before?</b><span class="small">Find your name to track your badges.</span></span>
+    </button>
   </section>
 
-  <!-- SONGBOOK -->
+  <!-- SONGS: search first, then shelves of covers, then the full list (songs.js + picker.js) -->
   <section class="panel" id="p-songs" role="tabpanel" aria-labelledby="t-songs">
-    <section class="sec pk" id="picker" aria-label="Song ideas"></section>
     <div class="seg" role="tablist" aria-label="Songbook view" data-seg="sg">
-      <button type="button" role="tab" aria-selected="true" data-sub="sg-find" id="sg-find-btn">Find a song</button>
-      <button type="button" role="tab" aria-selected="false" data-sub="sg-mine" id="sg-mine-btn">My list</button>
+      <button type="button" role="tab" aria-selected="true" data-sub="sg-find" id="sg-find-btn">🔍 Find a song</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="sg-mine" id="sg-mine-btn">📝 My list</button>
     </div>
     <div class="sub on" id="sg-find"><div class="sec" id="cat-find"></div></div>
     <div class="sub" id="sg-mine"></div>
-    <button class="act ghost sg-signup" type="button" data-signup>✍️ Found your song? Here’s how to sign up</button>
-    <p class="muted small" style="margin:0">Your list stays on this phone.</p>
+    <section class="sec pk" id="picker" aria-label="Song ideas"></section>
   </section>
 
-  <!-- AWARDS -->
+  <!-- PLAY: the games -->
+  <section class="panel" id="p-play" role="tabpanel" aria-labelledby="t-play">
+    <div class="seg" role="tablist" aria-label="Games" data-seg="pl">
+      <button type="button" role="tab" aria-selected="true" data-sub="pl-bingo">Bingo</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="pl-draft">Draft</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="pl-dares">Dares</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="pl-duets">Duets</button>
+    </div>
+    <div class="sub on" id="pl-bingo">
+      <div class="kb" id="bingo"></div>
+      <p class="rule">Get 5 in a row, then show your screen to the host.</p>
+    </div>
+    <div class="sub" id="pl-draft"><div class="sec" id="draft"></div></div>
+    <div class="sub" id="pl-dares">
+      <div class="sec night-sec">
+        <h2 id="dares-h">Tonight's dares</h2>
+        <div class="dares" id="dares"></div>
+        <div class="watch" id="watch" hidden></div>
+      </div>
+    </div>
+    <div class="sub" id="pl-duets"><div class="sec" id="duets"></div></div>
+  </section>
+
+  <!-- WINNERS: awards by night and season, all-time records, badges -->
   <section class="panel" id="p-awards" role="tabpanel" aria-labelledby="t-awards">
-    <div class="seg" role="tablist" aria-label="Awards view" data-seg="aw">
-      <button type="button" role="tab" aria-selected="true" data-sub="aw-night">By night</button>
+    <div class="seg" role="tablist" aria-label="Winners view" data-seg="aw">
+      <button type="button" role="tab" aria-selected="true" data-sub="aw-night">Nights</button>
       <button type="button" role="tab" aria-selected="false" data-sub="aw-season">Season</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="rec-fame" id="rec-btn">Records</button>
+      <button type="button" role="tab" aria-selected="false" data-sub="rec-badges">Badges</button>
     </div>
     <div class="sub on" id="aw-night">
-    <div class="chips" id="chips" aria-label="Pick a night"></div>
-    <div class="sec">
-      <h2 id="awards-h">Winners</h2>
-      <div class="awards" id="awards"></div>
-    </div>
-    <div class="sec">
-      <h2>Recap card</h2>
-      <canvas id="card" width="1080" height="1350" aria-label="Recap card for the selected night"></canvas>
-      <div class="btns">
-        <button class="act" id="share-card" type="button">Share card</button>
-        <button class="act ghost" id="copy-cap" type="button">Copy caption</button>
+      <div class="chips" id="chips" aria-label="Pick a night"></div>
+      <div class="sec">
+        <h2 id="awards-h">Winners</h2>
+        <div class="awards" id="awards"></div>
       </div>
-      <p class="muted small" id="card-note" style="margin:0">Sized for an Instagram post.</p>
-    </div>
+      <div class="sec" id="unlocked-sec" hidden>
+        <h2>Badges unlocked tonight</h2>
+        <div class="unl" id="unlocked"></div>
+      </div>
+      <div class="sec">
+        <h2>Share the recap</h2>
+        <canvas id="card" width="1080" height="1350" aria-label="Recap card for the selected night"></canvas>
+        <div class="btns">
+          <button class="act" id="share-card" type="button">Share card</button>
+          <button class="act ghost" id="copy-cap" type="button">Copy caption</button>
+        </div>
+        <p class="muted small" id="card-note" style="margin:0"></p>
+      </div>
     </div>
     <div class="sub" id="aw-season">
-    <div class="sec">
-      <h2>Season awards</h2>
-      <p class="muted small" style="margin:0" id="season-note">Across every night so far.</p>
-      <div class="awards" id="season-awards"></div>
-    </div>
-    </div>
-  </section>
-
-  <!-- BINGO -->
-  <section class="panel" id="p-bingo" role="tabpanel" aria-labelledby="t-bingo">
-    <div class="sec">
-      <h2>Karaoke bingo</h2>
-      <div class="kb" id="bingo"></div>
-      <p class="muted small" style="margin:0">Every phone gets its own card. Song squares only count when that exact song gets sung, from karaoke standards to deep cuts, so bingo is hard. First full row, column or diagonal wins: show your screen to the host!</p>
-    </div>
-  </section>
-
-  <!-- SINGERS -->
-  <section class="panel" id="p-singers" role="tabpanel" aria-labelledby="t-singers">
-    <div class="sec">
-      <h2>Search</h2>
-      <div class="search-wrap">
-        <input class="search" id="search" type="text" inputmode="search" placeholder="A singer, song or artist" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search singers, songs and artists">
-        <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden>×</button>
+      <div class="sec">
+        <h2><span>Season awards</span><span class="aside" id="season-note"></span></h2>
+        <div class="awards" id="season-awards"></div>
       </div>
-      <p class="muted small" style="margin:0" id="singers-note">Tap a name to see their songs and badges, or a song to see who sang it. Pick your name and tap “That’s me” to track your badges.</p>
     </div>
+    <div class="sub" id="rec-fame">
+      <div class="sec">
+        <h2>Hall of fame</h2>
+        <div class="records" id="records"></div>
+      </div>
+      <div class="sec">
+        <h2>Most-sung songs</h2>
+        <ol class="shelf" id="top-songs"></ol>
+      </div>
+      <div class="sec">
+        <h2>Favorite bands</h2>
+        <ol class="list" id="top-artists"></ol>
+      </div>
+      <div class="sec">
+        <h2>Songs by decade</h2>
+        <div class="card decades" id="decades"></div>
+      </div>
+      <a class="act ghost league-link" href="/league">🏆 This month’s Oke Night League</a>
+    </div>
+    <div class="sub" id="rec-badges">
+      <div class="sec">
+        <h2><span>Badge book</span><span class="aside" id="book-aside"></span></h2>
+        <p class="muted small" style="margin:0" id="book-note"></p>
+        <div class="book" id="book"></div>
+      </div>
+      <div class="sec">
+        <h2>Top collectors</h2>
+        <ol class="list" id="collectors"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- SINGERS: you, then everyone -->
+  <section class="panel" id="p-singers" role="tabpanel" aria-labelledby="t-singers">
+    <div class="me" id="me" hidden></div>
+    <div class="search-wrap">
+      <input class="search" id="search" type="text" inputmode="search" placeholder="🔍 Singer, song or artist" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search singers, songs and artists">
+      <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden>×</button>
+    </div>
+    <p class="rule" id="singers-note">Tap a name, then “That’s me” to track your badges.</p>
     <div id="singers"></div>
   </section>
 
-  <!-- RECORDS -->
-  <section class="panel" id="p-records" role="tabpanel" aria-labelledby="t-records">
-    <div class="seg" role="tablist" aria-label="Records view" data-seg="rec">
-      <button type="button" role="tab" aria-selected="true" data-sub="rec-fame">Hall of fame</button>
-      <button type="button" role="tab" aria-selected="false" data-sub="rec-badges">Badges</button>
-      <button type="button" role="tab" aria-selected="false" data-sub="rec-songs">Songs</button>
-    </div>
-    <div class="sub on" id="rec-fame">
-    <div class="sec">
-      <h2>Hall of fame</h2>
-      <div class="records" id="records"></div>
-    </div>
-    <a class="act ghost league-link" href="/league">🏆 This month’s Oke Night League</a>
-    </div>
-    <div class="sub" id="rec-badges">
-    <div class="sec">
-      <h2>Badge book <span class="aside" id="book-aside"></span></h2>
-      <p class="muted small" style="margin:0" id="book-note">Every badge you can earn, rarest first.</p>
-      <div class="book" id="book"></div>
-    </div>
-    <div class="sec">
-      <h2>Top badge collectors</h2>
-      <ol class="list" id="collectors"></ol>
-    </div>
-    </div>
-    <div class="sub" id="rec-songs">
-    <div class="sec">
-      <h2>Most-sung songs</h2>
-      <ol class="list" id="top-songs"></ol>
-    </div>
-    <div class="sec">
-      <h2>Crowd’s favorite bands</h2>
-      <ol class="list" id="top-artists"></ol>
-    </div>
-    <div class="sec">
-      <h2>Songs by decade</h2>
-      <div class="card decades" id="decades"></div>
-    </div>
-    </div>
-  </section>
-
   <div class="status" id="status"></div>
-  <p class="muted small" style="text-align:center;margin:18px 0 0">Album covers from <a href="https://music.apple.com/" target="_blank" rel="noopener">Apple Music</a>, tap one to hear the song · <a href="/privacy">Privacy and name removal</a></p>
+  <p class="foot">Covers from <a href="https://music.apple.com/" target="_blank" rel="noopener">Apple Music</a> · tap one to listen · <a href="/privacy">Privacy</a></p>
 </main>
 
 <nav class="tabs" aria-label="Sections">
   <div class="wrap" role="tablist">
     <button type="button" role="tab" id="t-tonight" aria-controls="p-tonight" aria-selected="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>Tonight</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>Live</button>
     <button type="button" role="tab" id="t-songs" aria-controls="p-songs" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Songbook<span class="tab-n" id="my-count" aria-label="songs on my list"></span></button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Songs<span class="tab-n" id="my-count" aria-label="songs on my list"></span></button>
+    <button type="button" role="tab" id="t-play" aria-controls="p-play" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.3" fill="currentColor"/></svg>Play</button>
     <button type="button" role="tab" id="t-awards" aria-controls="p-awards" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Awards</button>
-    <button type="button" role="tab" id="t-bingo" aria-controls="p-bingo" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>Bingo</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Winners</button>
     <button type="button" role="tab" id="t-singers" aria-controls="p-singers" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Singers</button>
-    <button type="button" role="tab" id="t-records" aria-controls="p-records" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>Records</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><circle cx="17.5" cy="9" r="3"/><path d="M17 15a6 6 0 0 1 5 6"/></svg>Singers</button>
   </div>
 </nav>
+
+<dialog id="remind-dlg" aria-labelledby="rm-h">
+  <div class="remind" id="remind">
+    <h3 id="rm-h">🗓️ Karaoke every week</h3>
+    <span class="muted" id="rm-sub"></span>
+    <div class="rm-acts">
+      <a class="act" id="rm-ics" href="sunday.ics">📅 Add to my calendar</a>
+      <a class="act ghost" id="rm-gcal" target="_blank" rel="noopener">Google Calendar</a>
+      <a class="act ghost" id="rm-push" target="_blank" rel="noopener">🔔 Phone alert</a>
+    </div>
+    <div class="muted small" id="rm-push-note">Phone alert uses the free ntfy app. Tap Subscribe and you’ll get a heads-up 2 hours before.</div>
+    <div class="streaks" id="rm-streaks" hidden></div>
+    <div class="btns" style="justify-content:center"><button class="act ghost" id="remind-close" type="button">Close</button></div>
+  </div>
+</dialog>
 
 <dialog id="signup-dlg" aria-labelledby="signup-h">
   <h3 id="signup-h">How to sign up to sing</h3>
@@ -831,6 +872,12 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   const clock = (ts) => new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  // A colored circle with the singer's first letter. Same name, same color, on every phone.
+  function avatar(name, size) {
+    const n = clean(name) || "?"; let h = 0; for (const ch of key(n)) h = (h * 31 + ch.codePointAt(0)) % 360;
+    const a = el("span", "av", (n.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase()); a.setAttribute("aria-hidden", "true");
+    a.style.setProperty("--h", String(h)); if (size) a.style.setProperty("--s", size + "px"); return a;
+  }
   // ICON, awards and tally live in /awards.js so the TV screen (/tv) shares them.
   const icon = OkeAwards.icon;
   // Adds a "🎤 Host" tag after a name element when that name is the host's.
@@ -858,8 +905,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     box.replaceChildren();
     if (!aw.length) { box.append(el("div", "card muted", "Awards show up once a few songs are in.")); return; }
     aw.slice().sort((a, b) => !!b.headline - !!a.headline).forEach((a) => { const c = el("article", "award" + (a.headline ? " headline" : ""));
-      const lb = el("div", "label"); lb.append(el("span", "ic", icon(a.id)), document.createTextNode(a.label)); lb.firstChild.setAttribute("aria-hidden", "true");
-      c.append(lb, el("div", "who", a.who), el("div", "what", a.what), el("div", "stat", a.stat)); box.append(c); });
+      const ic = el("span", "ic", icon(a.id)); ic.setAttribute("aria-hidden", "true");
+      c.append(ic, el("div", "label", a.label), el("div", "who", a.who), el("div", "what", a.what), el("div", "stat", a.stat)); box.append(c); });
   }
   function renderTally(box, t) {
     box.replaceChildren();
@@ -900,6 +947,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     $("hero-who").dataset.who = last && last.singer ? clean(last.singer) : "";
     $("hero-song").textContent = last && last.title ? "“" + last.title + "”" : "";
     $("hero").classList.toggle("has-cover", !!window.OkeArt && OkeArt.put($("hero-art"), last, { big: true }));
+    heroBackdrop();
     $("hero-artist").textContent = last ? [last.artist, last.release_year].filter(Boolean).join(" · ") + (singing || !tonight ? "" : (last.artist ? " · " : "") + ago(last.played_at)) : "";
     $("hero-bar").hidden = !singing; $("hero-meta").hidden = !singing;
     if (singing) {
@@ -937,29 +985,39 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const everyone = personTotals(rows), all = everyone.filter((e) => !OkeAwards.isHost(e.name)), hostE = everyone.find((e) => OkeAwards.isHost(e.name));
     const ol = $("leaderboard"); ol.replaceChildren();
     if (!all.length && !hostE) ol.append(el("li", "empty", "Nobody yet. Be the first!"));
-    const lbRow = (e, i) => { const li = el("li", (e.k === me ? "mine" : "") + (i < 0 ? " host-row" : "") || null); li.dataset.who = e.name; li.append(el("span", "rank", i < 0 ? "🎤" : String(i + 1)), tagHost(el("span", "main-t", e.name), e.name), el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song")));
-      li.append(el("span", "sub-t", mmss(e.secs) + " on the mic")); return li; };
-    all.slice(0, 8).forEach((e, i) => ol.append(lbRow(e, i)));
+    const lbRow = (e, i) => { const li = el("li", (e.k === me ? "mine" : "") + (i < 0 ? " host-row" : "") || null); li.dataset.who = e.name;
+      const nm = el("span", "main-t"); nm.append(avatar(e.name, 36), tagHost(el("span", "nm", e.name), e.name));
+      li.append(el("span", "rank", i < 0 ? "🎤" : i < 3 ? ["🥇", "🥈", "🥉"][i] : String(i + 1)), nm, el("span", "val" + (e.n > 1 ? "" : " dim"), plural(e.n, "song"))); return li; };
+    all.slice(0, 5).forEach((e, i) => ol.append(lbRow(e, i)));
     const mi = all.findIndex((e) => e.k === me);
-    if (mi >= 8) ol.append(lbRow(all[mi], mi));
+    if (mi >= 5) ol.append(lbRow(all[mi], mi));
     if (hostE) ol.append(lbRow(hostE, -1));
 
     // feed (the newest song is already in the hero)
-    const feed = $("feed"); feed.replaceChildren();
-    if (window.OkeArt && !$("feed-credit").firstChild) $("feed-credit").append(OkeArt.credit());
-    const older = rows.slice(0, -1).reverse(), shown = feedOpen ? older.slice(0, 20) : older.slice(0, 5);
-    if (!older.length) feed.append(el("li", "empty", "Nothing before this one yet."));
-    shown.forEach((p) => { const li = el("li", key(p.singer) === me ? "mine" : null); if (p.singer) li.dataset.who = clean(p.singer);
-      li.append(el("span", "time", clock(p.played_at)));
-      const d = el("div"); d.append(tagHost(el("div", "main-t", clean(p.as_typed || p.singer) || "Mystery singer"), p.singer), el("div", "sub-t", songLine(p)));
-      const rs = rxSummary(p); if (rs) d.append(el("div", "sub-t rx-sum", rs)); li.append(d); if (window.OkeArt && p.title) OkeArt.row(li, p); feed.append(li); });
-    if (older.length > 5) { const b = el("button", "toggle-more", feedOpen ? "Show less" : "Show " + (Math.min(20, older.length) - 5) + " more"); b.type = "button";
-      b.addEventListener("click", () => { feedOpen = !feedOpen; renderTonight(); }); feed.append(b); }
+    // Swipe sideways through the night, newest first. Rebuilt only when the songs change, so covers don't flicker.
+    const feed = $("feed"), older = rows.slice(0, -1).reverse().slice(0, 40);
+    const fk = older.map((p) => p.uuid).join() + "|" + me + "|" + reax.bySong.size;
+    $("feed").closest(".sec").hidden = !older.length;
+    if (feed.dataset.k !== fk) {
+      feed.dataset.k = fk; feed.replaceChildren();
+      older.forEach((p) => { const li = el("li", "card-s" + (key(p.singer) === me ? " mine" : "")); if (p.singer) li.dataset.who = clean(p.singer);
+        const fig = el("div", "cs-fig"); fig.append(window.OkeArt && p.title ? OkeArt.el(p, { big: true }) : el("span", "art"));
+        const rs = rxSummary(p); if (rs) fig.append(el("span", "cs-rx", rs));
+        li.append(fig, tagHost(el("span", "cs-t", clean(p.as_typed || p.singer) || "Mystery singer"), p.singer), el("span", "cs-s", p.title || "a mystery song"), el("span", "cs-m", clock(p.played_at)));
+        feed.append(li); });
+    }
 
     renderFun(n, tonight);
     renderMe(n, tonight);
     renderRemind(live);
-    renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)));
+    renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)).slice(0, 4).map((a) => ({ ...a, headline: false })));
+  }
+
+  // The hero's background is its own cover, blurred, once that cover has loaded.
+  function heroBackdrop() {
+    const img = $("hero-art").querySelector("img"), bg = $("hero-bg");
+    const set = () => { const u = img && img.naturalWidth ? img.currentSrc || img.src : ""; if (bg.dataset.u !== u) { bg.dataset.u = u; bg.style.backgroundImage = u ? "url(\"" + u.replace(/"/g, "%22") + "\")" : ""; } };
+    if (img && !img.complete) img.addEventListener("load", set, { once: true }); set();
   }
 
   // ---------- the line (the karaoke app's queue) ----------
@@ -1158,8 +1216,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const chev = el("span", "chev", "›"); chev.setAttribute("aria-hidden", "true");
     const singers = new Set(e.rows.map((p) => key(p.singer)).filter(Boolean));
     const last = e.rows[e.rows.length - 1];
-    s.append(el("span", "main-t", "“" + e.title + "”"), el("span", "val", plural(e.rows.length, "play")), chev,
-      el("span", "sub-t", [e.artist, e.year].filter(Boolean).join(" · ") + " · " + plural(singers.size, "singer") + " · last " + ago(last.played_at, last.night)));
+    s.append(el("span", "main-t", e.title), el("span", "val", plural(e.rows.length, "play")), chev,
+      el("span", "sub-t", [e.artist, plural(singers.size, "singer")].filter(Boolean).join(" · ")));
     if (window.OkeArt) OkeArt.row(s, last);
     d.append(s);
     const b = el("div", "sbody"); const ol = el("ol");
@@ -1181,8 +1239,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const d = el("details", "singer" + (getMe() === key(e.name) ? " mine" : ""));
     const s = el("summary");
     const chev = el("span", "chev", "›"); chev.setAttribute("aria-hidden", "true");
-    s.append(el("span", "main-t", e.name), el("span", "val", plural(e.rows.length, "song")), chev,
-      el("span", "sub-t", (e.rank ? "#" + e.rank + " of " + total : "🎤 Host") + " · " + plural(e.nights.size, "night") + " · last sang " + ago(e.rows[e.rows.length - 1].played_at, e.rows[e.rows.length - 1].night)));
+    s.append(avatar(e.name, 44), el("span", "main-t", e.name), el("span", "val", plural(e.rows.length, "song")), chev,
+      el("span", "sub-t", (e.rank ? "#" + e.rank : "🎤 Host") + " · " + plural(e.nights.size, "night") + " · " + ago(e.rows[e.rows.length - 1].played_at, e.rows[e.rows.length - 1].night)));
     d.append(s);
     d.addEventListener("toggle", () => {
       if (!d.open || d.querySelector(".sbody")) return;
@@ -1252,7 +1310,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     rec.forEach(([l, w, st, wh]) => { const r = el("div", "rec"); r.append(el("div", "label", l), el("div", "who", w), el("div", "stat", st), el("div", "what", wh)); box.append(r); });
 
     const sc = new Map(); songs.forEach((p) => { const k = key(p.title) + "|" + key(p.artist); const e = sc.get(k) || { p, n: 0, who: new Set() }; e.n++; e.who.add(key(p.singer)); sc.set(k, e); });
-    fillTop($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 10), (e) => "“" + e.p.title + "”", (e) => (e.p.artist || "") + " · " + plural(e.who.size, "singer"), (e) => plural(e.n, "play"), (e) => e.p.title, (e) => e.p);
+    fillShelf($("top-songs"), [...sc.values()].sort((a, b) => b.n - a.n).slice(0, 12), (e) => e.p, (e) => plural(e.n, "play"));
     // Ranked by how many different people sang them, then plays. Group names credit each part ("Lady Gaga & Bruno Mars").
     const ac = new Map();
     songs.forEach((p) => { (window.KaraokeFun ? KaraokeFun.favoriteBands([p], 9) : p.artist ? [{ name: p.artist }] : []).forEach((b) => {
@@ -1423,13 +1481,21 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       $("promo-where").textContent = new Date(t * 1000).toLocaleTimeString("en-US", { ...opt, hour: "numeric", minute: "2-digit" }).replace(":00", "") + " · " + schedule.venue;
       const days = Math.round((Date.parse(nightOf(t + 6 * 3600)) - Date.parse(new Date(now() * 1000).toLocaleDateString("en-CA", opt))) / 86400000);
       $("promo-k").textContent = days <= 0 ? "Karaoke tonight" : "Next karaoke";
-      $("promo-count").textContent = days <= 0 ? "Tonight! Warm up those vocals." : days === 1 ? "Tomorrow night" : "In " + days + " days";
-      $("promo-remind").hidden = !$("rm"); // the reminder card (calendar + phone alert), when this page has it
-      if (last) { $("promo-recap").href = "tv?night=" + last.night; $("promo-recap").textContent = "Recap of " + nightLabel(last.night); }
-      $("promo-recap").hidden = !last;
+      // Countdown: days, hours, minutes to the start
+      const left = Math.max(0, t - now()), parts = [[Math.floor(left / 86400), "day"], [Math.floor(left % 86400 / 3600), "hour"], [Math.floor(left % 3600 / 60), "min"]];
+      const cd = $("promo-count"), ck = parts.map((x) => x[0]).join(":");
+      if (cd.dataset.k !== ck) { cd.dataset.k = ck; cd.replaceChildren(...parts.map(([v, w]) => { const d = el("div"); d.append(el("b", null, String(v)), el("span", null, w + (v === 1 ? "" : "s"))); return d; })); }
+      // A wall of covers from the last night behind it
+      const bg = $("promo-bg"), wall = [], seen = new Set();
+      if (last) nights[nights.length - 1].rows.slice().reverse().forEach((p) => { const k = key(p.title); if (p.title && !seen.has(k) && wall.length < 8) { seen.add(k); wall.push(p); } });
+      const wk = wall.map((p) => p.uuid).join();
+      if (window.OkeArt && bg.dataset.k !== wk) { bg.dataset.k = wk; bg.replaceChildren(...wall.map((p) => OkeArt.el(p, { big: true }))); }
     }
   }
-  $("promo-remind").addEventListener("click", () => { const r = $("rm"); if (r) r.scrollIntoView({ behavior: "smooth", block: "start" }); });
+  const remindDlg = $("remind-dlg");
+  $("promo-remind").addEventListener("click", () => { renderRemind(false); remindDlg.showModal(); });
+  $("remind-close").addEventListener("click", () => remindDlg.close());
+  remindDlg.addEventListener("click", (e) => { if (e.target === remindDlg) remindDlg.close(); });
   $("promo-share").addEventListener("click", () => $("share-btn").click());
 
   // ---------- secret songs ----------
@@ -1502,8 +1568,6 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   // ---------- Sunday reminder + hot streaks ----------
   // Shown when karaoke isn't on, so people leaving (or checking on a Tuesday) can sign up for next week.
   function renderRemind(live) {
-    const box = $("remind");
-    box.hidden = !!live;
     if (live) return;
     const R = (schedule && schedule.reminder) || {};
     $("rm-h").textContent = "🗓️ Karaoke every " + VENUE.day_name;
@@ -1527,6 +1591,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     const row = el("div", "band-row");
     bands.forEach((x) => { const b = el("button", "band", x.name + (x.n > 1 ? " ×" + x.n : "")); b.type = "button"; b.addEventListener("click", () => openSearch(x.name)); row.append(b); });
     w.append(row); return w;
+  }
+  // A sideways row of big covers with a rank: song(e) is the play to show, val(e) a short count.
+  function fillShelf(ol, items, song, val) {
+    const k = items.map((e) => song(e).uuid + val(e)).join();
+    if (ol.dataset.k === k) return; ol.dataset.k = k; ol.replaceChildren();
+    items.forEach((e, i) => { const p = song(e), li = el("li", "card-s"); li.dataset.who = p.title;
+      const fig = el("div", "cs-fig"); fig.append(window.OkeArt ? OkeArt.el(p, { big: true }) : el("span", "art"), el("span", "cs-rank", String(i + 1)));
+      li.append(fig, el("span", "cs-t", p.title), el("span", "cs-s", p.artist || ""), el("span", "cs-m", val(e))); ol.append(li); });
   }
   function fillTop(ol, items, main, sub, val, q, song) {
     ol.replaceChildren();
@@ -1557,7 +1629,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   }
   // Songbook: song catalog search + "my list" (songs.js).
   const songbook = window.OkeSongs ? OkeSongs.mount({
-    find: $("cat-find"), mine: $("sg-mine"), count: $("my-count"),
+    find: $("cat-find"), mine: $("sg-mine"), count: $("my-count"), shelf: $("picker"),
     getPlays: () => plays,
     getMyRows: () => { const k = getMe(), e = k && people.get(k); return e ? e.rows : []; },
     onPick: () => $("sg-find-btn").click(),
@@ -1635,16 +1707,20 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   }
 
   // ---------- tabs ----------
-  const tabs = ["tonight", "songs", "awards", "bingo", "singers", "records"];
+  const tabs = ["tonight", "songs", "play", "awards", "singers"];
+  // Old links (#bingo, #records) and the sub-views they now live in.
+  const OLD = { bingo: ["play", "pl-bingo"], records: ["awards", "rec-fame"], draft: ["play", "pl-draft"], dares: ["play", "pl-dares"], duets: ["play", "pl-duets"] };
+  function pickSub(id) { const b = document.querySelector('.seg [data-sub="' + id + '"]'); if (b) b.click(); }
   function show(name) {
+    if (OLD[name]) { const [t, sub] = OLD[name]; pickSub(sub); name = t; }
     tabs.forEach((t) => { $("t-" + t).setAttribute("aria-selected", String(t === name)); $("p-" + t).classList.toggle("on", t === name); });
     if (name === "songs" && songbook) songbook.start();
     if (location.hash.slice(1) !== name) history.replaceState(null, "", name === "tonight" ? location.pathname : "#" + name);
     window.scrollTo(0, 0);
   }
   tabs.forEach((t) => $("t-" + t).addEventListener("click", () => show(t)));
-  if (tabs.includes(location.hash.slice(1))) show(location.hash.slice(1));
-  window.addEventListener("hashchange", () => { const h = location.hash.slice(1); show(tabs.includes(h) ? h : "tonight"); });
+  window.addEventListener("hashchange", () => { const h = location.hash.slice(1); show(tabs.includes(h) || OLD[h] ? h : "tonight"); });
+  document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => show(b.dataset.go)));
   ["leaderboard", "feed", "top-songs", "top-artists", "collectors"].forEach((id) => $(id).addEventListener("click", (ev) => {
     const li = ev.target.closest("li[data-who]"); if (li) openSearch(li.dataset.who); }));
   $("hero-who").addEventListener("click", () => { const t = $("hero-who").dataset.who; if (t) openSearch(t); });
@@ -1652,6 +1728,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   document.querySelectorAll(".seg").forEach((seg) => seg.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     seg.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-selected", String(on)); $(x.dataset.sub).classList.toggle("on", on); });
   })));
+  { const h = location.hash.slice(1); if (tabs.includes(h) || OLD[h]) show(h); }
   $("find-me").addEventListener("click", () => { show("singers"); $("search").focus(); });
   let st; $("search").addEventListener("input", () => { clearTimeout(st); st = setTimeout(() => { singerLimit = 40; songLimit = 30; renderSingers(); }, 120); });
 

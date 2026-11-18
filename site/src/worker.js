@@ -110,6 +110,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "host") { await ensureCore(env); return handleHost(req, env, venue); }
   if (name === "crowd") { await ensureCore(env); return handleCrowd(req, env, venue); } // the /host phone's crowd meter (host key only)
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
+  if (name === "art" && req.method === "POST") return handleArt(req, env, ctx); // a phone reports a cover it found (art.js)
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Read only", { status: 405 });
   if (name === "reactions") return handleCounts(req, env, ctx);
   if (name === "catalog") return handleCatalog(req, env, ctx, venue); // the venue picks its songbook (songbook_api.js)

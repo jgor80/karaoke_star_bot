@@ -30,7 +30,7 @@ h1, h2, h3 { margin: 0; font-weight: 400; }
 a { color: var(--gold); }
 .wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .muted { color: var(--muted); }
-.small { font-size: 15px; }
+.small { font-size: 16px; }
 
 header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
@@ -38,7 +38,7 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .logo { font-family: var(--f-display); font-size: clamp(19px, 5.6vw, 24px); color: var(--hot); white-space: nowrap; text-decoration: none; }
 .logo span { color: var(--gold); }
 .spacer { flex: 1; }
-.nav a { color: var(--muted); text-decoration: none; font-size: 15px; margin-left: 14px; white-space: nowrap; display: inline-flex; align-items: center; min-height: 44px; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 16px; font-weight: 600; margin-left: 14px; white-space: nowrap; display: inline-flex; align-items: center; min-height: 44px; }
 .nav a:hover { color: var(--ink); }
 @media (max-width: 520px) { .nav .wide { display: none; } }
 
@@ -48,12 +48,19 @@ header { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, va
 .act:focus-visible, a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .act[disabled] { opacity: .6; cursor: default; }
 
-.hero { padding: 48px 0 28px; }
-.kicker { font-family: var(--f-mono); font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
-.hero h1 { font-family: var(--f-display); font-size: clamp(34px, 9vw, 64px); line-height: 1.05; margin: 12px 0 16px; color: var(--ink); text-wrap: balance; }
+.hero { position: relative; padding: 150px 0 28px; }
+/* a tilted wall of album covers behind the headline (popular songs, art.js) */
+.wall { position: absolute; z-index: -1; top: -60px; left: 50%; width: min(1100px, 150vw); transform: translateX(-50%) rotate(-8deg); display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(23vw, 140px), 1fr)); gap: 6px; opacity: .5; pointer-events: none; }
+.wall .art { width: 100%; height: auto; aspect-ratio: 1; border-radius: 10px; }
+.wall .art.ok::after { display: none; }
+.hero::before { content: ""; position: absolute; z-index: -1; inset: -60px -50vw 0; background: linear-gradient(180deg, rgba(23,13,28,.25) 0%, rgba(23,13,28,.8) 45%, var(--bg) 72%); }
+.hero h1 { font-family: var(--f-display); font-size: clamp(36px, 10vw, 64px); line-height: 1.02; margin: 0 0 14px; color: var(--ink); text-wrap: balance; }
 .hero h1 em { font-style: normal; color: var(--hot); }
-.hero p { font-size: clamp(18px, 4.6vw, 21px); color: var(--muted); max-width: 40ch; margin: 0 0 22px; }
-.ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.hero p { font-size: clamp(19px, 5vw, 22px); color: #eadff0; max-width: 34ch; margin: 0 0 22px; }
+.ctas { display: grid; gap: 10px; max-width: 420px; }
+.ctas .act { min-height: 56px; font-size: 19px; }
+main.wrap { position: relative; isolation: isolate; overflow-x: clip; }
 
 /* The returning-visitor shortcut and the live venue list. */
 .back { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--hot); background: var(--hot-soft);
@@ -68,24 +75,26 @@ section > p.lead { color: var(--muted); margin: 0 0 18px; max-width: 52ch; }
 .finder { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
 #loc-msg { min-height: 1.5em; }
 .venues { display: grid; gap: 10px; }
-.venue { display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px;
+.venue { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 12px 14px; border-radius: 16px;
   background: var(--panel); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.venue > * { grid-column: 2; }
+.venue .vi { grid-column: 1; grid-row: 1 / span 3; width: 60px; height: 60px; border-radius: 14px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--hot-soft), var(--gold-soft)); }
+.venue .chev { grid-column: 3; grid-row: 1 / span 3; font-size: 28px; color: var(--muted); }
 .venue:hover { border-color: var(--hot); }
 .venue.nearest { border-color: var(--gold); }
 .venue .name { font-weight: 700; font-size: 19px; }
-.venue .meta { color: var(--muted); font-size: 15px; }
+.venue .meta { color: var(--muted); font-size: 16px; }
 .venue .side { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; }
-.tag { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+.tag { font-size: 14px; font-weight: 800; padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--muted); white-space: nowrap; display: inline-block; }
 .tag.live { background: var(--hot); border-color: var(--hot); color: #1d0a14; }
 .tag.near { border-color: var(--gold); color: var(--gold); }
-.dist { font-size: 14px; color: var(--muted); }
+.dist { font-size: 15px; color: var(--muted); }
+/* what the crowd gets: big icons, a few words each */
+.feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.feat div { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 6px; font-weight: 700; font-size: 17px; line-height: 1.25; }
+.feat i { font-style: normal; font-size: 34px; line-height: 1; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-.card .ic { font-size: 28px; line-height: 1; }
-.card h3 { font-weight: 700; font-size: 18px; margin: 10px 0 4px; }
-.card p { margin: 0; color: var(--muted); font-size: 16px; }
 
 .steps { counter-reset: s; display: grid; gap: 12px; padding: 0; margin: 0 0 22px; list-style: none; }
 .steps li { counter-increment: s; display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
@@ -106,7 +115,7 @@ textarea { min-height: 90px; resize: vertical; }
 #lead-msg.err { color: var(--hot); }
 
 footer a, .muted.small a { display: inline-block; padding: 12px 2px; margin: -12px 0; }
-footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; }
+footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 15px; }
 </style>
 </head>
 <body>
@@ -114,60 +123,57 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
   <div class="wrap top">
     <a class="logo" href="/">Oke <span>Night</span></a>
     <div class="spacer"></div>
-    <nav class="nav"><a href="#find">Find karaoke</a><a class="wide" href="#crowd">How it works</a><a href="#bars">For bars</a></nav>
+    <nav class="nav"><a class="wide" href="#find">Find karaoke</a><a href="#bars">For bars</a></nav>
   </div>
 </header>
 
 <main class="wrap">
   <div class="hero">
+    <div class="wall" id="wall" aria-hidden="true"></div>
     <a class="back" id="back" href="#" hidden>
       <span aria-hidden="true" style="font-size:26px">🎤</span>
       <span><b id="back-name"></b><span class="muted small" id="back-sub"></span></span>
       <span class="go">Open →</span>
     </a>
-    <div class="kicker">Live karaoke, played by the whole room</div>
-    <h1>Karaoke night, on <em>everyone’s</em> phone.</h1>
-    <p>See who’s on the mic, react to every song, play bingo, draft your friends and crown the night’s winners. No app to install. Just scan the code at the bar.</p>
+    <h1>Karaoke night, on <em>your phone.</em></h1>
+    <p>See who’s singing, react, play bingo and crown the night’s winners. No app needed.</p>
     <div class="ctas">
       <a class="act" href="#find" id="hero-find">📍 Find karaoke near me</a>
-      <a class="act ghost" href="#bars">Bring it to your bar</a>
     </div>
   </div>
 
   <section id="find" aria-labelledby="find-h">
     <h2 id="find-h">Pick your bar</h2>
-    <p class="lead">Each bar has its own page with tonight’s songs, awards and games. Share your location and we’ll put the closest one first.</p>
     <div class="finder">
-      <button class="act" type="button" id="locate">📍 Use my location</button>
+      <button class="act ghost" type="button" id="locate">📍 Closest first</button>
       <span class="muted small" id="loc-msg" role="status" aria-live="polite"></span>
     </div>
     <div class="venues" id="venues"></div>
-    <p class="muted small" style="margin-top:14px">Don’t see your bar? Tell them about Oke Night, or <a href="#bars">send us their name</a>.</p>
+    <p class="muted small" style="margin-top:14px">Don’t see your bar? <a href="#bars">Send us their name</a>.</p>
   </section>
 
   <section id="crowd" aria-labelledby="crowd-h">
     <h2 id="crowd-h">What the crowd gets</h2>
-    <p class="lead">Everything updates live as songs start, so the whole room follows along between turns.</p>
-    <div class="grid">
-      <div class="card"><div class="ic">🎙️</div><h3>Who’s on the mic</h3><p>The song playing now, who’s up next and roughly how long the wait is.</p></div>
-      <div class="card"><div class="ic">🔥</div><h3>Live reactions</h3><p>Tap fire, mic drop or tomato on whoever is singing. The crowd’s taps decide some of the awards.</p></div>
-      <div class="card"><div class="ic">🏆</div><h3>Awards and badges</h3><p>MVP, power ballad, crowd favorite and dozens of badges, handed out every night.</p></div>
-      <div class="card"><div class="ic">🎯</div><h3>Karaoke bingo</h3><p>A fresh card each night that fills itself in as the songs roll.</p></div>
-      <div class="card"><div class="ic">📝</div><h3>Crowd draft</h3><p>Draft a friend to sing a song, and the room votes up the picks it wants most.</p></div>
-      <div class="card"><div class="ic">📖</div><h3>Songbook</h3><p>Search the song list by genre, era or duet, save the ones you want and request what’s missing.</p></div>
-      <div class="card"><div class="ic">🤫</div><h3>Secret songs</h3><p>The host hides songs with prizes. Sing one and the whole bar finds out.</p></div>
-      <div class="card"><div class="ic">📺</div><h3>Big screen recap</h3><p>Awards, top singers and the night’s highlights on the bar’s TV.</p></div>
+    <div class="feat">
+      <div><i>🎙️</i>Who’s on the mic</div>
+      <div><i>🔥</i>Live reactions</div>
+      <div><i>🏆</i>Awards and badges</div>
+      <div><i>🎯</i>Karaoke bingo</div>
+      <div><i>📝</i>Draft your friends</div>
+      <div><i>📖</i>Songbook</div>
+      <div><i>🤫</i>Secret songs</div>
+      <div><i>📺</i>Big screen recap</div>
     </div>
   </section>
 
   <section id="bars" aria-labelledby="bars-h">
     <h2 id="bars-h">For bars and hosts</h2>
-    <p class="lead">Oke Night gives your karaoke crowd a reason to stay for one more round and come back next week.</p>
-    <div class="grid" style="margin-bottom:24px">
-      <div class="card"><div class="ic">⏱️</div><h3>People stay longer</h3><p>Bingo, reactions and awards keep the room playing between their own songs.</p></div>
-      <div class="card"><div class="ic">🔁</div><h3>Regulars come back</h3><p>Weekly streaks, records and a calendar reminder bring the same faces back every week.</p></div>
-      <div class="card"><div class="ic">🎛️</div><h3>Host tools</h3><p>A tip menu, secret songs, song requests, a crowd applause meter and moderation from your phone.</p></div>
-      <div class="card"><div class="ic">💻</div><h3>Works with your setup</h3><p>A small helper on the host’s karaoke laptop sends each song as it starts. Nothing changes for the singers.</p></div>
+    <p class="lead">A reason to stay for one more round, and come back next week.</p>
+    <div class="feat" style="margin-bottom:24px">
+      <div><i>⏱️</i>People stay longer</div>
+      <div><i>🔁</i>Regulars come back</div>
+      <div><i>🎛️</i>Host tools: tips, requests, secret songs</div>
+      <div><i>💻</i>Works with your karaoke laptop</div>
     </div>
     <h3 style="font-weight:700;margin-bottom:12px">How a bar gets set up</h3>
     <ol class="steps">
@@ -201,6 +207,7 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
   <div class="wrap">© Oke Night · <a href="#find">Find karaoke</a> · <a href="/league">League</a> · <a href="#bars">For bars</a> · <a href="/privacy">Privacy</a></div>
 </footer>
 
+<script src="/art.js"></script>
 <script>
 (() => {
   // Filled in by the Worker from venues.js (also at /api/venues): [{slug, name, neighborhood, address, city, lat, lng,
@@ -231,8 +238,9 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
     const box = $("venues"); box.textContent = "";
     list.forEach((v, i) => {
       const a = el("a", "venue" + (here && i === 0 ? " nearest" : "")); a.href = v.path;
-      a.append(el("span", "name", v.name));
-      a.append(el("span", "meta", [v.neighborhood, v.city].filter(Boolean).join(" · ") + " · " + v.hours_label));
+      const vi = el("span", "vi", "🎤"); vi.setAttribute("aria-hidden", "true"); const ch = el("span", "chev", "›"); ch.setAttribute("aria-hidden", "true");
+      a.append(vi, ch, el("span", "name", v.name));
+      a.append(el("span", "meta", [v.neighborhood, v.city].filter(Boolean).join(" · ")));
       const side = el("span", "side");
       if (isLive(v)) side.append(el("span", "tag live", "Live now"));
       else side.append(el("span", "tag", "Next " + v.next_label));
@@ -271,6 +279,15 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
   }
 
   render();
+  // The cover wall: the most popular songs, from the first bar's song list (covers via art.js).
+  (async () => {
+    if (!window.OkeArt) return;
+    try {
+      const d = await (await fetch("/api/catalog?hits=1")).json();
+      const songs = (d.songs || []).slice(0, 24);
+      $("wall").append(...songs.map((s) => OkeArt.el(s, { big: true })));
+    } catch (e) {}
+  })();
   // If they already allowed location for this site, sort by distance straight away (no prompt).
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: "geolocation" }).then((s) => { if (s.state === "granted") locate(true); }).catch(() => {});
