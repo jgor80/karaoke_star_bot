@@ -16,7 +16,7 @@
 // The Oke Night phone app shows this same page. Its shell sets window.OKE_APP (or adds "OkeNightApp" to the
 // browser's name) and window.OKE_SITE (https://okenight.com, since the app's own pages live at capacitor://).
 // In the app there's no bar pitch, billing or host page (screens a reviewer can't use). Tips stay on the
-// bar pages: an optional gift in Venmo, all of it to the host, unlocking nothing in the app.
+// bar pages: an optional gift in the host's Venmo, Cash App, PayPal or Zelle, all of it to the host, unlocking nothing in the app.
 window.OKE_APP = !!window.OKE_APP || /\bOkeNightApp\b/.test(navigator.userAgent);
 if (window.OKE_APP) document.documentElement.classList.add("app");
 </script>

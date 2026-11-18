@@ -113,6 +113,10 @@ html.embed .signup { grid-template-columns: 1fr; }
 .tally .count strong { color: var(--hot); font-size: calc(6.4 * var(--u)); font-variant-numeric: tabular-nums; }
 .ub.tip-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(.4 * var(--u)) calc(2 * var(--u)); align-items: center; }
 .ub.tip-row .amt { font-family: var(--f-display); font-size: calc(4 * var(--u)); color: var(--gold); grid-row: span 2; }
+.pay-ways { display: flex; flex-wrap: wrap; gap: calc(1.4 * var(--u)); }
+.pay-way { background: var(--panel); border: 2px solid var(--gold); border-radius: calc(1.6 * var(--u)); padding: calc(1.2 * var(--u)) calc(2.2 * var(--u)); min-width: 0; }
+.pay-way small { display: block; font-size: calc(1.8 * var(--u)); color: var(--muted); }
+.pay-way b { display: block; font-family: var(--f-mono); font-size: calc(2.8 * var(--u)); color: var(--gold); overflow-wrap: anywhere; }
 .pv-note { font-size: calc(2.6 * var(--u)); color: var(--muted); margin: 0; }
 .pv-note b { color: var(--ink); }
 
@@ -470,7 +474,13 @@ body.embed .line-tv { display: none !important; }
     // Any song since the preview window opened means the show is on: back to the live screen.
     if (!force && (data.plays || []).some((p) => Number(p.played_at) >= start - PREVIEW_LEAD_S)) return null;
     const startLabel = new Date(start * 1000).toLocaleTimeString("en-US", { timeZone: (VENUE && VENUE.tz) || "America/Chicago", hour: "numeric", minute: "2-digit" }).replace(":00", "");
-    const tips = data.tips && data.tips.venmo ? { venmo: String(data.tips.venmo).replace(/^@/, ""), menu: (data.tips.menu || []).slice(0, 8) } : null;
+    // Only the payment apps the host filled in on /host.
+    const T = data.tips || {}, ways = [];
+    if (T.venmo) ways.push(["Venmo", "@" + String(T.venmo).replace(/^@/, "")]);
+    if (T.cashapp) ways.push(["Cash App", "$" + T.cashapp]);
+    if (T.paypal) ways.push(["PayPal", "paypal.me/" + T.paypal]);
+    if (T.zelle) ways.push(["Zelle", T.zelle]);
+    const tips = ways.length ? { ways, menu: (T.menu || []).slice(0, 8) } : null;
     return { start, startLabel, venue: sc.venue || "", tips, secretsLeft: Number(data.secrets_left) || 0 };
   }
   function countdownText(start) {
@@ -508,7 +518,10 @@ body.embed .line-tv { display: none !important; }
       .forEach(([ic, nm, ds]) => { const c = el("article", "ub"); const i = el("span", "ic", ic); i.setAttribute("aria-hidden", "true"); c.append(i, el("div", "nm", nm), el("div", "ds", ds)); f.append(c); });
     box.append(f);
     if (pv.tips && pv.tips.menu.length) {
-      box.append(heading("Tip the KJ", "Venmo @" + pv.tips.venmo + " · tip menu at " + SHOW_URL));
+      box.append(heading("Tip the KJ", "tip menu at " + SHOW_URL));
+      const pw = el("div", "pay-ways");
+      pv.tips.ways.forEach(([nm, h]) => { const c = el("div", "pay-way"); c.append(el("small", null, nm), el("b", null, h)); pw.append(c); });
+      box.append(pw);
       const tg = el("div", "grid");
       pv.tips.menu.forEach((m) => { const c = el("article", "ub tip-row");
         c.append(el("span", "amt", Number(m.amount) > 0 ? "$" + Number(m.amount) : "You pick"), el("div", "nm", ((m.emoji ? m.emoji + " " : "") + (m.label || "")).trim()), el("div", "ds", m.note || ""));
