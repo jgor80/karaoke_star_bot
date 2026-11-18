@@ -29,6 +29,10 @@ export const VENUES = [
     day_name: "Sunday",
     crowd_topic: "okenight-sundays", // public ntfy topic for "karaoke tonight" reminders
     host_default: "Bleacher Jeff",
+    // How the crowd signs up to sing (phone page and TV). Leave these out for paper slips at the KJ booth, the
+    // default. A bar that signs people up another way (a tablet, a QR form, at the bar) sets its own, e.g.
+    //   signup_where: "the bar",
+    //   signup_steps: [["Ask the bartender", "They keep the list."], ["Pick your song", "Search the Songbook tab."], ["Listen for your name", "Watch “The line” for your spot."]],
   },
 ];
 
@@ -44,7 +48,8 @@ export const venueBySlug = (slug) => BY_SLUG.get(String(slug || "").toLowerCase(
 // What the venue picker and the app get from /api/venues (no settings, just where and when).
 export function publicVenue(v) {
   return { slug: v.slug, name: v.name, neighborhood: v.neighborhood, address: v.address, city: v.city,
-    lat: v.lat, lng: v.lng, tz: v.tz, hours_label: v.hours_label, day_name: v.day_name, path: "/" + v.slug + "/" };
+    lat: v.lat, lng: v.lng, tz: v.tz, hours_label: v.hours_label, day_name: v.day_name, path: "/" + v.slug + "/",
+    signup_where: v.signup_where || null, signup_steps: v.signup_steps || null };
 }
 
 // host_config key for this venue.
