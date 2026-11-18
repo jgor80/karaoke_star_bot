@@ -4,7 +4,7 @@
 // POST /api/host {action, ...}        (header x-host-key)  add {title, artist?, reward?} | remove {id} | reset {id}
 // POST /api/host {action:"setup", code, key, host_name?}  sets or resets the host key; needs the HOST_SETUP_CODE Worker secret
 // POST /api/host {action:"host_name", host_name}           (header x-host-key) the host's singer name ("" = nobody)
-// POST /api/host {action:"tips", venmo, menu}              (header x-host-key) Venmo handle + tip menu (menu null = default)
+// POST /api/host {action:"tips", venmo, cashapp, paypal, zelle, menu} (header x-host-key) tip handles (each optional) + tip menu (menu null = default)
 // POST /api/host {action:"songbook_upload"|"songbook_source"|"songbook_clear", ...}  the host's own songbook (songbook_api.js)
 // POST /api/host {action:"request_done", id, status} | {action:"request_remove", id}  song requests (requests_api.js)
 // POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
@@ -123,9 +123,9 @@ export const DEFAULT_HOST = DEFAULT_VENUE.host_default;
 const hostDefault = (venue) => venue.host_default || "";
 function cleanHostName(s) { return String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); }
 
-// Tip menu: the host's Venmo handle and the menu shown behind the Tip button. Both set on /host.
-// Perks ("skip the line" and so on) are on the honor system: the host sees the note in Venmo and does it.
-export const DEFAULT_VENMO = ""; // no Tip button until the host adds a handle on /host
+// Tip menu: the host's tip handles (Venmo, Cash App, PayPal, Zelle: each optional) and the menu shown behind
+// the Tip button. All set on /host. Perks ("skip the line" and so on) are on the honor system.
+export const DEFAULT_VENMO = ""; // no Tip button until the host adds at least one handle on /host
 export const DEFAULT_TIPS = [
   { emoji: "🙌", label: "Thanks for hosting", amount: 5, note: "Keep the mics on" },
   { emoji: "🍻", label: "Buy the host a drink", amount: 8, note: "Cheers from the crowd" },
@@ -134,7 +134,19 @@ export const DEFAULT_TIPS = [
   { emoji: "🎤", label: "Make the host sing one", amount: 15, note: "You pick the song" },
   { emoji: "🥂", label: "Dedicate a song", amount: 5, note: "Host gives it a shout-out on the mic" },
 ];
-function cleanVenmo(s) { return String(s || "").trim().replace(/^@/, "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30); }
+function cleanVenmo(s) { return String(s || "").trim().replace(/^.*venmo\.com\/(u\/)?/i, "").replace(/^@/, "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30); }
+// Cash App $cashtag: letters, numbers, - and _, up to 20. Pasted cash.app links and the $ are stripped.
+function cleanCashApp(s) { return String(s || "").trim().replace(/^.*cash\.app\//i, "").replace(/^\$/, "").split(/[/?#]/)[0].replace(/[^A-Za-z0-9_-]/g, "").slice(0, 20); }
+// PayPal.Me handle: letters and numbers, up to 20. Pasted paypal.me / paypal.com/paypalme links are stripped.
+function cleanPayPal(s) { return String(s || "").trim().replace(/^.*paypal\.(me|com\/paypalme)\//i, "").replace(/^@/, "").split(/[/?#]/)[0].replace(/[^A-Za-z0-9]/g, "").slice(0, 20); }
+// Zelle has no pay link, so it's the email or US mobile number the host enrolled. Empty clears it; junk is an error (null).
+function cleanZelle(s) {
+  s = String(s || "").trim();
+  if (!s) return "";
+  if (s.includes("@")) { s = s.toLowerCase(); return /^[^\s@<>]{1,64}@[a-z0-9.-]+\.[a-z]{2,}$/.test(s) && s.length <= 100 ? s : null; }
+  let d = s.replace(/\D/g, ""); if (d.length === 11 && d[0] === "1") d = d.slice(1);
+  return d.length === 10 ? "(" + d.slice(0, 3) + ") " + d.slice(3, 6) + "-" + d.slice(6) : null;
+}
 function cleanTips(list) {
   if (!Array.isArray(list)) return null;
   const t = (s, n) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -146,7 +158,7 @@ function cleanTips(list) {
 function tipsFrom(cfg) {
   let menu = null;
   try { menu = cfg.tip_menu ? cleanTips(JSON.parse(cfg.tip_menu)) : null; } catch (e) {}
-  return { venmo: cfg.venmo === undefined ? DEFAULT_VENMO : cfg.venmo, menu: menu || DEFAULT_TIPS };
+  return { venmo: cfg.venmo === undefined ? DEFAULT_VENMO : cfg.venmo, cashapp: cfg.cashapp || "", paypal: cfg.paypal || "", zelle: cfg.zelle || "", menu: menu || DEFAULT_TIPS };
 }
 
 // Found secrets (with who sang them) and how many are still hidden. Never includes unfound titles.
@@ -159,7 +171,7 @@ export async function publicSecrets(env, venue = DEFAULT_VENUE) {
     ]);
     const cfg = await config(env, venue);
     return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: cfg.host_name === undefined ? hostDefault(venue) : cfg.host_name, tips: tipsFrom(cfg) };
-  } catch (e) { return { secrets_found: [], secrets_left: 0, host: hostDefault(venue), tips: { venmo: DEFAULT_VENMO, menu: DEFAULT_TIPS } }; }
+  } catch (e) { return { secrets_found: [], secrets_left: 0, host: hostDefault(venue), tips: { venmo: DEFAULT_VENMO, cashapp: "", paypal: "", zelle: "", menu: DEFAULT_TIPS } }; }
 }
 
 // True when `given` is the host key. Used by other host-only endpoints (the crowd meter's /api/crowd).
@@ -276,8 +288,13 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (body.action === "tips") {
       const menu = body.menu == null ? null : cleanTips(body.menu);
       if (body.menu != null && !menu) return json({ error: "Bad tip menu." }, 400);
+      const zelle = cleanZelle(body.zelle);
+      if (zelle === null) return json({ error: "Zelle needs the email or 10-digit US phone number you enrolled with." }, 400);
+      const put = (k, v) => v ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K(k), v)
+                              : env.DB.prepare("DELETE FROM host_config WHERE k = ?").bind(K(k));
       await env.DB.batch([
         env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("venmo"), cleanVenmo(body.venmo)),
+        put("cashapp", cleanCashApp(body.cashapp)), put("paypal", cleanPayPal(body.paypal)), put("zelle", zelle),
         menu ? env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("tip_menu"), JSON.stringify(menu))
              : env.DB.prepare("DELETE FROM host_config WHERE k = ?").bind(K("tip_menu")),
       ]);

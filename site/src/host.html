@@ -269,11 +269,16 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     <section class="card">
       <h2>Tips</h2>
       <form class="card" id="tips-form" style="padding:0;border:0;background:none">
-        <label>Your Venmo handle. Adds a 💸 Tip button to the phone site. Leave it empty to hide the button.<input id="venmo" maxlength="31" placeholder="@your-handle" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-        <p class="hint">Tip menu. Each one opens Venmo with the amount and a note filled in. Leave the amount empty to let people type their own. Perks are on the honor system: you’ll see the note in Venmo.</p>
+        <p class="hint">Where people can tip you. Fill in any you use and leave the rest empty. Any one of them adds a 💸 Tip button to the phone site, and the TV shows them before the show. Everything here is public.</p>
+        <label>Venmo<input id="venmo" maxlength="31" placeholder="@your-handle" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>Cash App<input id="cashapp" maxlength="21" placeholder="$YourCashtag" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>PayPal<input id="paypal" maxlength="60" placeholder="paypal.me/yourname" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>Zelle (email or US mobile number you enrolled with)<input id="zelle" maxlength="100" placeholder="you@example.com or 312-555-0123" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <p class="hint">Zelle has no pay link, so phones show it with a Copy button and people send it from their bank app.</p>
+        <p class="hint">Tip menu. Each one opens the tipper’s pick with the amount filled in (Venmo adds the note too). Leave the amount empty to let people type their own. Perks are on the honor system: you’ll see the note in Venmo (other apps show just the amount).</p>
         <div class="list" id="tip-rows"></div>
         <div class="row"><button type="button" class="ghost small" id="tip-add">Add an item</button><button type="button" class="ghost small" id="tip-default">Use the default menu</button></div>
-        <div class="row"><button type="submit" class="small">Save tips</button><a class="hint" id="venmo-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check your Venmo link</a><span class="hint" id="tips-saved"></span></div>
+        <div class="row"><button type="submit" class="small">Save tips</button><a class="hint" id="venmo-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Venmo</a><a class="hint" id="cashapp-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Cash App</a><a class="hint" id="paypal-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check PayPal</a><span class="hint" id="tips-saved"></span></div>
       </form>
     </section>
 
@@ -436,15 +441,22 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   function readTips() {
     return [...$("tip-rows").children].map((r) => ({ emoji: r.querySelector(".emo").value, label: r.querySelector(".lab").value, amount: r.querySelector(".num").value.replace(/[$\s]/g, "") || null, note: r.querySelector(".note").value })).filter((t) => t.label.trim());
   }
-  function venmoTestLink(h) { const v = $("venmo-test"); h = (h || "").trim().replace(/^@/, ""); v.hidden = !h; v.href = "https://venmo.com/u/" + encodeURIComponent(h); }
-  $("venmo").addEventListener("input", () => venmoTestLink($("venmo").value));
+  // "Check" links so the host can see each handle opens the right account. Same clean-up as the server.
+  const handleOf = {
+    venmo: (h) => h.replace(/^.*venmo\.com\/(u\/)?/i, "").replace(/^@/, "").replace(/[^A-Za-z0-9_-]/g, ""),
+    cashapp: (h) => h.replace(/^.*cash\.app\//i, "").replace(/^\$/, "").split(/[/?#]/)[0].replace(/[^A-Za-z0-9_-]/g, ""),
+    paypal: (h) => h.replace(/^.*paypal\.(me|com\/paypalme)\//i, "").replace(/^@/, "").split(/[/?#]/)[0].replace(/[^A-Za-z0-9]/g, ""),
+  };
+  const testUrl = { venmo: (h) => "https://venmo.com/u/" + h, cashapp: (h) => "https://cash.app/$" + h, paypal: (h) => "https://paypal.me/" + h };
+  function testLink(k) { const a = $(k + "-test"), h = handleOf[k](($(k).value || "").trim()); a.hidden = !h; a.href = testUrl[k](encodeURIComponent(h)); }
+  ["venmo", "cashapp", "paypal"].forEach((k) => $(k).addEventListener("input", () => testLink(k)));
   $("tip-add").addEventListener("click", () => { $("tip-rows").append(tipRow({})); $("tip-rows").lastChild.querySelector(".lab").focus(); });
   $("tip-default").addEventListener("click", () => fillTips(defaultTips));
   $("tips-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const r = await api("POST", { action: "tips", venmo: $("venmo").value, menu: readTips() });
+    const r = await api("POST", { action: "tips", venmo: $("venmo").value, cashapp: $("cashapp").value, paypal: $("paypal").value, zelle: $("zelle").value, menu: readTips() });
     $("tips-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
-    tipsSet = false; load();
+    if (r.ok) { tipsSet = false; load(); }
   });
 
   $("logout").addEventListener("click", () => { store.set(KEY, null); key = null; clearTimeout(pollT); showLogin(false); });
@@ -562,7 +574,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   function render(d) {
     // Fill the host name once, so polling doesn't overwrite what's being typed.
     if (!hostNameSet) { $("host-name").value = d.host_name || ""; hostNameSet = true; }
-    if (!tipsSet && d.tips) { defaultTips = d.default_tips || []; $("venmo").value = d.tips.venmo ? "@" + d.tips.venmo : ""; venmoTestLink(d.tips.venmo); fillTips(d.tips.menu || []); tipsSet = true; }
+    if (!tipsSet && d.tips) { defaultTips = d.default_tips || []; $("venmo").value = d.tips.venmo ? "@" + d.tips.venmo : ""; $("cashapp").value = d.tips.cashapp ? "$" + d.tips.cashapp : ""; $("paypal").value = d.tips.paypal ? "paypal.me/" + d.tips.paypal : ""; $("zelle").value = d.tips.zelle || ""; ["venmo", "cashapp", "paypal"].forEach(testLink); fillTips(d.tips.menu || []); tipsSet = true; }
     if (d.ntfy_topic) { $("topic").textContent = d.ntfy_topic; $("topic-link").href = "https://ntfy.sh/" + d.ntfy_topic; }
     const hid = d.secrets.filter((s) => !s.found_uuid), fnd = d.secrets.filter((s) => s.found_uuid);
     $("hidden-h").textContent = "Hidden (" + hid.length + ")";
