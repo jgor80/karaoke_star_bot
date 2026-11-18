@@ -202,6 +202,8 @@ main { padding-block: 16px 24px; }
 .win { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 10px 3px 7px; border-radius: 999px; font-size: 15px; font-weight: 600;
   border: 1px solid var(--line); background: rgba(0,0,0,.22); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .win .i { font-size: 17px; line-height: 1; }
+.win .t small { display: block; font-size: 13px; font-weight: 500; opacity: .8; line-height: 1.2; }
+.win:has(small) { border-radius: 14px; padding-top: 4px; padding-bottom: 4px; }
 .win.w-award { border-color: var(--gold); color: var(--gold); background: rgba(245,184,74,.10); }
 .win.w-new { border-color: var(--hot); color: #fff; background: rgba(255,92,157,.18); }
 .win.w-past { color: var(--muted); }
@@ -276,11 +278,12 @@ main { padding-block: 16px 24px; }
 .award { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 2px; align-content: start; min-width: 0; }
 .award .ic { font-size: 34px; line-height: 1.1; margin-bottom: 4px; }
 .award .label { font-size: 15px; font-weight: 800; color: var(--gold); }
+.award .how { font-size: 14px; color: var(--ink); opacity: .8; line-height: 1.25; }
 .award .who { font-size: 20px; font-weight: 800; overflow-wrap: anywhere; line-height: 1.2; }
 .award .what { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .award .stat { font-size: 15px; font-weight: 700; color: var(--hot); }
 .award.headline { border-color: var(--gold); background: linear-gradient(135deg, var(--win), var(--panel) 75%); grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; }
-.award.headline .ic { grid-row: 1 / span 4; font-size: 52px; align-self: center; }
+.award.headline .ic { grid-row: 1 / span 5; font-size: 52px; align-self: center; }
 .award.headline .who { font-size: 26px; }
 .awards.mini .what, .awards.mini .stat { display: none; }
 canvas#card { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); display: block; }
@@ -318,6 +321,8 @@ details.singer[open] summary { border-bottom: 1px solid var(--line); }
 .badge { font-size: 14px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--gold-soft); color: var(--gold); }
 .more { width: 100%; margin-top: 8px; }
 .badge.earned { background: var(--hot-soft); color: #ffd1e3; }
+.badge small { display: block; font-size: 13px; font-weight: 500; opacity: .85; }
+.badge:has(small) { border-radius: 12px; padding: 4px 10px; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 15px; color: var(--muted); }
 .facts b { color: var(--ink); font-weight: 600; }
 details.singer.mine { border-color: var(--gold); }
@@ -1054,7 +1059,12 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     if (!aw.length) { box.append(el("div", "card muted", "Awards show up once a few songs are in.")); return; }
     aw.slice().sort((a, b) => !!b.headline - !!a.headline).forEach((a) => { const c = el("article", "award" + (a.headline ? " headline" : ""));
       const ic = el("span", "ic", icon(a.id)); ic.setAttribute("aria-hidden", "true");
-      c.append(ic, el("div", "label", a.label), el("div", "who", a.who), el("div", "what", a.what), el("div", "stat", a.stat)); box.append(c); });
+      const h = OkeAwards.how(a.id);
+      c.append(ic, el("div", "label", a.label));
+      if (h) c.append(el("div", "how", h));
+      c.append(el("div", "who", a.who));
+      if (OkeAwards.whatOf(a)) c.append(el("div", "what", OkeAwards.whatOf(a)));
+      c.append(el("div", "stat", a.stat)); box.append(c); });
   }
   function renderTally(box, t) {
     box.replaceChildren();
@@ -1432,7 +1442,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       }
       if (person && draft) { const db = el("button", "act ghost me-btn", "🎯 Draft " + e.name + " to sing…"); db.type = "button"; db.addEventListener("click", () => draft.open(e.name)); extra.push(db); }
       const earned = el("div", "badges");
-      if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
+      if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.append(el("small", null, x.desc)); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
       e.rows.slice().reverse().forEach((p) => { const li = el("li");
         li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()));
@@ -1524,18 +1534,19 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     if (!n || !last.singer) { box.hidden = true; return; }
     const chips = [], who = clean(last.singer), line = songLine(last), seen = new Set();
     const labels = new Set();
-    const chip = (cls, ic, text, title, label) => { if (labels.has(label || text)) return; labels.add(label || text); const c = el("span", "win " + cls); const i = el("span", "i", ic); i.setAttribute("aria-hidden", "true"); c.append(i, document.createTextNode(text)); if (title) c.title = title; chips.push(c); };
+    const chip = (cls, ic, text, title, label, why) => { if (labels.has(label || text)) return; labels.add(label || text); const c = el("span", "win " + cls); const i = el("span", "i", ic); i.setAttribute("aria-hidden", "true");
+      const t = el("span", "t", text); if (why) t.append(el("small", null, why)); c.append(i, t); if (title) c.title = title; chips.push(c); };
     const pk = window.KaraokeFun ? KaraokeFun.personKey(last.singer) : null, e = pk && people.get(pk);
-    if (e) e.badges.forEach((b) => { if (b.at === last && b.id !== "debut") { chip("w-new", icon(b.id), "New: " + b.name, b.desc, b.name); seen.add(b.id); } });
+    if (e) e.badges.forEach((b) => { if (b.at === last && b.id !== "debut") { chip("w-new", icon(b.id), "New: " + b.name, b.desc, b.name, b.desc); seen.add(b.id); } });
     if (e && e.rows.length === 1 && e.rows[0] === last) chip("w-new", "🎤", "First song here!", "Welcome to Oke Night");
     // "Last Call" is whoever sang last, so it means nothing while the night is still going.
     const aw = awardsFor(n.rows).filter((a) => sameName(a.who, who) && !(tonight && a.id === "last"));
-    aw.filter((a) => a.what === line).forEach((a) => chip("w-award", icon(a.id), a.label, a.stat, a.label));
-    aw.filter((a) => a.what !== line).forEach((a) => chip("w-award", icon(a.id), a.label + (tonight ? " tonight" : ""), a.what + " · " + a.stat, a.label));
-    if (last.title) pastSongAwards(last).slice(-2).forEach((x) => chip("w-award w-past", icon(x.a.id), x.a.label + " · " + nightLabel(x.night), "Won with this song before", x.a.label + x.night));
-    if (e) e.badges.filter((b) => b.id !== "debut" && !seen.has(b.id) && b.at !== last).reverse().forEach((b) => chip("", icon(b.id), b.name, b.desc, b.name));
-    // Keep the box short: the 6 most interesting chips (new badges, then awards, then held badges), and a count for the rest.
-    const MAX = 6, extra = chips.length - MAX;
+    aw.filter((a) => a.what === line).forEach((a) => chip("w-award", icon(a.id), a.label, a.stat, a.label, OkeAwards.how(a.id)));
+    aw.filter((a) => a.what !== line).forEach((a) => chip("w-award", icon(a.id), a.label + (tonight ? " tonight" : ""), a.what + " · " + a.stat, a.label, OkeAwards.how(a.id)));
+    if (last.title) pastSongAwards(last).slice(-2).forEach((x) => chip("w-award w-past", icon(x.a.id), x.a.label + " · " + nightLabel(x.night), "Won with this song before", x.a.label + x.night, OkeAwards.how(x.a.id)));
+    if (e) e.badges.filter((b) => b.id !== "debut" && !seen.has(b.id) && b.at !== last).reverse().forEach((b) => chip("", icon(b.id), b.name, b.desc, b.name, b.desc));
+    // Keep the box short: the 4 most interesting chips (new badges, then awards, then held badges), and a count for the rest.
+    const MAX = 4, extra = chips.length - MAX;
     box.hidden = !chips.length; box.append(...chips.slice(0, extra > 1 ? MAX : MAX + 1));
     if (extra > 1) { const m = el("button", "win w-more", "+" + extra + " more"); m.type = "button"; m.addEventListener("click", () => openSearch(who)); box.append(m); }
   }

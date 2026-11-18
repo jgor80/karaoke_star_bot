@@ -68,6 +68,7 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .award.headline { border-color: var(--gold); background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); }
 .award .label { font-family: var(--f-mono); font-size: calc(2 * var(--u)); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); display: flex; align-items: center; gap: calc(1 * var(--u)); }
 .ic { font-size: calc(3.4 * var(--u)); line-height: 1; letter-spacing: 0; }
+.award .how { color: var(--ink); opacity: .8; font-size: calc(2.2 * var(--u)); line-height: 1.2; }
 .award .who { font-size: calc(4.4 * var(--u)); font-weight: 800; line-height: 1.1; overflow-wrap: break-word; }
 .award .what { color: var(--muted); font-size: calc(2.5 * var(--u)); line-height: 1.25; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -366,7 +367,11 @@ body.embed .line-tv { display: none !important; }
     lb.append(ic, document.createTextNode(a.label));
     c.append(lb);
     if (a.photo) c.append(photoImg(a.photo));
-    c.append(el("div", "who", a.who.replace(/\//g, "/\u200b")), el("div", "what", a.what), el("div", "stat", a.stat));
+    const h = OkeAwards.how(a.id);
+    if (h) c.append(el("div", "how", h));
+    c.append(el("div", "who", a.who.replace(/\//g, "/\u200b")));
+    if (OkeAwards.whatOf(a)) c.append(el("div", "what", OkeAwards.whatOf(a)));
+    c.append(el("div", "stat", a.stat));
     return c;
   }
   function badgeCard(g) {
