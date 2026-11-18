@@ -45,6 +45,7 @@ heartbeat and crowd mic under its slug; a laptop with no `venue` is Welcome Back
 | `site/` | The public phone site: a Cloudflare Worker (`src/worker.js`) serving `src/index.html` and reading D1. `/tv` (`src/tv.html`) is a TV screen that scrolls the latest night's awards, top singers, badges, favorite songs and artists, decade and hour charts and dares (press F, double-click, or use the button that appears when the mouse moves for full screen); `?night=YYYY-MM-DD` pins a night, `?speed=2` scrolls faster. Night awards live in `src/awards.js`, shared by both pages. Live emoji reactions (`src/reactions_api.js`): anyone can tap 🔥 🎤 🍅 😴 and friends on the song on the mic; they feed crowd awards, badges and the TV. |
 | `site/` Songbook | The Songbook tab (`src/songs.js`) searches and filters (genre, decade, language, duets, top hits, sort) the karaoke app's whole catalog (`/api/catalog`, `src/catalog_api.js`). The Worker's every-minute cron downloads the app's published song list (a CSV of about 90,000 songs) once a week and writes only what changed (`src/catalog_import.js`); no laptop needed and lets each person keep a list of songs they want to sing. The list is saved on their phone (no accounts) and songs tick off by themselves once that person sings them. |
 | `awards/` | "The Mics" night awards and recap card page. |
+| `buttons/` | DIY Wi-Fi bar buttons: board code and parts list (see Bar buttons). |
 | `bingo/` | Karaoke bingo cards. The site uses its own copy in `site/src/bingo.js`. |
 
 ## Setting up the sync on the laptop
@@ -115,6 +116,20 @@ code and a new host key. Without the secret, nobody can set or reset the key.
 that only works for their bar, set `HOST_SETUP_CODE_<SLUG>` instead (for example
 `HOST_SETUP_CODE_WBL`). After 10 wrong keys or codes from one network in an hour (or 60 for the
 bar overall), the host page waits an hour.
+
+## Bar buttons
+
+Wireless buttons around the bar that send an emoji reaction to whoever is singing. It floats up the TV like a phone tap (`site/src/buttons_api.js`).
+
+1. On `/<slug>/host`, under **Bar buttons**, type a name (like "Pool table"), pick what a plain press sends (one emoji, random hype, random roast or anything), and tap **Add button**.
+2. Copy the secret link it shows. It's only shown once. **New link** makes a fresh one (the old one stops working), and **Remove** shuts a lost or stolen button off.
+3. Paste the link into the button:
+   - **Flic 2 + Flic Hub:** in the Flic app, pick the button, then for Click, Double click and Hold add the action **Internet Request**, type **GET**, and paste a link. Use the emoji chips under the link to copy a link for one emoji (it adds `&r=tomato` and so on), so each press type can send a different emoji. If requests from the hub fail, turn off "Validate certificates" on that action.
+   - **DIY Wi-Fi buttons** (an M5Stack ATOM Lite, or arcade buttons on an ESP32): see [`buttons/README.md`](buttons/README.md) for parts, wiring and the board code.
+   - **Anything else** ( a Shelly script, a phone shortcut): open the link with GET, or POST `{"k": "<secret>", "r": "fire"}` as JSON. `r` can be a reaction key (`fire`, `micdrop`, `encore`, `chills`, `dance`, `keychange`, `cringe`, `offkey`, `tomato`, `snooze`), its emoji, `hype`, `roast` or `random`.
+4. Test at home by opening the link with `&test=1` added: nothing is sent, and the button shows "last press" on /host.
+
+Presses only count while a song is on (the same window phones get). Each button can send 5 presses every 10 seconds and 30 a song, and all of a bar's buttons together 120 a minute. Extra presses are dropped. Each button counts as one phone for crowd awards and badges, and buttons never win the who-reacted-most awards.
 
 ## Crowd meter
 

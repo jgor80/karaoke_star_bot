@@ -129,7 +129,8 @@ export async function reactionTotals(env, venue = DEFAULT_VENUE, since = null) {
       // n = how many different phones sent that emoji on that song, so one phone tapping
       // ten times counts once toward crowd awards and badges. taps = the raw number of taps.
       bind(env.DB.prepare("SELECT play_uuid AS play, reaction AS r, count(DISTINCT device_id) AS n, count(*) AS taps FROM reactions " + where + " GROUP BY play_uuid, reaction")),
-      bind(env.DB.prepare("SELECT night, who, reaction AS r, count(*) AS n FROM reactions " + where + " GROUP BY night, who, reaction")),
+      // Bar buttons (device_id "btn:<id>", buttons_api.js) aren't a person, so they're left out of who-reacted-most.
+      bind(env.DB.prepare("SELECT night, who, reaction AS r, count(*) AS n FROM reactions " + where + " AND device_id NOT LIKE 'btn:%' GROUP BY night, who, reaction")),
     ]);
     return { reactions: bySong.results, reactors: byWho.results };
   } catch (e) {

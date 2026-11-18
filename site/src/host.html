@@ -50,6 +50,9 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .ph-list .s { color: var(--muted); font-size: 14px; }
 .ph-list .row { justify-content: center; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn-secret { background: var(--panel-2); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.btn-secret code, #btn-link { font-size: 13px; word-break: break-all; flex: 1 1 200px; }
+#btn-chips button { font-size: 20px; padding: 6px 10px; }
 .hint { font-size: 15px; color: var(--muted); margin: 0; }
 .err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
 .list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -179,6 +182,26 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
         <div class="row"><button type="button" id="sb-go">Upload</button><span class="hint" id="sb-progress"></span></div>
       </div>
       <div class="row"><button type="button" class="ghost small" id="sb-clear" hidden>Delete my songbook</button><span class="hint" id="sb-status"></span></div>
+    </section>
+
+    <section class="card" id="btn-card">
+      <h2 id="btn-h">Bar buttons</h2>
+      <p class="hint">Wireless buttons around the bar that send an emoji to whoever is singing. It floats up the TV like a phone tap. Each button gets its own secret link: paste it into the button’s app (for Flic: Internet Request, GET). Presses only count while someone is singing, and each button is limited to a few presses every 10 seconds.</p>
+      <form class="row" id="btn-add">
+        <input id="btn-label" maxlength="40" placeholder="Button name, e.g. Pool table" autocomplete="off" style="flex:1 1 180px">
+        <select id="btn-r" aria-label="What a plain press sends"></select>
+        <button type="submit" class="small">Add button</button>
+      </form>
+      <p class="err" id="btn-err"></p>
+      <div class="btn-secret" id="btn-secret" hidden>
+        <p class="hint"><b id="btn-secret-h"></b> Copy it now. It’s only shown once (use “New link” if you lose it).</p>
+        <div class="row"><code id="btn-link"></code><button type="button" class="ghost small" id="btn-copy">Copy</button></div>
+        <p class="hint">A link for one emoji, for example for a double click or a hold (tap to copy):</p>
+        <div class="row" id="btn-chips"></div>
+        <p class="hint">Testing at home? Add <code>&amp;test=1</code> to the link and open it: the button shows “last press just now” below.</p>
+        <div class="row"><button type="button" class="small" id="btn-done">I saved it</button><span class="hint" id="btn-copied" role="status" aria-live="polite"></span></div>
+      </div>
+      <ul class="list" id="btn-list"></ul>
     </section>
 
     <section class="card">
@@ -509,6 +532,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "duet_remove", id: x.id });
       const row = el("div", "row"); row.append(rm); li.append(row); dul.append(li); });
     renderPhotos(d.photos || []);
+    renderButtons(d.buttons || []);
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
     $("req-h").textContent = "Song requests (" + rq.length + ")";
@@ -643,6 +667,60 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       blocked.forEach((p, i) => { if (i) bp.append(document.createTextNode(" ")); const b = el("button", "ghost small", "Allow " + p.name); b.type = "button";
         b.onclick = () => act({ action: "photo_unblock", k: p.k }); bp.append(b); });
     }
+  }
+
+  // Wireless bar buttons (buttons_api.js). The secret link comes back only from button_add / button_rotate.
+  // Keep in sync with REACTIONS in awards.js (this page doesn't load it).
+  const BTN_RX = [["fire", "🔥", "Fire"], ["micdrop", "🎤", "Mic drop"], ["encore", "🔁", "Encore"], ["chills", "😭", "Chills"], ["dance", "💃", "Dance"],
+    ["keychange", "📈", "Key change"], ["cringe", "😬", "Cringe"], ["offkey", "🙉", "Off-key"], ["tomato", "🍅", "Tomato"], ["snooze", "😴", "Snooze"]].map(([k, e, name]) => ({ k, e, name }));
+  const BTN_CHOICES = [["hype", "🎉 Random hype"], ["roast", "🍅 Random roast"], ["random", "🎲 Anything"],
+    ...BTN_RX.map((x) => [x.k, x.e + " " + x.name])];
+  const btnName = (r) => (BTN_CHOICES.find((c) => c[0] === r) || [r, r])[1];
+  $("btn-r").replaceChildren(...BTN_CHOICES.map(([v, t]) => { const o = el("option", null, t); o.value = v; return o; }));
+  const btnBase = () => location.origin + "/" + SLUG + "/api/button?k=";
+  async function copyText(t, what) {
+    try { await navigator.clipboard.writeText(t); $("btn-copied").textContent = (what || "Link") + " copied"; }
+    catch (e) { $("btn-copied").textContent = "Couldn’t copy. Press and hold the link to copy it."; }
+  }
+  function showSecret(label, secret) {
+    const link = btnBase() + secret;
+    $("btn-secret-h").textContent = "Secret link for “" + label + "”.";
+    $("btn-link").textContent = link; $("btn-copied").textContent = "";
+    $("btn-copy").onclick = () => copyText(link);
+    $("btn-chips").replaceChildren(...BTN_RX.map((x) => { const b = el("button", "ghost", x.e); b.type = "button"; b.title = x.name;
+      b.onclick = () => copyText(link + "&r=" + x.k, x.e + " link"); return b; }));
+    $("btn-secret").hidden = false; $("btn-secret").scrollIntoView({ block: "nearest" });
+  }
+  $("btn-done").addEventListener("click", () => { $("btn-secret").hidden = true; $("btn-link").textContent = ""; });
+  $("btn-add").addEventListener("submit", async (ev) => {
+    ev.preventDefault(); $("btn-err").textContent = "";
+    const label = $("btn-label").value.trim();
+    const r = await api("POST", { action: "button_add", label, r: $("btn-r").value });
+    if (!r.ok) { $("btn-err").textContent = r.d.error || "Couldn’t add it."; return; }
+    $("btn-label").value = ""; showSecret(label, r.d.secret); load();
+  });
+  let btnSig = "";
+  function renderButtons(list) {
+    const sig = JSON.stringify(list); if (sig === btnSig) return; btnSig = sig;
+    $("btn-h").textContent = "Bar buttons" + (list.length ? " (" + list.length + ")" : "");
+    const ul = $("btn-list"); ul.replaceChildren();
+    list.forEach((b) => {
+      const li = el("li"), row = el("div", "row");
+      li.append(el("span", "t", "🔘 " + b.label),
+        el("span", "s", "Plain press: " + btnName(b.r) + " · " + (b.last_at ? "last press " + when(b.last_at) : "never pressed yet") + " · " + b.presses + " sent"));
+      const sel = el("select"); sel.setAttribute("aria-label", "What a plain press on " + b.label + " sends");
+      BTN_CHOICES.forEach(([v, t]) => { const o = el("option", null, t); o.value = v; o.selected = v === b.r; sel.append(o); });
+      sel.onchange = () => act({ action: "button_set", id: b.id, r: sel.value });
+      const nl = el("button", "ghost small", "New link"); nl.type = "button";
+      nl.onclick = async () => {
+        if (!confirm("Make a new link for " + b.label + "? The old link stops working, so you’ll need to paste the new one into the button.")) return;
+        const r = await api("POST", { action: "button_rotate", id: b.id }); if (!r.ok) return alert(r.d.error || "That didn’t work.");
+        showSecret(b.label, r.d.secret); load();
+      };
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button";
+      rm.onclick = () => { if (confirm("Remove " + b.label + "? Its link stops working right away.")) act({ action: "button_remove", id: b.id }); };
+      row.append(sel, nl, rm); li.append(row); ul.append(li);
+    });
   }
 
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }

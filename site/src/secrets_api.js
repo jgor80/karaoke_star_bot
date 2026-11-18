@@ -9,6 +9,7 @@
 // POST /api/host {action:"request_done", id, status} | {action:"request_remove", id}  song requests (requests_api.js)
 // POST /api/host {action:"draft_remove", id} | {action:"draft_block"|"draft_unblock", singer}  crowd draft moderation (drafts_api.js)
 // POST /api/host {action:"singer_erase", singer}  take a singer's name off the site (privacy_api.js)
+// POST /api/host {action:"button_add"|"button_set"|"button_rotate"|"button_remove", ...}  wireless bar buttons (buttons_api.js)
 // POST /api/host {action:"duet_remove", id}       take a duet finder post down (duets_api.js)
 // POST /api/host {action:"owner_topic", on}       make / turn off the bar owner's report alerts (report_api.js)
 // checkSecrets(env, venue)                 -> marks newly sung secrets found and sends the phone push (cron + /api/plays)
@@ -27,6 +28,7 @@ import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
 import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
+import { hostButtons, hostButtonAction } from "./buttons_api.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
@@ -284,6 +286,10 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (String(body.action || "").startsWith("photo_")) {
       const r = await hostPhotoAction(env, body, venue); // singer photos: remove one, block or unblock a name
       if (r.error) return json(r, 400);
+    } else if (String(body.action || "").startsWith("button_")) {
+      const r = await hostButtonAction(env, body, venue); // wireless bar buttons: add, change, new link, remove
+      if (r.error) return json(r, 400);
+      return json(r); // button_add / button_rotate carry the secret link, shown once
     } else if (body.action === "duet_remove") {
       const r = await hostDuetAction(env, body, venue); // duet finder: take a post down
       if (r.error) return json(r, 400);
@@ -308,5 +314,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
