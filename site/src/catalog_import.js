@@ -26,9 +26,9 @@ export const KV_ID_BASE = 3e9;  // ids of songs that only come from the file (ho
 const UA = "OkeNight/1.0 (affiliate catalog import; okenight.com)";
 const REFRESH_MS = 7 * 86400 * 1000;
 const RETRY_MS = 3600 * 1000;
-const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
+export const MAX_SQL_BYTES = 90000; // D1 allows 100 KB per SQL statement
 const MIN_SONGS = 10000;     // a broken download must never wipe the catalog
-const VERSION = "3";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
+const VERSION = "5";         // bump to retry right away after a deploy instead of waiting out RETRY_MS
 
 const SCHEMA = [
   // rowid = the app's song id (same as plays.song_id). Only title, artist and k are searchable.
@@ -130,6 +130,11 @@ export function unzipFirstEntry(body) {
   return deflated.pipeThrough(new DecompressionStream("deflate-raw")).pipeThrough(new TextDecoderStream());
 }
 
+// A copy of a short string that doesn't point into the big chunk of XML it was cut from. V8 keeps a
+// substring's whole parent alive, so without this every title would pin its ~MB chunk and the song list
+// would hold the whole 180 MB file in memory (more than a Worker gets).
+const own = (s) => (" " + s).slice(1);
+
 const ENT = { amp: "&", apos: "'", quot: '"', lt: "<", gt: ">" };
 export const unescapeXml = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) =>
   e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e] ?? m);
@@ -140,13 +145,13 @@ export const unescapeXml = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e)
 export function songsFromArtist(block) {
   const name = /<name>([^<]*)<\/name>/.exec(block);
   if (!name) return [];
-  const artist = unescapeXml(name[1]).trim(), out = [];
+  const artist = own(unescapeXml(name[1]).trim()), out = [];
   const re = /<song id="(\d+)">([\s\S]*?)<\/song>/g; let m;
   while ((m = re.exec(block))) {
     const title = /<name>([^<]*)<\/name>/.exec(m[2]), rank = /<rank>(\d+)<\/rank>/.exec(m[2]);
     if (!title) continue;
     const prev = /<preview>https?:\/\/[^<]*\/preview\/(\d+)\/?<\/preview>/.exec(m[2]);
-    out.push({ kv: Number(m[1]), title: unescapeXml(title[1]).trim(), artist, rank: rank ? Number(rank[1]) : 1e9,
+    out.push({ kv: Number(m[1]), title: own(unescapeXml(title[1]).trim()), artist, rank: rank ? Number(rank[1]) : 1e9,
       kfn: /format="KFN"[^>]*track_type="KAR"/.test(m[2]), preview: prev ? Number(prev[1]) : null });
   }
   return out;
@@ -174,7 +179,8 @@ export async function songsFromXml(text) {
 }
 
 async function downloadSongs() {
-  const r = await fetch(KV_ZIP, { headers: { "user-agent": UA } });
+  // A stuck download must end in an error we can see (catalog_meta.last_error), not a silent timeout.
+  const r = await fetch(KV_ZIP, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(180000) });
   if (!r.ok || !r.body) throw new Error("song list download said " + r.status);
   return songsFromXml(unzipFirstEntry(r.body));
 }
@@ -220,7 +226,11 @@ async function setMeta(env, pairs) {
 
 export async function importCatalog(env, now = Date.now(), firstImport = false) {
   for (const sql of SCHEMA) await env.DB.prepare(sql).run();
+  // catalog_meta.stage: how far the last import got, so a run the platform cuts off still says where.
+  const stage = (v) => setMeta(env, { stage: v + " " + new Date().toISOString() }).catch(() => {});
+  await stage("downloading");
   const kvSongs = await downloadSongs();
+  await stage("read " + kvSongs.length + " songs");
   // What's in D1 now, paged by rowid so no single result gets huge.
   const existing = [];
   for (let last = -1; ;) {
@@ -241,12 +251,20 @@ export async function importCatalog(env, now = Date.now(), firstImport = false) 
   if (songs.length < MIN_SONGS) throw new Error("song list download looks wrong (" + songs.length + " songs from " + kvSongs.length + ")");
   const have = new Map(existing.map((r) => [Number(r.id), r.h]));
   const todo = songs.filter((s) => have.get(s.id) !== s.h);
+  await stage("writing " + todo.length + " songs");
   const stmts = insertStatements(todo);
-  for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5).map((sql) => env.DB.prepare(sql)));
   const ids = new Set(songs.map((s) => s.id)), gone = [...have.keys()].filter((id) => !ids.has(id));
+  // Mark the browse copy stale before changing the catalog. rebuildOrder sets order_version back when it
+  // finishes, so if it (or anything before it) fails, the next cron run rebuilds it (maybeImportCatalog)
+  // even though a retry would find no changed songs and skip the rebuild here.
+  if (todo.length || gone.length) await setMeta(env, { order_version: "stale" });
+  for (let i = 0; i < stmts.length; i += 5) await env.DB.batch(stmts.slice(i, i + 5).map((sql) => env.DB.prepare(sql)));
   for (let i = 0; i < gone.length; i += 500) await env.DB.prepare("DELETE FROM catalog WHERE rowid IN (" + gone.slice(i, i + 500).join(",") + ")").run();
+  await stage("indexing");
   if (todo.length || gone.length) await rebuildOrder(env);
-  await seedDetails(env, songs); // queue years, genres and languages to look up (details_import.js)
+  await stage("queueing details");
+  await seedDetails(env, songs);
+  await stage("done"); // queue years, genres and languages to look up (details_import.js)
   return { songs: songs.length, in_file: kvSongs.length, sung_here: songs.filter((s) => s.id < KV_ID_BASE).length, sent: todo.length, removed: gone.length };
 }
 

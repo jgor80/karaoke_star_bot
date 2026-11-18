@@ -34,6 +34,22 @@ function label(ts, tz, opts) {
   return new Date(ts * 1000).toLocaleString("en-US", { timeZone: tz, ...opts });
 }
 
+const dayKey = (d) => d.toISOString().slice(0, 10); // a session's date in its own time zone, YYYY-MM-DD
+
+// The next n karaoke nights (ignoring nights off), for the /host "nights off" list: [{date, label}].
+export function upcomingNights(nowTs, sch = SCHEDULE, n = 8) {
+  const st = scheduleStatus(nowTs, { ...sch, nights_off: [] });
+  const first = st.status === "off" ? st.next_start : st.session_start;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const w = wall(first + i * 7 * 86400 + 3600, sch.tz);
+    const date = w.y + "-" + String(w.m).padStart(2, "0") + "-" + String(w.d).padStart(2, "0");
+    const ts = fromWall(w.y, w.m, w.d, sch.start[0], sch.start[1], sch.tz);
+    out.push({ date, label: label(ts, sch.tz, { weekday: "short", month: "short", day: "numeric" }) });
+  }
+  return out;
+}
+
 // status: "live" (regular hours), "overtime" (after 1am, before 2am), or "off".
 export function scheduleStatus(nowTs, sch = SCHEDULE) {
   const w = wall(nowTs, sch.tz);
@@ -47,13 +63,20 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
     start = sessionStart(startDay.getUTCFullYear(), startDay.getUTCMonth() + 1, startDay.getUTCDate(), sch);
   }
   const end = start + sch.hours * 3600, latest = start + sch.latest_hours * 3600;
-  const status = nowTs < end ? "live" : nowTs < latest ? "overtime" : "off";
-  const nd = new Date(startDay.getTime() + 7 * 86400000);
+  let status = nowTs < end ? "live" : nowTs < latest ? "overtime" : "off";
+  // Nights the host turned off on /host ("No karaoke this night", sch.nights_off from withNightsOff in
+  // venues.js): tonight reads as an off night, and the next night skips over them.
+  const off = new Set(sch.nights_off || []);
+  const cancelled = status !== "off" && off.has(dayKey(startDay));
+  if (cancelled) status = "off";
+  let nd = new Date(startDay.getTime() + 7 * 86400000);
+  for (let i = 0; i < 60 && off.has(dayKey(nd)); i++) nd = new Date(nd.getTime() + 7 * 86400000);
   const next = status === "off" ? sessionStart(nd.getUTCFullYear(), nd.getUTCMonth() + 1, nd.getUTCDate(), sch) : start;
   return {
     venue: sch.venue,
     slug: sch.slug,
     status,
+    cancelled_tonight: cancelled,
     session_start: start,
     session_end: end,
     latest_end: latest,

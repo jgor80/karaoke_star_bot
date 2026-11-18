@@ -29,6 +29,10 @@ export const VENUES = [
     day_name: "Sunday",
     crowd_topic: "okenight-sundays", // public ntfy topic for "karaoke tonight" reminders
     host_default: "Bleacher Jeff",
+    // How the crowd signs up to sing (phone page and TV). Leave these out for paper slips at the KJ booth, the
+    // default. A bar that signs people up another way (a tablet, a QR form, at the bar) sets its own, e.g.
+    //   signup_where: "the bar",
+    //   signup_steps: [["Ask the bartender", "They keep the list."], ["Pick your song", "Search the Songbook tab."], ["Listen for your name", "Watch “The line” for your spot."]],
   },
 ];
 
@@ -44,7 +48,8 @@ export const venueBySlug = (slug) => BY_SLUG.get(String(slug || "").toLowerCase(
 // What the venue picker and the app get from /api/venues (no settings, just where and when).
 export function publicVenue(v) {
   return { slug: v.slug, name: v.name, neighborhood: v.neighborhood, address: v.address, city: v.city,
-    lat: v.lat, lng: v.lng, tz: v.tz, hours_label: v.hours_label, day_name: v.day_name, path: "/" + v.slug + "/" };
+    lat: v.lat, lng: v.lng, tz: v.tz, hours_label: v.hours_label, day_name: v.day_name, path: "/" + v.slug + "/",
+    signup_where: v.signup_where || null, signup_steps: v.signup_steps || null };
 }
 
 // host_config key for this venue.
@@ -97,4 +102,21 @@ export function km(aLat, aLng, bLat, bLng) {
   const r = Math.PI / 180, dLat = (bLat - aLat) * r, dLng = (bLng - aLng) * r;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(dLng / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));
+}
+
+// Nights the host turned off on /host (host_config "nights_off": ["YYYY-MM-DD", ...]), added to the venue
+// as nights_off so scheduleStatus (schedule.js) treats them as off nights: no reminder push, no laptop alert,
+// no TV countdown, no report, and "next night" skips them. Kept for a minute per Worker instance.
+const offCache = new Map();
+export function forgetNightsOff(v) { offCache.delete(v.slug); }
+export async function withNightsOff(env, v) {
+  const hit = offCache.get(v.slug);
+  if (hit && Date.now() - hit.at < 60000) return { ...v, nights_off: hit.list };
+  let list = [];
+  try {
+    const r = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(v, "nights_off")).first();
+    list = r ? JSON.parse(r.v).filter((d) => /^\d{4}-\d\d-\d\d$/.test(d)) : [];
+  } catch (e) { return v; } // no host_config table yet, or bad JSON: the regular schedule
+  offCache.set(v.slug, { at: Date.now(), list });
+  return { ...v, nights_off: list };
 }

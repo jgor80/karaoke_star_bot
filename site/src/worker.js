@@ -12,7 +12,7 @@
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
 import PAGE from "./index.html";
 import HOME from "./home.html";
-import { VENUES, DEFAULT_VENUE, venueBySlug, publicVenue, ensureVenueColumns } from "./venues.js";
+import { VENUES, DEFAULT_VENUE, venueBySlug, publicVenue, ensureVenueColumns, withNightsOff } from "./venues.js";
 import { handleLead } from "./leads_api.js";
 import BINGO from "./bingo.js"; // imported as text, see [[rules]] in wrangler.toml
 import FUN from "./fun.js";
@@ -34,6 +34,7 @@ import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { erasedSingers, relabel, sweepErased, dailyCleanup } from "./privacy_api.js";
 import PRIVACY from "./privacy.html";
+import TERMS from "./terms.html";
 import { handleDraft, draftBoard } from "./drafts_api.js";
 import DRAFTS from "./drafts.js";
 import { reminderLinks, sundayIcs, sendCrowdReminder } from "./reminders.js";
@@ -95,9 +96,9 @@ const withVenue = (page, venue) =>
   page.replace("<head>", "<head>\n<script>window.OKE_VENUE = " + JSON.stringify(publicVenue(venue)).replace(/</g, "\\u003c") + ";</script>");
 
 // The venue list for the intro page's picker and the app, with whether each one is on tonight.
-function venueList() {
+function venueList(env) {
   const now = Math.floor(Date.now() / 1000);
-  return VENUES.map((v) => { const s = scheduleStatus(now, v); return { ...publicVenue(v), status: s.status, next_start: s.next_start, next_label: s.next_label }; });
+  return Promise.all(VENUES.map(async (v0) => { const v = await withNightsOff(env, v0), s = scheduleStatus(now, v); return { ...publicVenue(v), status: s.status, next_start: s.next_start, next_label: s.next_label }; }));
 }
 
 // /<slug>/api/<name> and the old /api/<name> (= first venue).
@@ -179,19 +180,20 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
-    if (path === "/") return html(HOME.replace("/*VENUES*/[]", JSON.stringify(venueList()).replace(/</g, "\\u003c")), "public, max-age=300");
+    if (path === "/") return html(HOME.replace("/*VENUES*/[]", JSON.stringify(await venueList(env)).replace(/</g, "\\u003c")), "public, max-age=300");
     if (path === "/api/venues") {
-      return new Response(JSON.stringify({ venues: venueList() }), {
+      return new Response(JSON.stringify({ venues: await venueList(env) }), {
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
       });
     }
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
     if (path === "/sample-report" || path === "/sample-report/") // the home page's sample: real numbers, no bar name or dates (sample_report.js)
       return html(REPORT.replace("<script>", "<script>window.OKE_SAMPLE = " + JSON.stringify(SAMPLE_REPORT) + ";</script>\n<script>"), "public, max-age=3600", { "x-robots-tag": "noindex" });
+    if (path === "/terms" || path === "/terms/") return html(TERMS, "public, max-age=3600");
     if (path === "/league" || path === "/league/") return html(LEAGUE, "public, max-age=300");
     if (path === "/api/league") return handleLeague(req, env, ctx, url); // monthly table across every bar, see league_api.js
     if (path === "/api/lead") return handleLead(req, env, ctx); // "bring Oke Night to your bar" form on the intro page
-    if (path.startsWith("/api/")) return handleApi(path.slice(5), req, env, ctx, DEFAULT_VENUE, url); // old links = first venue
+    if (path.startsWith("/api/")) return handleApi(path.slice(5), req, env, ctx, await withNightsOff(env, DEFAULT_VENUE), url); // old links = first venue
     if (STATIC_JS[path]) return js(STATIC_JS[path]);
     // Calendar apps that subscribed to the old link poll it; serve it instead of redirecting.
     if (path === "/sunday.ics") return handleVenue("sunday.ics", req, env, ctx, DEFAULT_VENUE, url);
@@ -201,7 +203,7 @@ export default {
     const venue = m && venueBySlug(m[1]);
     if (venue) {
       if (m[2] === undefined) return Response.redirect(url.origin + "/" + venue.slug + "/" + url.search, 301); // /wbl -> /wbl/
-      return handleVenue(m[3], req, env, ctx, venue, url);
+      return handleVenue(m[3], req, env, ctx, await withNightsOff(env, venue), url);
     }
     return new Response("Not found", { status: 404 });
   },
@@ -210,7 +212,8 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       await ensureCore(env);
-      for (const v of VENUES) {
+      for (const v0 of VENUES) {
+        const v = await withNightsOff(env, v0); // nights the host turned off: no reminder, laptop alert or report
         await checkSecrets(env, v).catch(() => {});
         await scoreCrowd(env, v).catch(() => {}); // crowd meter
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic

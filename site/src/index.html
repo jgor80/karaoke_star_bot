@@ -303,6 +303,7 @@ details.singer[open] summary .chev { transform: rotate(90deg); }
 .song-link { text-decoration-color: transparent; }
 .list li[data-who] { cursor: pointer; }
 .list li[data-who]:active { background: var(--panel-2); }
+.list li[data-who]:focus-visible, #hero-who[role="button"]:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 details.singer.song summary .main-t { font-weight: 600; }
 
 /* the line: how many are waiting in the karaoke app's queue and about how long a new sign-up waits */
@@ -459,6 +460,8 @@ details.singer.song summary .main-t { font-weight: 600; }
 /* "Request a song" box at the bottom of the Songbook (songs.js) */
 .req { display: grid; gap: 10px; }
 .req-lead { margin: 0; }
+.kv-credit { margin: 14px 4px 0; text-align: center; }
+.kv-credit a { color: inherit; text-decoration: underline; }
 .req-form { display: grid; gap: 10px; }
 .req-l { display: grid; gap: 4px; font-size: 16px; color: var(--muted); }
 .req-mine { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -781,7 +784,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   </section>
 
   <div class="status" id="status"></div>
-  <p class="foot">Covers from <a href="https://music.apple.com/" target="_blank" rel="noopener">Apple Music</a> · tap one to listen · <a href="/privacy">Privacy</a></p>
+  <p class="foot">Covers from <a href="https://music.apple.com/" target="_blank" rel="noopener">Apple Music</a> · tap one to listen · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · 21+</p>
 </main>
 
 <nav class="tabs" aria-label="Sections">
@@ -817,6 +820,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 <dialog id="signup-dlg" aria-labelledby="signup-h">
   <h3 id="signup-h">How to sign up to sing</h3>
   <ol class="steps" data-steps></ol>
+  <p class="muted small" style="margin:0">Your singer name and songs show on this bar’s page and TV. Want to stay off the site? Tell the host when you sign up. <a href="/privacy">Privacy</a></p>
   <div class="btns" style="justify-content:center">
     <button class="act" type="button" data-find-song>Find a song</button>
     <button class="act ghost" id="signup-close" type="button">Got it</button>
@@ -836,7 +840,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
 
 <dialog id="photo-dlg" aria-labelledby="photo-h">
   <h3 id="photo-h">Your photo</h3>
-  <p class="muted small" style="margin:0" id="photo-sub">Shows next to your name on this bar’s page and TV. Keep it friendly: the host can take it down.</p>
+  <p class="muted small" style="margin:0" id="photo-sub">Only a photo of you, and only if you’re 21 or over. Everyone can see it next to your name on this bar’s page and on the TV. Keep it friendly: the host can take it down.</p>
+  <p class="muted small" style="margin:0">Someone used your name or your photo? Tell the host, or email <a href="mailto:info@synthwaveweb.com">info@synthwaveweb.com</a>. <a href="/privacy">Privacy</a></p>
   <input type="file" id="photo-file" accept="image/*" hidden>
   <div class="ph-stage" id="ph-stage" hidden><canvas id="ph-canvas" width="560" height="560" aria-label="Drag to move your photo"></canvas></div>
   <label class="ph-zoom" id="ph-zoom-l" hidden>Zoom <input type="range" id="ph-zoom" min="1" max="4" step="0.01" value="1"></label>
@@ -1496,9 +1501,9 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   document.addEventListener("visibilitychange", () => { if (!document.hidden && rx.play) pollRx(); });
 
   // ---------- after the session: recap, then promote the next one ----------
-  // A karaoke night runs 6am to 6am Central (same as plays.night). Once the session closes, the rest of that
+  // A karaoke night runs 6am to 6am in the bar's time zone (same as plays.night). Once the session closes, the rest of that
   // night shows the scrolling TV recap. From 6am the next day the top of the page promotes the next session.
-  const NIGHT_TZ = "America/Chicago";
+  const NIGHT_TZ = VENUE.tz || "America/Chicago"; // the bar's time zone (venues.js)
   const nightOf = (ts) => new Date((ts - 6 * 3600) * 1000).toLocaleDateString("en-CA", { timeZone: NIGHT_TZ });
   let recapFor = null;
   function renderStage(live, last) {
@@ -1736,9 +1741,11 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
       if (data.avatars) avatars = mergeAvatars(data.avatars);
-      // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions or host changed.
-      // The response also carries served_at, the schedule and the sync time, which change every poll.
-      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.host, avatars]);
+      // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions, applause scores
+      // or host changed. The response also carries served_at, the schedule and the sync time, which change every poll.
+      // Applause (crowd) is scored by the Worker's cron about a minute after a song ends, often with nothing else
+      // changing, so it has to be part of this check or the last song's 👏 score never shows until a reload.
+      const sig = JSON.stringify([data.plays, data.reactions, data.reactors, data.crowd, data.host, avatars]);
       if (sig !== lastJson) { lastJson = sig; load(data); } else renderTonight();
       if (draft) draft.update(data);
       if (duets) duets.update(data);
@@ -1764,9 +1771,24 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   tabs.forEach((t) => $("t-" + t).addEventListener("click", () => show(t)));
   window.addEventListener("hashchange", () => { const h = location.hash.slice(1); show(tabs.includes(h) || OLD[h] ? h : "tonight"); });
   document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => show(b.dataset.go)));
-  ["leaderboard", "feed", "top-songs", "top-artists", "collectors"].forEach((id) => $(id).addEventListener("click", (ev) => {
+  const WHO_LISTS = ["leaderboard", "feed", "top-songs", "top-artists", "collectors"];
+  WHO_LISTS.forEach((id) => $(id).addEventListener("click", (ev) => {
     const li = ev.target.closest("li[data-who]"); if (li) openSearch(li.dataset.who); }));
   $("hero-who").addEventListener("click", () => { const t = $("hero-who").dataset.who; if (t) openSearch(t); });
+  // Keyboard and screen readers: the tappable rows (and the singer on the mic) are focusable buttons that open
+  // with Enter or Space, not just a tap. Rows are rebuilt on every refresh, so mark new ones as they appear.
+  function markWho() {
+    WHO_LISTS.forEach((id) => $(id).querySelectorAll("li[data-who]:not([tabindex])").forEach((li) => { li.tabIndex = 0; li.setAttribute("role", "button"); }));
+    const h = $("hero-who"), on = !!h.dataset.who;
+    if (on !== (h.tabIndex === 0)) { if (on) { h.tabIndex = 0; h.setAttribute("role", "button"); } else { h.removeAttribute("tabindex"); h.removeAttribute("role"); } }
+  }
+  new MutationObserver(markWho).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-who"] });
+  markWho();
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const t = ev.target, li = t.closest && t.closest("li[data-who]");
+    if ((li && li === t) || (t.id === "hero-who" && t.dataset.who)) { ev.preventDefault(); t.click(); }
+  });
   $("search-clear").addEventListener("click", () => { $("search").value = ""; singerLimit = 40; renderSingers(); $("search").focus(); });
   document.querySelectorAll(".seg").forEach((seg) => seg.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     seg.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-selected", String(on)); $(x.dataset.sub).classList.toggle("on", on); });
@@ -1936,7 +1958,8 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
   $("tip-close").addEventListener("click", () => tipDlg.close());
 
   // ---------- how to sign up (paper slips at the KJ booth) ----------
-  const SIGNUP_STEPS = [
+  // Each bar can set its own steps in venues.js (signup_steps); these are the paper-slip default.
+  const SIGNUP_STEPS = (VENUE.signup_steps && VENUE.signup_steps.length) ? VENUE.signup_steps : [
     ["Go to the KJ booth", "That’s where the host runs the music."],
     ["Write it on a slip of paper", "Your name and the song. Add the artist if there’s more than one song with that title."],
     ["Hand it to the KJ", "Then listen for your name. Watch “The line” on this page for your spot."]];

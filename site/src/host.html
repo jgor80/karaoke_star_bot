@@ -50,6 +50,9 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .ph-list .s { color: var(--muted); font-size: 14px; }
 .ph-list .row { justify-content: center; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.nights { list-style: none; padding: 0; margin: 8px 0 0; }
+.nights li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.nights li.off .t { text-decoration: line-through; opacity: .7; }
 .btn-secret { background: var(--panel-2); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
 .btn-secret code, #btn-link { font-size: 13px; word-break: break-all; flex: 1 1 200px; }
 #btn-chips button { font-size: 20px; padding: 6px 10px; }
@@ -125,7 +128,14 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     <section class="card" id="laptop-card">
       <h2>Karaoke laptop</h2>
       <p class="hint" id="laptop-state">Checking…</p>
+      <p class="hint" id="laptop-mic"></p>
       <p class="hint">From 30 minutes before each night, you get a push (same ntfy topic as above) if the laptop stops checking in or the karaoke app isn’t open. The laptop’s sync updates itself, so there are no files to copy.</p>
+    </section>
+
+    <section class="card" id="nights-card">
+      <h2>Karaoke nights</h2>
+      <p class="hint">Bar closed or the night moved? Turn a night off and the site treats it as an off night: no “karaoke tonight” push to the crowd, no laptop alerts, no TV countdown or morning report, and phones show the next night instead.</p>
+      <ul class="nights" id="nights-list"></ul>
     </section>
 
     <section class="card">
@@ -496,7 +506,17 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     }
     if (r.status === 401 && r.d.needs_setup) return showLogin(true);
     if (r.status === 403) { store.set(KEY, null); return showLogin(false, "That key didn’t work."); }
-    if (!r.ok) { pollT = setTimeout(load, 10000); return; }
+    // Locked out: too many wrong tries from this network (at the bar, everyone on its wifi shares one).
+    // Say so instead of leaving the page blank, keep the saved key, and keep trying in the background.
+    if (r.status === 429) {
+      showLogin(false, (r.d.error || "Too many wrong tries from this network.") + " Turn off wifi and use mobile data to get in now.");
+      if (key) $("key").value = key;
+      pollT = setTimeout(load, 60000); return;
+    }
+    if (!r.ok) {
+      if ($("app").hidden && $("login").hidden) showLogin(false, "The site had a problem. Trying again…");
+      pollT = setTimeout(load, 10000); return;
+    }
     $("login").hidden = true; $("app").hidden = false;
     render(r.d);
     pollT = setTimeout(load, document.hidden ? 30000 : 8000);
@@ -524,6 +544,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     renderSongbook(d);
     renderLaptop(d.sync_health);
     renderOwner(d.owner_topic);
+    renderNights(d.nights || [], d.nights_off || []);
     const du = d.duets || [], dul = $("duet-list"); dul.replaceChildren();
     $("duet-h").textContent = "Duet finder (" + du.length + ")";
     if (!du.length) dul.append(el("li", "s", "Nobody is looking for a duet partner right now."));
@@ -626,6 +647,21 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     p.textContent = (ok ? "🟢 Online" : "🔴 Offline") + " · last check-in " + (mins < 1 ? "just now" : mins < 120 ? mins + " min ago" : when(h.ts)) +
       (h.app_open === true ? " · karaoke app open" : h.app_open === false ? " · karaoke app closed" : "") +
       (h.up_to_date === true ? " · sync up to date" : h.up_to_date === false ? (h.version ? " · sync updating (it checks every 30 min between nights)" : " · old sync: copy the new karaoke_sync.py to the laptop once, and it updates itself after that") : "");
+    // The live (--watch) copy and the crowd mic (health_api.js). A one-off test run doesn't count as live.
+    const now = Date.now() / 1000, ago = (t) => { const m = Math.round((now - t) / 60); return m < 1 ? "just now" : m < 120 ? m + " min ago" : when(t); };
+    const lv = h.live || {}, mic = h.mic || {}, lines = [];
+    if (!lv.ts) lines.push("🔴 Live sync: no report from it yet. An old copy may be running: on the laptop run install_live_sync.bat again (or sign out of Windows and back in).");
+    else if (now - lv.ts > 15 * 60) lines.push("🔴 Live sync: last report " + ago(lv.ts) + ". Sign out of Windows and back in, or run install_live_sync.bat again.");
+    else lines.push("🟢 Live sync running" + (lv.up_to_date === false ? " (an update is waiting; it installs between nights)" : ""));
+    const st = mic.status || "", fresh = lv.ts && now - lv.ts <= 15 * 60;
+    const heard = mic.level_ts ? " · last reading " + ago(mic.level_ts) : " · no readings yet";
+    if (mic.level_ts && now - mic.level_ts < 120) lines.push("🎤 Crowd mic live" + (st.startsWith("listening: ") ? " on " + st.slice(11) : "") + heard);
+    else if (fresh && st.startsWith("listening")) lines.push("🟡 Crowd mic open but no readings reaching the site yet" + heard);
+    else if (fresh && st.startsWith("idle")) lines.push("⚪ Crowd mic ready, it opens when a song plays or someone is in the queue" + heard);
+    else if (fresh && st) lines.push("🔴 Crowd mic " + st + heard);
+    else lines.push("🔴 Crowd mic: no word from the laptop" + heard);
+    if (mic.phone_ts && now - mic.phone_ts < 120) lines.push("📱 Phone crowd mic live");
+    const box = $("laptop-mic"); box.replaceChildren(); lines.forEach((t) => box.append(el("span", "", t), document.createElement("br")));
   }
   let ownerTopic = null;
   function renderOwner(t) {
@@ -723,6 +759,18 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     });
   }
 
+  function renderNights(nights, off) {
+    const list = $("nights-list"), offSet = new Set(off), sig = JSON.stringify([nights, off]);
+    if (list.dataset.sig === sig) return; // only rebuild when something changed, so focus stays put while polling
+    list.dataset.sig = sig; list.replaceChildren();
+    nights.forEach((n) => {
+      const isOff = offSet.has(n.date), li = el("li", isOff ? "off" : null);
+      const b = el("button", "ghost small", isOff ? "Turn back on" : "No karaoke"); b.type = "button";
+      b.setAttribute("aria-label", (isOff ? "Turn karaoke back on for " : "No karaoke on ") + n.label);
+      b.onclick = () => { if (isOff || confirm("No karaoke on " + n.label + "? The crowd won’t get the reminder and the site will show the next night.")) act({ action: "night_off", date: n.date, off: !isOff }); };
+      li.append(el("span", "t", n.label + (isOff ? " · off" : "")), b); list.append(li);
+    });
+  }
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {
