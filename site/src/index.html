@@ -315,6 +315,7 @@ details.singer.song summary .main-t { font-weight: 600; }
 .line-next b { color: var(--ink); font-weight: 600; }
 .line-mine { font-size: 16px; color: var(--gold); font-weight: 600; }
 .line-note { font-size: 15px; color: var(--muted); }
+.line-warn { font-size: 16px; font-weight: 600; color: var(--ink); background: var(--hot-soft, rgba(255,92,157,.15)); border: 1px solid var(--hot); border-radius: 10px; padding: 8px 10px; }
 
 /* "that's me" card */
 .me { border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; background: linear-gradient(180deg, var(--gold-soft), var(--panel) 75%); display: grid; gap: 8px; }
@@ -1086,6 +1087,14 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
      [items.length || current ? "~" + waitLabel(t) : "None", "wait if you sign up now"]].forEach(([v, l]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
+    // The line vs time left: does a new sign-up still get on before tonight ends?
+    const sc = schedule && (schedule.status === "live" || schedule.status === "overtime") ? schedule : null;
+    const endAt = sc ? Number(sc.status === "live" ? sc.session_end : sc.latest_end) : 0;
+    if (endAt) {
+      const endLbl = new Date(endAt * 1000).toLocaleTimeString("en-US", { timeZone: (window.OKE_VENUE && OKE_VENUE.tz) || "America/Chicago", hour: "numeric", minute: "2-digit" }).replace(":00", "");
+      if (now() + t > endAt) box.append(el("div", "line-warn", "⏰ The line already runs past " + endLbl + ", when karaoke ends. Sign up now and you might not get on tonight."));
+      else if (endAt - now() < 30 * 60) box.append(el("div", "line-warn", "🔔 Last call! Karaoke ends at " + endLbl + ". Get your slip in now."));
+    }
     if (!items.length) { box.append(el("div", "line-next", current ? "Nobody's queued after this song. Grab the mic!" : "Nobody's in line. Grab the mic!")); return; }
     const names = items.slice(0, 3).map((q) => clean(q.singer) || "someone");
     const nx = el("div", "line-next"); nx.append(document.createTextNode("Next up: "), el("b", null, names[0]));
@@ -1094,7 +1103,7 @@ dialog h3 { font-family: var(--f-display); font-size: 20px; color: var(--hot); m
     // Your spot, if this phone has a name ("That's me" or the reactions name)
     const mine = [getMe(), key(clean(store.get(NAME_KEY) || ""))].filter(Boolean);
     const at = mine.length ? items.findIndex((q) => mine.includes(key(clean(q.singer)))) : -1;
-    if (at >= 0) box.append(el("div", "line-mine", at === 0 && starts[0] < 60 ? "🎤 You're up next, get ready!" : "🎟️ You're #" + (at + 1) + " in line · about " + waitLabel(starts[at])));
+    if (at >= 0) box.append(el("div", "line-mine", at === 0 && starts[0] < 60 ? "🎤 You're up next, get ready!" : "🎟️ You're #" + (at + 1) + " in line · about " + waitLabel(starts[at]) + (endAt && now() + starts[at] > endAt ? " · that’s after karaoke ends, ask the host" : "")));
     box.append(el("div", "line-note", "Wait times are estimates from song lengths. The host may shuffle the order."));
   }
 

@@ -57,6 +57,9 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .btn-secret code, #btn-link { font-size: 13px; word-break: break-all; flex: 1 1 200px; }
 #btn-chips button { font-size: 20px; padding: 6px 10px; }
 .hint { font-size: 15px; color: var(--muted); margin: 0; }
+.line-big { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.25; }
+.line-big.over { color: var(--hot); }
+.line-big.fits { color: var(--ok); }
 .err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
 .list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .list li { background: var(--panel-2); border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; }
@@ -123,6 +126,14 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       <p class="hint" id="alert-state">Turn alerts on to get a flashing screen, a sound and a buzz on this phone when a secret song is sung. Keep this page open.</p>
       <div class="row"><button type="button" id="alerts-btn">Turn on alerts</button><button type="button" class="ghost small" id="test-btn">Send a test push</button></div>
       <p class="hint" id="ntfy">For alerts when this page is closed, install the free <b>ntfy</b> app, tap <b>+</b>, and subscribe to <code id="topic">…</code>. <a id="topic-link" href="#" target="_blank" rel="noopener" style="color:var(--hot)">Open it</a></p>
+    </section>
+
+    <section class="card" id="line-card" hidden>
+      <h2>The line vs closing</h2>
+      <p class="line-big" id="line-big"></p>
+      <p class="hint" id="line-detail"></p>
+      <div class="row" id="line-actions"></div>
+      <p class="hint">Checked every minute all night. You get a push (same ntfy topic as above) when the line starts running past the end time, and a last-call nudge 30 minutes before the end.</p>
     </section>
 
     <section class="card" id="laptop-card">
@@ -550,6 +561,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     renderOwner(d.owner_topic);
     renderNights(d.nights || [], d.nights_off || []);
     renderEnd(d.end_night);
+    renderLineCheck(d.line, d.end_night);
     const du = d.duets || [], dul = $("duet-list"); dul.replaceChildren();
     $("duet-h").textContent = "Duet finder (" + du.length + ")";
     if (!du.length) dul.append(el("li", "s", "Nobody is looking for a duet partner right now."));
@@ -776,6 +788,27 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       li.append(el("span", "t", n.label + (isOff ? " · off" : "")), b); list.append(li);
     });
   }
+  // The line vs closing (line_api.js lineCheck): does tonight's queue fit before the end time?
+  function waitLabel(s) { const m = Math.round(s / 60); return m < 1 ? "under a minute" : m < 60 ? m + " min" : Math.floor(m / 60) + " hr" + (m % 60 ? " " + (m % 60) + " min" : ""); }
+  function renderLineCheck(l, en) {
+    const card = $("line-card"); card.hidden = !l; if (!l) return;
+    const big = $("line-big"), acts = $("line-actions"); acts.replaceChildren();
+    big.className = "line-big " + (l.over_s > 0 ? "over" : "fits");
+    big.textContent = !l.count ? "Nobody in line · " + waitLabel(l.left_s) + " left"
+      : l.over_s > 0 ? "Runs about " + waitLabel(l.over_s) + " past " + l.end_label
+      : "Fits, with about " + waitLabel(l.end - l.finish) + " to spare";
+    $("line-detail").textContent = (l.count ? l.count + " in line, about " + waitLabel(l.wait_s) + " of songs, done around " + l.finish_label + ". " : "")
+      + (l.overtime ? "Past the regular end, running until " + l.end_label + " at the latest." : "Karaoke ends at " + l.end_label + (l.end_set ? " (set tonight)" : "") + ", " + waitLabel(l.left_s) + " from now.")
+      + (l.late.length ? " Probably won’t get on: " + l.late.join(", ") + "." : "");
+    // Running over: offer the first end time that fits the line (or the latest one there is).
+    if (l.over_s > 0 && !l.overtime && en && en.choices) {
+      const later = en.choices.filter((c) => c.hours > (en.hours || en.regular));
+      const need = (l.finish - l.end) / 3600 + (en.hours || en.regular);
+      const pick = later.find((c) => c.hours >= need) || later[later.length - 1];
+      if (pick) { const b = el("button", "small", "Run until " + pick.label); b.type = "button"; b.onclick = () => act({ action: "end_time", hours: pick.hours }); acts.append(b); }
+    }
+  }
+
   // Tonight's end time: the TV's "karaoke ends in" countdown and its "line runs past closing" warning use it.
   function renderEnd(en) {
     const sel = $("end-time"); if (!en || !sel) return;
