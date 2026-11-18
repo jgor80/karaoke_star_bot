@@ -1,4 +1,5 @@
 import { listSongById } from "./songbook_api.js";
+import { validSongId } from "./song_ids.js";
 // Album covers for songs:
 //   GET /api/art?id=<the app's song id>&t=<title>[&s=big]  -> the cover image, or 404 when there's none
 //
@@ -218,7 +219,7 @@ export async function handleArt(req, env, ctx) {
   const id = Number(url.searchParams.get("id"));
   const tk = norm(url.searchParams.get("t"));
   const big = url.searchParams.get("s") === "big";
-  if (!Number.isInteger(id) || id <= 0 || id > 2e9) return none(404, 86400);
+  if (!validSongId(id)) return none(404, 86400);
 
   const cache = caches.default;
   // v=2: images, not redirects (older cached redirects are simply left to expire)
@@ -259,7 +260,7 @@ async function saveFromPhone(req, env, ctx, url) {
   let b;
   try { b = await req.json(); } catch (e) { return none(400, 0); }
   const id = Number(b && b.id), tk = norm(b && b.t), cover = String((b && b.url) || ""), link = String((b && b.link) || "");
-  if (!Number.isInteger(id) || id <= 0 || id > 2e9 || !tk || cover.length > 400 || !APPLE_IMG.test(cover)) return none(400, 0);
+  if (!validSongId(id) || !tk || cover.length > 400 || !APPLE_IMG.test(cover)) return none(400, 0);
   try {
     await ensureTable(env);
     const row = await env.DB.prepare("SELECT url FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
@@ -305,7 +306,7 @@ export async function handleListen(req, env) {
   const url = new URL(req.url);
   const id = Number(url.searchParams.get("id"));
   const tk = norm(url.searchParams.get("t"));
-  if (!Number.isInteger(id) || id <= 0 || id > 2e9) return none(404, 86400);
+  if (!validSongId(id)) return none(404, 86400);
   try {
     await ensureTable(env);
     const row = await env.DB.prepare("SELECT link, src FROM song_art WHERE id = ? AND tk = ?").bind(id, tk).first();
