@@ -48,6 +48,9 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .ph-list img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--bg); }
 .ph-list .t { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
 .ph-list .s { color: var(--muted); font-size: 14px; }
+.rep-list { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 8px; }
+.rep-list li { background: var(--panel-2); border-radius: 12px; padding: 10px; display: grid; gap: 6px; }
+.rep-list .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ph-list .row { justify-content: center; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .nights { list-style: none; padding: 0; margin: 8px 0 0; }
@@ -185,7 +188,16 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 
     <section>
       <h2 id="ph-h">Singer photos</h2>
-      <p class="hint" style="margin-bottom:8px">Singers can add a photo for their name from their phone (tap their circle after “That’s me”). Photos show on this bar’s page and the TV right away. Remove anything that isn’t OK. “Remove and block” also stops new photos for that name, for example when someone used another person’s name.</p>
+      <p class="hint" style="margin-bottom:8px">Singers can add a photo for their name from their phone (tap their circle after “That’s me”). Remove anything that isn’t OK. “Remove and block” also stops new photos for that name, for example when someone used another person’s name.</p>
+      <label class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="ph-approval"> Check new photos before they show (recommended; you get a push when one is waiting)</label>
+      <div id="ph-reports-box" hidden>
+        <h3 style="margin:8px 0 6px;font-size:17px">Reports</h3>
+        <p class="hint" style="margin-bottom:6px">People can report a photo or a name from their phone. A photo reported by two different people is hidden until you look at it.</p>
+        <ul class="rep-list" id="ph-reports"></ul>
+      </div>
+      <h3 id="ph-wait-h" style="margin:8px 0 6px;font-size:17px" hidden>Waiting for you</h3>
+      <ul class="ph-list" id="ph-wait" hidden></ul>
+      <h3 id="ph-live-h" style="margin:8px 0 6px;font-size:17px" hidden>On the site</h3>
       <ul class="ph-list" id="ph-list"></ul>
       <p class="hint" id="ph-blocked" hidden></p>
     </section>
@@ -569,7 +581,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       li.append(el("span", "t", "“" + x.title + "”" + (x.artist ? " – " + x.artist : "")), el("span", "s", x.partner ? "🤝 " + x.by + " + " + x.partner : "🎤 " + x.by + " needs a partner"));
       const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "duet_remove", id: x.id });
       const row = el("div", "row"); row.append(rm); li.append(row); dul.append(li); });
-    renderPhotos(d.photos || []);
+    renderPhotos(d.photos || [], d.reports || [], d.photo_approval !== false);
     renderButtons(d.buttons || []);
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
@@ -698,21 +710,37 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 
   // Singer photos (avatars_api.js). Only redrawn when the list changes, so the pictures don't flicker every poll.
   let photosSig = "";
-  function renderPhotos(list) {
-    const sig = JSON.stringify(list); if (sig === photosSig) return; photosSig = sig;
-    const shown = list.filter((p) => p.has_img && !p.blocked), blocked = list.filter((p) => p.blocked), ul = $("ph-list");
-    $("ph-h").textContent = "Singer photos (" + shown.length + ")";
+  $("ph-approval").addEventListener("change", () => act({ action: "photo_approval", on: $("ph-approval").checked }));
+  const btn = (label, fn) => { const b = el("button", "ghost small", label); b.type = "button"; b.onclick = fn; return b; };
+  function photoCard(p, waiting) {
+    const li = el("li"), img = el("img"); img.alt = "Photo for " + p.name; img.loading = "lazy"; img.src = "api/avatar?k=" + encodeURIComponent(p.k) + "&v=" + p.v;
+    const row = el("div", "row");
+    if (waiting) row.append(btn("Approve", () => act({ action: "photo_approve", k: p.k })));
+    row.append(btn(waiting ? "Reject" : "Remove", () => { if (confirm("Remove " + p.name + "’s photo?")) act({ action: "photo_remove", k: p.k }); }),
+      btn("Remove and block", () => { if (confirm("Remove " + p.name + "’s photo and stop new photos for that name?")) act({ action: "photo_remove", k: p.k, name: p.name, block: true }); }));
+    li.append(img, el("span", "t", p.name), el("span", "s", when(p.at)), row);
+    return li;
+  }
+  function renderPhotos(list, reports, approval) {
+    const sig = JSON.stringify([list, reports, approval]); if (sig === photosSig) return; photosSig = sig;
+    $("ph-approval").checked = approval;
+    const shown = list.filter((p) => p.has_img && !p.blocked && !p.pending), waiting = list.filter((p) => p.has_img && !p.blocked && p.pending);
+    const blocked = list.filter((p) => p.blocked), ul = $("ph-list"), wl = $("ph-wait");
+    $("ph-h").textContent = "Singer photos (" + shown.length + (waiting.length ? ", " + waiting.length + " waiting" : "") + ")";
+    $("ph-wait-h").hidden = wl.hidden = !waiting.length; $("ph-live-h").hidden = !waiting.length;
+    wl.replaceChildren(...waiting.map((p) => photoCard(p, true)));
     ul.replaceChildren();
     if (!shown.length) ul.append(el("li", "s", "No singer photos yet."));
-    shown.forEach((p) => {
-      const li = el("li"), img = el("img"); img.alt = "Photo for " + p.name; img.loading = "lazy"; img.src = "api/avatar?k=" + encodeURIComponent(p.k) + "&v=" + p.v;
-      const row = el("div", "row");
-      const rm = el("button", "ghost small", "Remove"); rm.type = "button";
-      rm.onclick = () => { if (confirm("Remove " + p.name + "’s photo?")) act({ action: "photo_remove", k: p.k }); };
-      const bl = el("button", "ghost small", "Remove and block"); bl.type = "button";
-      bl.onclick = () => { if (confirm("Remove " + p.name + "’s photo and stop new photos for that name?")) act({ action: "photo_remove", k: p.k, name: p.name, block: true }); };
-      row.append(rm, bl);
-      li.append(img, el("span", "t", p.name), el("span", "s", when(p.at)), row); ul.append(li);
+    shown.forEach((p) => ul.append(photoCard(p, false)));
+    // Reports: what was reported, why, how many people. The actions are the same ones as above, or "Remove singer".
+    const rl = $("ph-reports"); $("ph-reports-box").hidden = !reports.length; rl.replaceChildren();
+    reports.forEach((r) => {
+      const li = el("li"), row = el("div", "row");
+      li.append(el("span", "t", (r.kind === "photo" ? "📷 Photo of " : "🏷️ Name ") + r.name + " · " + r.n + (r.n === 1 ? " report" : " reports")), el("span", "s", r.why + " · " + when(r.at)));
+      if (r.kind === "photo") row.append(btn("Remove photo", () => act({ action: "photo_remove", k: r.k })), btn("Remove and block", () => act({ action: "photo_remove", k: r.k, name: r.name, block: true })));
+      else row.append(btn("Remove this name from the site", () => { $("erase-name").value = r.name; $("erase-name").focus(); $("erase-name").scrollIntoView({ block: "center" }); }));
+      row.append(btn(r.kind === "photo" ? "Keep it (dismiss)" : "Dismiss", () => act({ action: "photo_dismiss", k: r.k, kind: r.kind })));
+      li.append(row); rl.append(li);
     });
     const bp = $("ph-blocked"); bp.hidden = !blocked.length; bp.replaceChildren();
     if (blocked.length) {
