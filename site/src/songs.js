@@ -191,9 +191,14 @@
     if (opts.shelf) find.append(opts.shelf);
     // A light credit + affiliate link: the song list and previews come from Karaoke Version's affiliate
     // catalog, and tracks bought through this link earn the host a commission (catalog_import.js).
+    // In the phone app it's a plain credit with no link: no link out to buy digital tracks from inside the app
+    // (Apple 3.1.1). On the website the link says it's an affiliate link.
     const credit = el("p", "muted small kv-credit");
-    const kv = el("a", null, "Karaoke Version"); kv.href = "https://www.karaoke-version.com/?aff=1507"; kv.target = "_blank"; kv.rel = "noopener sponsored";
-    credit.append(document.createTextNode("Song list and previews from "), kv, document.createTextNode(". Want to practice at home? Get the backing tracks there."));
+    if (window.OKE_APP) credit.textContent = "Song list and previews from Karaoke Version.";
+    else {
+      const kv = el("a", null, "Karaoke Version"); kv.href = "https://www.karaoke-version.com/?aff=1507"; kv.target = "_blank"; kv.rel = "noopener sponsored";
+      credit.append(document.createTextNode("Song list and previews from "), kv, document.createTextNode(". Want to practice at home? Get the backing tracks there (an affiliate link: we may earn a small commission)."));
+    }
     find.append(listH, ol, moreBtn, requestBox(), credit);
 
     // ---- my list ----
