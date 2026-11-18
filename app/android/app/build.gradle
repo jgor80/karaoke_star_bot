@@ -7,8 +7,9 @@ android {
         applicationId "com.okenight.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI sets these (the GitHub run number), so every upload to Google Play is new.
+        versionCode((System.getenv("ANDROID_VERSION_CODE") ?: "1") as Integer)
+        versionName(System.getenv("ANDROID_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing with the upload key, from the environment (see .github/workflows/android-release.yml).
+    // Without it, bundleRelease makes an unsigned bundle (fine for a compile check, not for Google Play).
+    def ks = System.getenv("ANDROID_KEYSTORE_PATH")
+    signingConfigs {
+        if (ks) {
+            upload {
+                storeFile file(ks)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "upload"
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (ks) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

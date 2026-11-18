@@ -28,13 +28,13 @@ npm run build        # www/ from site/src (npm run check also parses every scrip
 npx cap sync         # copy www/ and plugins into ios/ and android/
 ```
 
-- **Android:** `npm run android` opens Android Studio. Then use Build > Generate Signed Bundle (.aab) for Google Play.
+- **Android (what we use):** the **Android app** GitHub workflow (`.github/workflows/android-release.yml`). On pull requests it does a debug build. From Actions > Android app > Run workflow, it makes a signed `.aab` for Google Play, saved on the run page under Artifacts. Signing needs the secrets `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASSWORD` (the upload key; Play App Signing holds the real key). Or locally: `npm run android` opens Android Studio, then Build > Generate Signed Bundle.
 - **iPhone:** you need a Mac with Xcode, or a cloud Mac. Windows can't build iOS apps. `npm run ios` opens Xcode on a Mac. Then:
   1. Choose Signing & Capabilities > Team (Synthwave Web LLC).
   2. Choose Product > Archive, then Distribute > App Store Connect.
 - **Without a Mac (what we use):** the **iPhone app** GitHub workflow (`.github/workflows/ios-testflight.yml`) builds on a GitHub cloud Mac. On pull requests it does a simulator build to check that the app compiles. From Actions > iPhone app > Run workflow, it signs the app and uploads it to App Store Connect / TestFlight. The upload needs four repository secrets, listed at the top of that file.
 
-Bump the version in Xcode (Version/Build) and in `android/app/build.gradle` (`versionName`/`versionCode`) for each upload.
+Build numbers come from the GitHub run number, so each upload is new. Change the version (1.0) in Xcode (Version) and in the Android workflow (`ANDROID_VERSION_NAME`) for a new release.
 
 ## Push notifications (Firebase)
 

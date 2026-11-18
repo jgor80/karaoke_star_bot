@@ -1,0 +1,95 @@
+# Builds the Oke Night Android app (app/) on a GitHub cloud Linux machine.
+#
+#  - Pull requests that touch the app: a debug build, to check that it compiles.
+#  - "Run workflow" (Actions tab > Android app > Run workflow): a signed release bundle (.aab) for Google Play,
+#    saved on the run page under Artifacts ("oke-night-android"). Upload it in Google Play Console >
+#    Test and release > (a testing track or Production) > Create new release.
+#
+# Signing uses the app's upload key, from two repository secrets (Settings > Secrets and variables > Actions):
+#   ANDROID_KEYSTORE_B64       the upload keystore file (upload-keystore.jks), base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD  its password (the key inside, alias "upload", has the same password)
+# Google Play keeps the real app signing key (Play App Signing). If the upload key is ever lost, Play Console
+# can reset it, so it can't lock the app out.
+# Push needs FIREBASE_ANDROID_JSON_B64 (the base64 of google-services.json). Without it the app builds without push.
+name: Android app
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/**"
+      - "site/src/index.html"
+      - "site/src/*.js"
+      - ".github/workflows/android-release.yml"
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build the app's web files and copy them into the Android project
+        working-directory: app
+        env:
+          FIREBASE_ANDROID_JSON_B64: ${{ secrets.FIREBASE_ANDROID_JSON_B64 }}
+        run: |
+          npm ci
+          npm run check
+          npx cap sync android
+
+      - name: Debug build (compile check)
+        if: github.event_name != 'workflow_dispatch'
+        working-directory: app/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Signed release bundle for Google Play
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: app/android
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          # Version code: the run number plus 100, so every upload is newer than the last.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_VERSION_NAME: "1.0"
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Add the repository secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD first (see the top of .github/workflows/android-release.yml)."
+            exit 1
+          fi
+          export ANDROID_VERSION_CODE=$((ANDROID_VERSION_CODE + 100))
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          ./gradlew --no-daemon bundleRelease
+          rm -f "$ANDROID_KEYSTORE_PATH"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/out/oke-night-$ANDROID_VERSION_NAME-$ANDROID_VERSION_CODE.aab"
+          echo "### Android bundle 1.0 ($ANDROID_VERSION_CODE) is ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download it under Artifacts below, then upload it in Google Play Console." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the bundle
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oke-night-android
+          path: ${{ runner.temp }}/out/*.aab
+          retention-days: 30
