@@ -42,7 +42,7 @@ footer { margin-top: 32px; }
 <body>
 <main>
   <div class="top">
-    <a href="./">← Oke Night</a>
+    <a href="./" id="back-link">← Oke Night</a>
     <div class="noprint"><select id="pick" aria-label="Pick a night"></select> <button type="button" id="print">Print / PDF</button></div>
   </div>
   <h1 id="h">Karaoke report</h1>
@@ -78,15 +78,18 @@ footer { margin-top: 32px; }
     }
     box.append(t);
   }
+  const SAMPLE = window.OKE_SAMPLE || null; // /sample-report: a frozen night with the bar's name and dates taken out
   async function load(night) {
-    const r = await fetch("api/report" + (night ? "?night=" + night : ""), { cache: "no-store" });
-    const d = await r.json();
+    const d = SAMPLE || await (await fetch("api/report" + (night ? "?night=" + night : ""), { cache: "no-store" })).json();
     if (!d.stats) { $("sub").textContent = "No karaoke nights yet."; return; }
     const s = d.stats, c = d.compare || {};
     $("h").textContent = d.venue + " karaoke";
-    $("sub").textContent = dayLabel(d.night) + (s.start ? " · " + s.start + " to " + s.end : "");
-    document.title = d.venue + " · " + d.night + " · Karaoke Report";
+    $("sub").textContent = (SAMPLE ? "Sample report: real numbers from one Sunday night, with the bar’s name and dates left out" : dayLabel(d.night)) + (s.start ? " · " + s.start + " to " + s.end : "");
+    document.title = SAMPLE ? "Sample · Karaoke Report · Oke Night" : d.venue + " · " + d.night + " · Karaoke Report";
+    if (SAMPLE) $("pick").hidden = true;
+    else {
     const pick = $("pick"); pick.replaceChildren(...d.nights.slice().reverse().map((n) => { const o = el("option", null, dayLabel(n)); o.value = n; o.selected = n === d.night; return o; }));
+    }
     $("cmpn").textContent = c.nights ? c.nights : "previous";
 
     const nb = $("night"); nb.replaceChildren();
@@ -119,12 +122,13 @@ footer { margin-top: 32px; }
       row.append(el("span", null, hourLabel(h)), b, el("span", null, String(n))); hours.append(row); });
 
     const season = $("season"); season.replaceChildren();
-    tile(season, d.season.nights, "Nights since " + new Date(d.season.since + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    tile(season, d.season.nights, d.season.since ? "Nights since " + new Date(d.season.since + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Nights so far");
     tile(season, d.season.songs, "Songs sung");
     tile(season, d.season.guests, "Different guests");
     if (d.season.nights) tile(season, Math.round(d.season.songs / d.season.nights), "Songs per night");
-    if (location.search.indexOf(d.night) < 0) history.replaceState(null, "", "?night=" + d.night);
+    if (!SAMPLE && location.search.indexOf(d.night) < 0) history.replaceState(null, "", "?night=" + d.night);
   }
+  if (SAMPLE) $("back-link").href = "/";
   $("pick").addEventListener("change", (e) => load(e.target.value).catch(() => {}));
   $("print").addEventListener("click", () => window.print());
   load(new URLSearchParams(location.search).get("night")).catch(() => { $("sub").textContent = "Couldn’t load the report. Reload to try again."; });
