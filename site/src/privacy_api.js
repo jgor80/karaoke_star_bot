@@ -18,6 +18,7 @@
 // counted) with the device ID swapped for a meaningless "old<n>". Bar leads are deleted after LEAD_DAYS.
 import { cfgKey } from "./venues.js";
 import { singerKey } from "./drafts_api.js";
+import { eraseStyled } from "./styled_api.js";
 
 export const RETAIN_DAYS = 90;
 export const LEAD_DAYS = 365;
@@ -119,6 +120,7 @@ export async function eraseSinger(env, body, venue) {
     () => relabelColumn(env, venue, [e], "duets", "partner", "Anon", null),
     () => cleanRequestNames(env, venue, [e]),
     () => env.DB.prepare("DELETE FROM avatars WHERE venue = ? AND k = ?").bind(venue.slug, e.k).run(), // their photo (avatars_api.js)
+    () => eraseStyled(env, venue, e.k), // their AI rock-star looks (styled_api.js)
     async () => {
       const { results } = await env.DB.prepare("SELECT DISTINCT singer, singer_key FROM drafts WHERE venue = ? AND removed_at IS NULL").bind(venue.slug).all();
       for (const r of results) if (relabelName([e], r.singer)) {

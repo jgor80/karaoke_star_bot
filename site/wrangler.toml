@@ -35,6 +35,17 @@ STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/28EcN69VRcczeOO22Tg7e00"
 # Secrets (set in the Cloudflare dashboard, never in this file): HOST_SETUP_CODE, ANTHROPIC_API_KEY,
 # IP_SALT (any long random text; keeps rate-limit network hashes from being reversed, see src/net.js).
 
+# Workers AI: the singer photo "rock-star looks" (src/styled_api.js, FLUX.2 klein, about $0.0004 a look).
+[ai]
+binding = "AI"
+
+# Where rock-star looks are stored. Until R2 is switched on for the account (Cloudflare dashboard > R2 >
+# Purchase/enable, the first 10 GB are free) and a bucket called okenight-styled exists, leave this commented
+# out and the looks are kept in D1 instead. Then uncomment it and deploy.
+# [[r2_buckets]]
+# binding = "STYLED"
+# bucket_name = "okenight-styled"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "karaoke-stats"

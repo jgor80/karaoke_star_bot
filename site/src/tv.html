@@ -271,7 +271,9 @@ body.embed .line-tv { display: none !important; }
   // Singer photos: match key (same folding as privacy_api.js matchKey) -> version, from /api/plays "avatars".
   let avatars = {};
   const photoKey = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return v ? "api/avatar?k=" + k + "&v=" + v : null; }
+  // A rock-star look the host OK'd (styled_api.js, "styled": match key -> look id) shows instead of the plain photo.
+  let styled = {};
+  function photoSrc(name) { const k = photoKey(name), v = k && avatars[k]; return !v ? null : styled[k] ? "api/styled?k=" + k + "&id=" + styled[k] : "api/avatar?k=" + k + "&v=" + v; }
   // Awards whose "who" is an artist, a decade or a typed reaction name rather than a singer.
   const NOT_SINGER = new Set(["artist", "decade", "s-hype", "rx-hype", "rx-critic"]);
   function photoImg(src) { const i = el("img", "tv-av"); i.alt = ""; i.src = src; i.onerror = () => i.remove(); return i; }
@@ -594,7 +596,7 @@ body.embed .line-tv { display: none !important; }
       if (data.since && base) data = mergeSince(base, data); else baseAt = Date.now();
       base = data;
       if (data.served_at) clockSkew = data.served_at - Date.now() / 1000;
-      avatars = data.avatars || {};
+      avatars = data.avatars || {}; styled = data.styled || {};
       const v = build(data);
       // Pre-show preview (see previewInfo). If anything in it goes wrong, fall back to the normal screen.
       let pv = null;
