@@ -46,6 +46,7 @@ import { SAMPLE_REPORT } from "./sample_report.js";
 import { handleDuet, duetBoard } from "./duets_api.js";
 import DUETS from "./duets.js";
 import PICKER from "./picker.js";
+import { DEMO_VENUE, handleDemoApi } from "./demo.js"; // okenight.com/demo/: an always-on sample night
 import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
@@ -113,6 +114,7 @@ function venueList(env) {
 
 // /<slug>/api/<name> and the old /api/<name> (= first venue).
 async function handleApi(name, req, env, ctx, venue, url) {
+  if (venue.demo) return handleDemoApi(name, req, url, () => handleApi(name, req, env, ctx, DEFAULT_VENUE, url));
   if (name === "react") {
     if (req.method !== "POST") return new Response("POST only", { status: 405 });
     await ensureCore(env);
@@ -175,6 +177,7 @@ function handleVenue(rest, req, env, ctx, venue, url) {
   if (rest === "" || rest === "index.html") return html(withVenue(PAGE, venue));
   if (rest === "tv" || rest === "tv/") return html(withVenue(TV, venue));
   if (rest === "report" || rest === "report/") return html(withVenue(REPORT, venue), "public, max-age=300", { "x-robots-tag": "noindex" });
+  if (venue.demo && /^(host|report)\/?$/.test(rest)) return Response.redirect(url.origin + "/demo/", 302); // nothing to run or report
   if (rest === "host" || rest === "host/") return html(withVenue(HOST, venue), "no-store", { "x-robots-tag": "noindex" });
   if (rest === "sunday.ics" || rest === "calendar.ics") {
     return new Response(sundayIcs(Math.floor(Date.now() / 1000), venue), {
@@ -217,10 +220,10 @@ export default {
     if (path in LEGACY) return Response.redirect(url.origin + "/" + DEFAULT_VENUE.slug + "/" + LEGACY[path] + url.search + url.hash, 301);
 
     const m = /^\/([a-z0-9-]+)(\/(.*))?$/.exec(path);
-    const venue = m && venueBySlug(m[1]);
+    const venue = m && (venueBySlug(m[1]) || (m[1] === DEMO_VENUE.slug ? DEMO_VENUE : null));
     if (venue) {
       if (m[2] === undefined) return Response.redirect(url.origin + "/" + venue.slug + "/" + url.search, 301); // /wbl -> /wbl/
-      return handleVenue(m[3], req, env, ctx, await withNightsOff(env, venue), url);
+      return handleVenue(m[3], req, env, ctx, venue.demo ? venue : await withNightsOff(env, venue), url);
     }
     return new Response("Not found", { status: 404 });
   },
