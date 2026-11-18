@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Oke Night</string>
+    <string name="title_activity_main">Oke Night</string>
+    <string name="package_name">com.okenight.app</string>
+    <string name="custom_url_scheme">com.okenight.app</string>
+</resources>

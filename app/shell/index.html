@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en" class="app">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#170d1c">
+<title>Oke Night</title>
+<style>
+/* The app's first screen: pick a bar, turn on karaoke-night reminders. Same colors as okenight.com.
+   Everything here is inside the app, so it opens with no signal too. */
+:root {
+  --bg: #170d1c; --panel: #23152a; --panel-2: #2d1b36; --ink: #f6ecf8; --muted: #d3c4d8; --line: #3a2843;
+  --hot: #ff5c9d; --gold: #f5b84a; --good: #5fd39a;
+  --f-display: "Impact", "Arial Black", system-ui, sans-serif;
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 18px; line-height: 1.5;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+a { color: var(--gold); }
+button { font: inherit; color: inherit; }
+main { max-width: 560px; margin: 0 auto; }
+.logo { font-family: var(--f-display); font-size: 34px; color: var(--hot); letter-spacing: .02em; margin: 20px 0 0; }
+.logo span { color: var(--gold); }
+.tag { color: var(--muted); margin: 2px 0 18px; }
+h2 { font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 22px 0 10px; }
+.venues { display: grid; gap: 10px; }
+.venue { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+  color: var(--ink); text-decoration: none; text-align: left; width: 100%; cursor: pointer; }
+.venue.last { border-color: var(--gold); }
+.venue .name { font-weight: 700; font-size: 19px; }
+.venue .meta { color: var(--muted); font-size: 15px; grid-column: 1; }
+.venue .side { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 14px; color: var(--muted); text-align: right; }
+.venue .live { color: var(--good); font-weight: 700; }
+.venue.demo { border-style: dashed; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.row { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.switch { appearance: none; width: 52px; height: 30px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--muted); transition: left .15s; }
+.switch:checked { background: var(--hot); border-color: var(--hot); }
+.switch:checked::after { left: 25px; background: #fff; }
+.muted { color: var(--muted); }
+.small { font-size: 15px; }
+.note { margin: 8px 0 0; }
+.offline { background: var(--panel-2); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; font-size: 16px; }
+footer { margin-top: 28px; font-size: 15px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1 class="logo">Oke <span>Night</span></h1>
+  <p class="tag">Karaoke night, live on your phone.</p>
+
+  <p class="offline" id="offline" hidden>You’re offline. The bar list below is from your last visit. Live songs come back when you’re online.</p>
+
+  <h2 id="pick-h">Pick your bar</h2>
+  <div class="venues" id="venues" aria-labelledby="pick-h"></div>
+
+  <h2>Karaoke night reminders</h2>
+  <div class="card">
+    <div class="row">
+      <label for="remind" id="remind-l"><b>Remind me</b> <span class="muted small" id="remind-for"></span></label>
+      <input type="checkbox" class="switch" id="remind" role="switch" aria-labelledby="remind-l">
+    </div>
+    <p class="muted small note" id="remind-msg" role="status" aria-live="polite">A notification on your phone a few hours before karaoke starts at your bar.</p>
+  </div>
+
+  <footer>
+    For ages 21 and over. ·
+    <a href="https://okenight.com/privacy" target="_blank" rel="noopener">Privacy</a> ·
+    <a href="https://okenight.com/terms" target="_blank" rel="noopener">Terms</a> ·
+    <a href="mailto:info@synthwaveweb.com">Contact</a>
+  </footer>
+</main>
+<script src="remind.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const { store, Notes, schedule, cancel, refresh } = window.OkeApp;
+
+  // A sample show that's always on (okenight.com/demo/). Lets anyone, App Review included, see Oke Night
+  // on a day without karaoke.
+  const DEMO = { slug: "demo", name: "Demo Night", neighborhood: "A sample show", city: "always on", path: "/demo/", tz: "America/Chicago",
+    day_name: "Every day", hours_label: "Any time", demo: true, status: "live" };
+
+  function open(v) {
+    store.set("oke_app_venue", v);
+    if (!v.demo) { store.set("oke_app_home", v.slug); schedule(); }
+    location.href = "venue.html";
+  }
+
+  function render() {
+    const box = $("venues"), last = store.get("oke_app_home"), venues = store.get("oke_app_venues") || [];
+    box.textContent = "";
+    const list = venues.slice().sort((a, b) => (a.slug === last ? -1 : b.slug === last ? 1 : 0) || ((b.status === "live") - (a.status === "live")) || a.name.localeCompare(b.name));
+    for (const v of [...list, DEMO]) {
+      const b = el("button", "venue" + (v.slug === last ? " last" : "") + (v.demo ? " demo" : "")); b.type = "button";
+      b.append(el("span", "name", v.name), el("span", "meta", [v.neighborhood, v.city].filter(Boolean).join(" · ")));
+      const side = el("span", "side");
+      if (v.demo) side.append(el("span", null, "Try it any time"));
+      else if (v.status === "live" || v.status === "overtime") side.append(el("span", "live", "Live now"));
+      else if (v.next_label) side.append(el("span", null, "Next " + v.next_label));
+      b.append(side);
+      b.addEventListener("click", () => open(v));
+      box.append(b);
+    }
+    const home = venues.find((v) => v.slug === last);
+    $("remind-for").textContent = home ? "for " + home.name : "(pick your bar first)";
+  }
+
+  async function load() { const list = await refresh(); $("offline").hidden = !!list; render(); }
+
+  $("remind").checked = !!store.get("oke_app_remind");
+  $("remind").addEventListener("change", async (ev) => {
+    const on = ev.target.checked, msg = $("remind-msg"), N = Notes();
+    if (!N) { ev.target.checked = false; msg.textContent = "Reminders work in the Oke Night app."; return; }
+    if (on) {
+      let p = { display: "prompt" };
+      try { p = await N.checkPermissions(); if (p.display !== "granted") p = await N.requestPermissions(); } catch (e) {}
+      if (p.display !== "granted") { ev.target.checked = false; store.set("oke_app_remind", false); msg.textContent = "Notifications are off for Oke Night. Turn them on in your phone’s Settings to get reminders."; return; }
+      store.set("oke_app_remind", true); await schedule();
+      msg.textContent = store.get("oke_app_home") ? "On. You’ll get a heads-up a few hours before karaoke starts." : "On. Pick your bar and we’ll remind you before its karaoke nights.";
+    } else { store.set("oke_app_remind", false); await cancel(); msg.textContent = "Off."; }
+  });
+
+  // Already on a bar: go straight back to it (venue.html refreshes the list and reminders itself), unless
+  // the person came here on purpose (the venue page's "Change" link adds ?pick=1).
+  const c = store.get("oke_app_venue");
+  if (c && !c.demo && !/[?&]pick=1/.test(location.search)) { location.replace("venue.html"); return; }
+  render(); load();
+  window.addEventListener("online", load);
+  window.addEventListener("offline", () => { $("offline").hidden = false; });
+})();
+</script>
+</body>
+</html>
