@@ -8,9 +8,9 @@
 // Keep in sync with REACTIONS in awards.js (the page's buttons).
 export const REACTION_KEYS = ["fire", "micdrop", "encore", "chills", "dance", "keychange", "cringe", "offkey", "tomato", "snooze"];
 const KEYS = new Set(REACTION_KEYS);
+import { okOrigin } from "./origins.js";
 import { DEFAULT_VENUE, ensureVenueColumn } from "./venues.js";
 import { networkHash, withCacheControl } from "./net.js";
-import { okOrigin } from "./origins.js";
 
 export const LIMITS = {
   burst: 8, burstWindowS: 10,     // one phone: at most 8 taps in 10 seconds
