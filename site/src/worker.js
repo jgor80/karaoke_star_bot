@@ -50,6 +50,15 @@ import { handleLeague } from "./league_api.js";
 import LEAGUE from "./league.html";
 import { handleAvatar, avatarMap } from "./avatars_api.js";
 import { handleButton } from "./buttons_api.js";
+// Installable web app (pwa/): manifest, service worker, offline screen and icons. Text/Data per [[rules]].
+import MANIFEST from "./pwa/manifest.webmanifest";
+import SW from "./pwa/sw.js";
+import OFFLINE from "./pwa/offline.html";
+import ICON_192 from "./pwa/icon-192.png";
+import ICON_512 from "./pwa/icon-512.png";
+import ICON_MASK from "./pwa/icon-maskable-512.png";
+import ICON_APPLE from "./pwa/apple-touch-icon.png";
+const ICONS = { "/icons/icon-192.png": ICON_192, "/icons/icon-512.png": ICON_512, "/icons/icon-maskable-512.png": ICON_MASK, "/apple-touch-icon.png": ICON_APPLE, "/icons/apple-touch-icon.png": ICON_APPLE };
 
 const PLAYS_SQL =
   "SELECT uuid, night, played_at, singer, song_id, artist, title, release_year, length_s FROM plays WHERE venue = ?1 ORDER BY played_at";
@@ -189,6 +198,11 @@ export default {
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
       });
     }
+    if (path === "/manifest.webmanifest") return new Response(MANIFEST, { headers: { "content-type": "application/manifest+json", "cache-control": "public, max-age=3600" } });
+    // The service worker itself: revalidated every load so a new version reaches phones quickly.
+    if (path === "/sw.js") return new Response(SW, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
+    if (path === "/offline.html") return html(OFFLINE, "public, max-age=3600");
+    if (ICONS[path]) return new Response(ICONS[path], { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800" } });
     if (path === "/privacy" || path === "/privacy/") return html(PRIVACY, "public, max-age=3600");
     if (path === "/sample-report" || path === "/sample-report/") // the home page's sample: real numbers, no bar name or dates (sample_report.js)
       return html(REPORT.replace("<script>", "<script>window.OKE_SAMPLE = " + JSON.stringify(SAMPLE_REPORT) + ";</script>\n<script>"), "public, max-age=3600", { "x-robots-tag": "noindex" });
