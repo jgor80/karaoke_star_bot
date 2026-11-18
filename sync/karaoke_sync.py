@@ -837,9 +837,39 @@ def request_filer(a, log):
     dest_dir = os.path.expanduser(cfg.get("karaoke_dir") or os.path.join("~", "Music", "Karaoke Songs"))
     write_log(log, f"auto-file: watching {downloads} -> {dest_dir}")
     sizes, requests, last_req = {}, [], 0.0
+    # Requests whose track was filed but whose "added" update didn't reach D1 (no wifi, say). The file has
+    # left Downloads, so it won't be matched again: keep {id: [time, title]} here and in a small file next to
+    # the config (so a restart keeps it), and retry each pass until D1 takes it.
+    pending_path = os.path.join(os.path.dirname(os.path.abspath(a.config)), "autofile_pending.json")
+    try:
+        with open(pending_path, encoding="utf-8") as f:
+            pending = {int(k): v for k, v in json.load(f).items()}
+    except (OSError, ValueError, AttributeError):
+        pending = {}
+
+    def save_pending():
+        try:
+            with open(pending_path, "w", encoding="utf-8") as f:
+                json.dump(pending, f)
+        except OSError:
+            pass
+
+    def mark_added(rid, when):
+        d1_query(cfg, "UPDATE song_requests SET status = 'added', updated_at = ? WHERE id = ? AND status = 'open'",
+                 [int(when), rid])
+
     while True:
         try:
             now = time.time()
+            if pending and cfg.get("api_token"):
+                for rid, (when, title) in list(pending.items()):
+                    try:
+                        mark_added(rid, when)
+                        del pending[rid]
+                        write_log(log, f"auto-file: request “{title}” marked added (retried)")
+                    except Exception:
+                        break  # still offline: try again next pass
+                save_pending()
             if cfg.get("api_token") and time.monotonic() - last_req >= REQUESTS_EVERY_S:
                 try:
                     # Only this bar's requests ("venue" in the config is the bar's slug on okenight.com).
@@ -860,13 +890,14 @@ def request_filer(a, log):
                 msg = f"auto-file: {os.path.basename(path)} -> {dest_dir}"
                 hits = match_requests(landed + [os.path.basename(path)], requests)
                 for r in hits:
+                    requests = [x for x in requests if x["id"] != r["id"]]
                     try:
-                        d1_query(cfg, "UPDATE song_requests SET status = 'added', updated_at = ? WHERE id = ? AND status = 'open'",
-                                 [int(now), r["id"]])
-                        requests = [x for x in requests if x["id"] != r["id"]]
+                        mark_added(r["id"], now)
                         msg += f" (request “{r['title']}” marked added)"
                     except Exception as e:
-                        msg += f" (couldn't mark “{r['title']}” added: {e})"
+                        pending[int(r["id"])] = [int(now), str(r.get("title") or "")]
+                        save_pending()
+                        msg += f" (couldn't mark “{r['title']}” added yet, will retry: {e})"
                 write_log(log, msg)
         except Exception as e:  # never let a bad file stop the sync
             write_log(log, f"auto-file: {e}")
