@@ -91,6 +91,7 @@ One-time setup:
 | Name | Yes | Yes | No |
 | Photos | Yes | Yes | No |
 | User ID (the random phone ID) | Yes | Yes | No |
+| Device ID (the notification address from Firebase) | Yes | Yes | No |
 | Other user content (requests, reactions) | Yes | — | — |
 | Diagnostics (salted IP hash, kept 90 days) | Yes | No | No |
 | Location | No (it stays on the phone) | — | — |

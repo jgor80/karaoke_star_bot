@@ -81,6 +81,9 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
           ./gradlew --no-daemon bundleRelease
           rm -f "$ANDROID_KEYSTORE_PATH"
+          # Proof the bundle is signed, and with which upload key (Play Console shows the same fingerprint).
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab | tail -n 1
+          keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | grep -E "Owner|SHA256:" | tee -a "$GITHUB_STEP_SUMMARY"
           mkdir -p "$RUNNER_TEMP/out"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/out/oke-night-$ANDROID_VERSION_NAME-$ANDROID_VERSION_CODE.aab"
           echo "### Android bundle 1.0 ($ANDROID_VERSION_CODE) is ready" >> "$GITHUB_STEP_SUMMARY"
