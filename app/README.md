@@ -1,8 +1,8 @@
 # Oke Night phone app
 
 The iPhone and Android app (`com.okenight.app`). It is a [Capacitor](https://capacitorjs.com) shell
-around the singer page from okenight.com. It is for singers only: there's no host page, no bar pitch or
-billing, and no tips.
+around the singer page from okenight.com. It is for singers only: there's no host page and no bar pitch or
+billing. Tips to the host (Venmo) stay.
 
 | Part | What it does |
 |---|---|
@@ -49,7 +49,10 @@ Bump the version in Xcode (Version/Build) and in `android/app/build.gradle` (`ve
 >   Objectionable content is removed by the host, or by us at info@synthwaveweb.com.
 > - **Accounts:** there are none, so there's no account to delete. A singer can remove their photo in the
 >   app, or ask the host or info@synthwaveweb.com to remove their name.
-> - **Payments:** none in the app.
+> - **Payments:** no in-app purchases. A bar's page can show a Tip button that opens Venmo to pay the host
+>   directly, for things the host does in person at the bar (for example, playing a song sooner). All of it
+>   goes to the host, and nothing in the app is unlocked (3.1.3(e), 3.2.1(vii)). The bar's own $20/month
+>   plan is sold only on the website and never shown in the app.
 > - **Native features:** karaoke-night reminders (local notifications), the photo picker or camera for
 >   your singer photo, and an offline first screen.
 > - **Age:** the bars are 21+ and the app is rated 17+.
