@@ -1892,7 +1892,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       if (sig !== lastJson) { lastJson = sig; load(data); } else renderTonight();
       if (draft) draft.update(data);
       if (duets) duets.update(data);
-      setStatus(plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
+      setStatus((VENUE.slug === "demo" ? "Demo night: made-up singers and songs · " : "") + plural(plays.length, "song") + " across " + plural(nights.length, "night") + (data.last_sync_ts ? " · updated " + syncLabel(data.last_sync_ts) : ""));
     } catch (e) {
       setStatus(plays.length ? "Can't reach the stats right now. Showing what we had." : "Couldn't load the stats. Reload the page to try again.", true);
       const pill = $("live-pill"); pill.textContent = "Offline"; pill.classList.remove("live");
