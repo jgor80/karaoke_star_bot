@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -62,6 +62,7 @@ jobs:
         run: xcodebuild -version
 
       - name: Simulator build (compile check, no signing)
+        if: github.event_name == 'pull_request' || !inputs.upload
         working-directory: app/ios/App
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
@@ -149,25 +150,55 @@ jobs:
           # Build number: the run number, so every upload is new. Version (1.0) comes from the project.
           BUILD="${{ github.run_number }}"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          # 1. Archive without Apple signing. (Automatic signing would first want a development profile,
+          #    which needs a registered test iPhone on the team.)
+          ARCHIVE="$RUNNER_TEMP/OkeNight.xcarchive"
           xcodebuild -project App.xcodeproj -scheme App -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/OkeNight.xcarchive" \
+            -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
             -derivedDataPath "$RUNNER_TEMP/dd" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$BUILD" \
-            "${AUTH[@]}" archive | tail -n 60
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive | tail -n 40
+          # 2. Give the archived app a local (ad-hoc) signature that carries its entitlements, so the export
+          #    below keeps Push Notifications when it re-signs for the App Store.
+          APP="$ARCHIVE/Products/Applications/App.app"
+          ENT="$RUNNER_TEMP/archive.entitlements"
+          cp App/App.entitlements "$ENT"
+          /usr/libexec/PlistBuddy -c "Add :application-identifier string $APPLE_TEAM_ID.com.okenight.app" \
+            -c "Add :com.apple.developer.team-identifier string $APPLE_TEAM_ID" "$ENT"
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -print0 | xargs -0 -n1 codesign --force --sign -
+          fi
+          codesign --force --sign - --entitlements "$ENT" "$APP"
+          # 3. Export: Xcode makes the App Store certificate and profile itself (API key, Admin role) and signs.
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
+            <key>destination</key><string>export</string>
             <key>teamID</key><string>$APPLE_TEAM_ID</string>
             <key>signingStyle</key><string>automatic</string>
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/OkeNight.xcarchive" \
+          xcodebuild -exportArchive -archivePath "$ARCHIVE" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
-            "${AUTH[@]}" | tail -n 60
+            "${AUTH[@]}" | tail -n 40
+          IPA="$(ls "$RUNNER_TEMP"/export/*.ipa | head -n 1)"
+          # 4. Check the signed app before uploading: App Store signature, with production push.
+          mkdir -p "$RUNNER_TEMP/ipa" && unzip -q "$IPA" -d "$RUNNER_TEMP/ipa"
+          codesign -d --entitlements - --xml "$RUNNER_TEMP/ipa/Payload/App.app" > "$RUNNER_TEMP/signed.entitlements" 2>/dev/null
+          codesign -dv "$RUNNER_TEMP/ipa/Payload/App.app" 2>&1 | grep -E "Authority|TeamIdentifier" | head -n 3
+          PUSH="$(/usr/libexec/PlistBuddy -c "Print :aps-environment" "$RUNNER_TEMP/signed.entitlements" 2>/dev/null || true)"
+          echo "Push entitlement in the signed app: ${PUSH:-missing}"
+          if [ "$PUSH" != "production" ]; then
+            echo "::error::The signed app has no production Push Notifications entitlement, so it was not uploaded."
+            exit 1
+          fi
+          # 5. Upload to App Store Connect.
+          mkdir -p "$HOME/.appstoreconnect/private_keys" && cp "$KEY" "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -n 20
+          rm -rf "$HOME/.appstoreconnect/private_keys"
           echo "### Uploaded build 1.0 ($BUILD) to App Store Connect" >> "$GITHUB_STEP_SUMMARY"
           echo "It appears in TestFlight once Apple finishes processing it." >> "$GITHUB_STEP_SUMMARY"
           rm -f "$KEY"
