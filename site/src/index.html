@@ -2022,6 +2022,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   function phRender() { if (ph) { phClamp(); phDraw(phCtx, VIEW); } }
   function phMode(editing) {
     $("ph-stage").hidden = $("ph-zoom-l").hidden = $("ph-save").hidden = $("ph-agree-l").hidden = !editing;
+    $("ph-save").disabled = false;
     $("ph-pick").textContent = editing ? "Choose another" : "Choose a photo"; $("ph-pick").classList.toggle("ghost", editing);
     $("ph-remove").hidden = editing || !(avatars[photoKey(phName)] && mineList().includes(photoKey(phName)));
     $("ph-rock").hidden = $("ph-remove").hidden;
@@ -2083,8 +2084,9 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     const out = document.createElement("canvas"); out.width = out.height = OUT_PX;
     phDraw(out.getContext("2d"), OUT_PX);
     const image = out.toDataURL("image/jpeg", 0.85);
-    $("ph-save").disabled = true; phMsg("Saving…");
+    // Check the box before turning the button off, so "Tick the box first" never leaves Save stuck.
     if (!$("ph-agree").checked) { phMsg("Tick the box first.", true); $("ph-agree").focus(); return; }
+    $("ph-save").disabled = true; phMsg("Saving…");
     try {
       const d = await photoPost({ action: "upload", image, agree: true });
       if (d.pending) { photoMine.fresh[d.k] = { v: d.v, at: Date.now() }; setMine(d.k, true); avatars = mergeAvatars(avatars); renderAll(); phMode(false); ph = null;
