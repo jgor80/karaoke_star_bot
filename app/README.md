@@ -66,7 +66,8 @@ One-time setup:
 > Oke Night shows a live karaoke night at a participating bar: who's singing, the line, reactions and
 > awards. No account or sign-in is needed. Karaoke is usually once a week, so to see a live show at any time,
 > open the app and tap **Demo Night** on the first screen. It's a sample show that is always on, and nothing
-> is saved there.
+> is saved there. Some demo singers have sample photos: open the **Singers** tab and tap a singer such as
+> Maya to try **Report** and **Hide photo**. No host key or sign-in is needed to review the app.
 >
 > - **User content:** singers can add a photo and a name. Photos need the host's approval before anyone
 >   sees them. Anyone can tap a singer's name to **Report** a photo or name (two reports hide it right
