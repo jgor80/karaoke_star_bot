@@ -27,6 +27,7 @@ import { handleCatalog } from "./catalog_api.js";
 import { handleArt, handleListen, warmArt } from "./art_api.js";
 import ART from "./art.js";
 import { maybeImportCatalog } from "./catalog_import.js";
+import { updateDetails } from "./details_import.js";
 import { updateVoices } from "./voice_import.js";
 import { handleRequest } from "./requests_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
@@ -213,10 +214,11 @@ export default {
       }
       await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
     })().catch(() => {}));
-    // Weekly: refresh the song catalog for the Songbook (no-op unless due, see catalog_import.js).
+    // Weekly: refresh the Songbook's song list (no-op unless due, see catalog_import.js).
     ctx.waitUntil(maybeImportCatalog(env).catch(() => {}));
-    // Songbook voice filters: look up a few more singers on MusicBrainz (see voice_import.js).
-    ctx.waitUntil(updateVoices(env).catch(() => {}));
+    // Songbook voice filters, then years, genres and languages: a few more MusicBrainz / Wikidata lookups
+    // each minute (voice_import.js, details_import.js). One after the other, so MusicBrainz gets one request at a time.
+    ctx.waitUntil(updateVoices(env).catch(() => {}).then(() => updateDetails(env)).catch(() => {}));
     // Album covers: look a few up ahead of phones, inside Apple's rate budget (see art_api.js).
     ctx.waitUntil(warmArt(env).catch(() => {}));
   },
