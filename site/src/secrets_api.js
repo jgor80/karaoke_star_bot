@@ -28,7 +28,7 @@ import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
 import { lineCheck } from "./line_api.js";
-import { hostPush } from "./push_api.js";
+import { hostPush, forgetHostPhones } from "./push_api.js";
 import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
 import { hostStyled, hostStyledAction } from "./styled_api.js";
@@ -261,6 +261,7 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     const name = cleanHostName(body.host_name);
     if (name) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("host_name"), name));
     await env.DB.batch(stmts);
+    await forgetHostPhones(env, venue).catch(() => {}); // the app's host alerts need the new key too
     return json({ ok: true });
   }
   if (!cfg.key_hash) return json({ error: "setup", needs_setup: true }, 401);
