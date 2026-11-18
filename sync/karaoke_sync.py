@@ -448,6 +448,12 @@ def check_update(cfg, log):
         want = hashlib.sha256(body).hexdigest()
         if want == script_hash():
             return False
+        try:
+            with open(BAD_PATH, encoding="utf-8") as f:
+                if f.read().strip() == want:
+                    return False  # this exact version was rolled back once; wait for the next one
+        except OSError:
+            pass
         text = body.decode("utf-8")
         if "def watch(" not in text or "def check_update(" not in text:
             raise RuntimeError("download doesn't look like the sync script")
@@ -458,6 +464,8 @@ def check_update(cfg, log):
             f.write(body)
         shutil.copy2(SCRIPT_PATH, os.path.join(folder, "karaoke_sync.prev.py"))
         os.replace(tmp, SCRIPT_PATH)
+        with open(TRIAL_PATH, "w", encoding="utf-8") as f:
+            f.write(want)  # restart() waits for the new copy to clear this, or puts the old one back
         write_log(log, f"update: installed new version {want[:12]}")
         return True
     except Exception as e:
@@ -465,15 +473,58 @@ def check_update(cfg, log):
         return False
 
 
-def restart(lock):
-    """Start a fresh copy of the (updated) script with the same arguments, then end this one."""
+TRIAL_PATH = os.path.join(os.path.dirname(SCRIPT_PATH), "karaoke_sync.trial")
+BAD_PATH = os.path.join(os.path.dirname(SCRIPT_PATH), "karaoke_sync.bad")
+TRIAL_WAIT_S = 180
+
+
+def trial_passed():
+    """Called by a freshly updated copy once its watch loop has run a full pass: it started fine."""
+    try:
+        with open(TRIAL_PATH, encoding="utf-8") as f:
+            mine = f.read().strip() == script_hash()
+        if mine:
+            os.remove(TRIAL_PATH)
+    except OSError:
+        pass
+
+
+def restart(lock, log=None):
+    """Start a fresh copy of the (updated) script with the same arguments, then end this one.
+
+    After an update, wait up to TRIAL_WAIT_S for the new copy to clear karaoke_sync.trial (it does so after
+    its first full pass). If it quits or hangs before that, a bad version reached main: kill it, put
+    karaoke_sync.prev.py back, and start that instead, so the laptop keeps syncing without anyone touching it."""
     try:
         lock.close()  # free the single-instance port for the new copy
     except OSError:
         pass
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([sys.executable, SCRIPT_PATH] + sys.argv[1:], creationflags=flags, close_fds=True,
-                     cwd=os.path.dirname(SCRIPT_PATH))
+    start = lambda: subprocess.Popen([sys.executable, SCRIPT_PATH] + sys.argv[1:], creationflags=flags, close_fds=True,
+                                     cwd=os.path.dirname(SCRIPT_PATH))
+    child = start()
+    if os.path.exists(TRIAL_PATH):
+        prev = os.path.join(os.path.dirname(SCRIPT_PATH), "karaoke_sync.prev.py")
+        deadline = time.monotonic() + TRIAL_WAIT_S
+        while time.monotonic() < deadline and os.path.exists(TRIAL_PATH) and child.poll() is None:
+            time.sleep(2)
+        if os.path.exists(TRIAL_PATH) and os.path.exists(prev):
+            why = "quit" if child.poll() is not None else "didn't finish a pass in %d s" % TRIAL_WAIT_S
+            try:
+                child.kill()
+            except OSError:
+                pass
+            try:
+                with open(TRIAL_PATH, encoding="utf-8") as f, open(BAD_PATH, "w", encoding="utf-8") as b:
+                    b.write(f.read().strip())  # check_update won't install this version again
+                os.remove(TRIAL_PATH)
+                shutil.copy2(prev, SCRIPT_PATH)
+                if log:
+                    write_log(log, f"update: the new version {why}, so the previous one was put back")
+            except OSError as e:
+                if log:
+                    write_log(log, f"update: the new version {why} and the previous one couldn't be put back ({e})")
+            start()
     os._exit(0)
 
 
@@ -931,7 +982,7 @@ def watch(a, log):
             cfg = load_cfg(a.config)
             if cfg and check_update(cfg, log):
                 write_log(log, "watch: restarting with the new version")
-                restart(lock)
+                restart(lock, log)
         stamp = source_stamp(a.source)
         due = time.monotonic() - last_sync >= WATCH_HEARTBEAT_S
         if stamp != last_stamp or due or failures:
@@ -949,6 +1000,7 @@ def watch(a, log):
                 if failures in (1, 5) or failures % 60 == 0:
                     write_log(log, f"watch {msg} (try {failures})")
                 time.sleep(min(60, 5 * failures))  # back off while offline
+        trial_passed()  # a full pass: tell the copy that started this one (after an update) that all is well
         time.sleep(WATCH_POLL_S)
 
 

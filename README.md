@@ -66,7 +66,7 @@ synced for 15 minutes.
 
 **It updates itself.** The live sync checks `sync/karaoke_sync.py` on `main` every 30 minutes
 (only when no karaoke is going on), checks the new copy compiles, swaps it in (keeping the old
-one as `karaoke_sync.prev.py`) and restarts. The daily run checks too. So a laptop only needs
+one as `karaoke_sync.prev.py`) and restarts. If the new copy quits or doesn't finish a full pass within 3 minutes, the old one is put back and restarted, and that version isn't installed again (`karaoke_sync.bad`). The daily run checks too. So a laptop only needs
 the files copied by hand once. Turn it off with `"auto_update": false` in the config.
 
 **Pre-show alert.** Each heartbeat (every 5 minutes) also reports whether the karaoke app is open.
