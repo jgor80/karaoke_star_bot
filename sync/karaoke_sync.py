@@ -283,14 +283,22 @@ def venue_of(cfg):
     return str(cfg.get("venue") or DEFAULT_VENUE).strip().lower()
 
 
-def with_venue(send_with, send_without):
+def with_venue(venue, send_with, send_without):
     """Write with the venue column; on a database the site hasn't given that column yet, write without it
-    (the site adds it on its first request, defaulting old rows to the first bar)."""
+    (the site adds it on its first request, defaulting old rows to the first bar).
+
+    Only the first bar may fall back: a row written without a venue becomes the first bar's, so another
+    bar's plays, heartbeat or queue would land in its data. Other bars stop with a clear error until
+    the site has added the column (open the bar's page once, which runs the migration)."""
     try:
         return send_with()
     except Exception as e:
         if "venue" not in str(e).lower():
             raise
+        if venue != DEFAULT_VENUE:
+            raise RuntimeError("D1 has no venue column yet, so %r's data can't be kept apart from %r's. Open "
+                               "okenight.com/%s/ once so the site adds it, then sync again. (%s)"
+                               % (venue, DEFAULT_VENUE, venue, e)) from e
         return send_without()
 
 
@@ -343,7 +351,7 @@ def upload(target, cfg):
                     ["session_end", "name"], sessions)
     # Each play is filed under this laptop's bar. A play's venue never changes once uploaded.
     venue = venue_of(cfg)
-    with_venue(lambda: upsert_rows(cfg, "plays", D1_PLAY_COLS + ["venue"], "uuid", D1_PLAY_COLS[2:],
+    with_venue(venue, lambda: upsert_rows(cfg, "plays", D1_PLAY_COLS + ["venue"], "uuid", D1_PLAY_COLS[2:],
                                    [r + [venue] for r in rows]),
                lambda: upsert_rows(cfg, "plays", D1_PLAY_COLS, "uuid", D1_PLAY_COLS[2:], rows))
     now = dt.datetime.now().isoformat(timespec="seconds")
@@ -352,7 +360,7 @@ def upload(target, cfg):
     # Name the columns: the Worker adds a venue column to sync_runs (site/src/venues.js), so a
     # positional insert fails on every run and the site thinks the sync has stopped.
     beat = [now, os.environ.get("COMPUTERNAME", ""), len(plays), len(rows)]
-    with_venue(lambda: d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded, venue)"
+    with_venue(venue, lambda: d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded, venue)"
                                 " values (?,?,?,?,?)", beat + [venue]),
                lambda: d1_query(cfg, "insert or replace into sync_runs (ran_at, device, source_rows, uploaded)"
                                 " values (?,?,?,?)", beat))
@@ -376,7 +384,7 @@ def upload_queue(cfg, queue):
     # from their slug. The site reads the newest row for its venue (site/src/worker.js QUEUE_SQL).
     venue = venue_of(cfg)
     row_id = 1 if venue == DEFAULT_VENUE else 1000 + zlib.crc32(venue.encode()) % 1000000
-    with_venue(lambda: d1_query(cfg, "insert or replace into live_queue (id, updated_at, items, venue) values (?, ?, ?, ?)",
+    with_venue(venue, lambda: d1_query(cfg, "insert or replace into live_queue (id, updated_at, items, venue) values (?, ?, ?, ?)",
                                 [row_id, int(time.time()), items, venue]),
                lambda: d1_query(cfg, "insert or replace into live_queue (id, updated_at, items) values (?, ?, ?)",
                                 [row_id, int(time.time()), items]))
