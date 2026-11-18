@@ -27,6 +27,7 @@ import { upcomingNights, endChoices } from "./schedule.js";
 import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
+import { lineCheck } from "./line_api.js";
 import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
 import { hostButtons, hostButtonAction } from "./buttons_api.js";
@@ -340,5 +341,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), ...(await lineCheck(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

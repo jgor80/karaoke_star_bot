@@ -10,6 +10,7 @@
 // The host (with the host key) can also hide secret songs (see secrets_api.js and /host).
 // Wireless buttons around the bar can send reactions too, each with its own secret link made on /host (buttons_api.js).
 // Singers can add a photo for their name from the phone that added it, and the host can remove it (avatars_api.js).
+import { watchLine } from "./line_api.js";
 import PAGE from "./index.html";
 import HOME from "./home.html";
 import { VENUES, DEFAULT_VENUE, venueBySlug, publicVenue, ensureVenueColumns, withNightsOff } from "./venues.js";
@@ -219,6 +220,7 @@ export default {
         await sendCrowdReminder(env, undefined, v).catch(() => {}); // heads-up to the venue's ntfy topic
         await sweepErased(env, v).catch(() => {}); // new songs by singers who asked to be removed
         await checkSyncAlerts(env, v).catch(() => {}); // host alert if the laptop or karaoke app isn't ready (health_api.js)
+        await watchLine(env, v).catch(() => {}); // host alert when the line runs past tonight's end, and last call (line_api.js)
         await sendReports(env, v).catch(() => {}); // the morning-after numbers for the host and bar owner (report_api.js)
       }
       await dailyCleanup(env, event.scheduledTime).catch(() => {}); // drop old rate-limit IDs (privacy_api.js)
