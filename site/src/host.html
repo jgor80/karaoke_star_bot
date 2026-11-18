@@ -136,6 +136,9 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       <h2>Karaoke nights</h2>
       <p class="hint">Bar closed or the night moved? Turn a night off and the site treats it as an off night: no “karaoke tonight” push to the crowd, no laptop alerts, no TV countdown or morning report, and phones show the next night instead.</p>
       <ul class="nights" id="nights-list"></ul>
+      <label class="hint" for="end-time" id="end-label" style="display:block;margin-top:14px">When does karaoke end?</label>
+      <select id="end-time"></select>
+      <p class="hint" id="end-note">The TV counts down to the end and tells the crowd when the line is running past it.</p>
     </section>
 
     <section class="card">
@@ -546,6 +549,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     renderLaptop(d.sync_health);
     renderOwner(d.owner_topic);
     renderNights(d.nights || [], d.nights_off || []);
+    renderEnd(d.end_night);
     const du = d.duets || [], dul = $("duet-list"); dul.replaceChildren();
     $("duet-h").textContent = "Duet finder (" + du.length + ")";
     if (!du.length) dul.append(el("li", "s", "Nobody is looking for a duet partner right now."));
@@ -772,6 +776,16 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       li.append(el("span", "t", n.label + (isOff ? " · off" : "")), b); list.append(li);
     });
   }
+  // Tonight's end time: the TV's "karaoke ends in" countdown and its "line runs past closing" warning use it.
+  function renderEnd(en) {
+    const sel = $("end-time"); if (!en || !sel) return;
+    const sig = JSON.stringify(en); if (sel.dataset.sig === sig) return; sel.dataset.sig = sig;
+    $("end-label").textContent = "When does karaoke end on " + en.label + "?";
+    sel.replaceChildren();
+    en.choices.forEach((c) => { const o = el("option", null, c.label + (c.regular ? " (regular)" : "")); o.value = String(c.hours);
+      o.selected = en.hours ? c.hours === en.hours : c.regular; sel.append(o); });
+  }
+  $("end-time").addEventListener("change", (ev) => act({ action: "end_time", hours: Number(ev.target.value) }));
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {

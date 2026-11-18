@@ -38,7 +38,7 @@ const dayKey = (d) => d.toISOString().slice(0, 10); // a session's date in its o
 
 // The next n karaoke nights (ignoring nights off), for the /host "nights off" list: [{date, label}].
 export function upcomingNights(nowTs, sch = SCHEDULE, n = 8) {
-  const st = scheduleStatus(nowTs, { ...sch, nights_off: [] });
+  const st = scheduleStatus(nowTs, { ...sch, nights_off: [], end_override: null });
   const first = st.status === "off" ? st.next_start : st.session_start;
   const out = [];
   for (let i = 0; i < n; i++) {
@@ -62,7 +62,11 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
     startDay = new Date(Date.UTC(w.y, w.m - 1, w.d - back - 7));
     start = sessionStart(startDay.getUTCFullYear(), startDay.getUTCMonth() + 1, startDay.getUTCDate(), sch);
   }
-  const end = start + sch.hours * 3600, latest = start + sch.latest_hours * 3600;
+  // The host can set tonight's end time on /host (sch.end_override {date, hours} from withNightsOff in venues.js),
+  // e.g. run until 2 am or wrap up early. It only applies to the night it was set for.
+  const eo = sch.end_override, hrs = eo && eo.date === dayKey(startDay) && Number(eo.hours) > 0 ? Number(eo.hours) : sch.hours;
+  // Ending early means no overtime after it; running late moves the latest end out with it.
+  const end = start + hrs * 3600, latest = start + (hrs < sch.hours ? hrs : Math.max(sch.latest_hours, hrs)) * 3600;
   let status = nowTs < end ? "live" : nowTs < latest ? "overtime" : "off";
   // Nights the host turned off on /host ("No karaoke this night", sch.nights_off from withNightsOff in
   // venues.js): tonight reads as an off night, and the next night skips over them.
@@ -72,6 +76,8 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
   let nd = new Date(startDay.getTime() + 7 * 86400000);
   for (let i = 0; i < 60 && off.has(dayKey(nd)); i++) nd = new Date(nd.getTime() + 7 * 86400000);
   const next = status === "off" ? sessionStart(nd.getUTCFullYear(), nd.getUTCMonth() + 1, nd.getUTCDate(), sch) : start;
+  const nextHrs = status !== "off" ? hrs : eo && eo.date === dayKey(nd) && Number(eo.hours) > 0 ? Number(eo.hours) : sch.hours;
+  const nextEnd = next + nextHrs * 3600; // when the current night (or the next one, between nights) is set to end
   return {
     venue: sch.venue,
     slug: sch.slug,
@@ -80,6 +86,9 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
     session_start: start,
     session_end: end,
     latest_end: latest,
+    next_end: nextEnd,
+    end_set: nextHrs !== sch.hours, // the host moved this night's end time on /host
+    end_label: label(nextEnd, sch.tz, { hour: "numeric", minute: "2-digit" }).replace(":00", ""),
     next_start: next,
     next_label: label(next, sch.tz, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(":00", ""),
     hours_label: sch.hours_label,
@@ -90,4 +99,15 @@ export function scheduleStatus(nowTs, sch = SCHEDULE) {
 export function localStampToUnix(v, sch = SCHEDULE) {
   const m = /^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d)(?::(\d\d))?/.exec(String(v || ""));
   return m ? fromWall(+m[1], +m[2], +m[3], +m[4], +m[5], sch.tz) + Number(m[6] || 0) : null;
+}
+
+// End times the host can pick for a night on /host: every half hour from 2 hours after the start up to the
+// latest the venue can run. [{hours, label}], label like "1:30 AM".
+export function endChoices(sch = SCHEDULE) {
+  const out = [];
+  for (let h = 2; h <= sch.latest_hours + 1e-9; h += 0.5) {
+    const m = sch.start[0] * 60 + sch.start[1] + h * 60, hh = Math.floor(m / 60) % 24, mm = m % 60;
+    out.push({ hours: h, label: (hh % 12 || 12) + (mm ? ":" + String(mm).padStart(2, "0") : "") + (hh < 12 ? " AM" : " PM"), regular: h === sch.hours });
+  }
+  return out;
 }
