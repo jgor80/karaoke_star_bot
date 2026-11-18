@@ -2211,6 +2211,14 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     zelle: { name: "Zelle", sub: () => "", how: "Zelle has no pay link. Copy the host’s Zelle above, then send it from your bank’s app.", link: null },
   };
   function tipWays() { return tips ? Object.keys(TIP_WAYS).filter((k) => tips[k]) : []; }
+  // In the phone app the menu is always these thank-you gifts, whatever the host set on /host: no perks like
+  // moving up the line, so nothing paid for in the app looks like it buys a place or a feature (Apple 3.1.1).
+  const APP_TIPS = [
+    { emoji: "🙌", label: "Thanks for hosting", amount: 5, note: "Keep the mics on" },
+    { emoji: "🍻", label: "Buy the host a drink", amount: 8, note: "Cheers from the crowd" },
+    { emoji: "💸", label: "Tip the host", amount: 0, note: "Any amount you like" },
+  ];
+  function tipMenu() { return window.OKE_APP ? APP_TIPS : tips.menu; }
   let tipWay = null;
   try { tipWay = localStorage.getItem("oke-tip-way"); } catch (e) {}
   async function copyZelle(t) {
@@ -2229,8 +2237,8 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       b.onclick = () => { tipWay = k; try { localStorage.setItem("oke-tip-way", k); } catch (e) {} renderTips(); }; return b; }));
     $("tip-sub").textContent = w.sub(h); $("tip-sub").hidden = !w.sub(h);
     $("tip-zelle").hidden = tipWay !== "zelle"; $("tip-zelle-to").textContent = tipWay === "zelle" ? h : "";
-    $("tip-how").textContent = w.how + " Perks are up to the host.";
-    $("tips").replaceChildren(...tips.menu.map((t) => {
+    $("tip-how").textContent = w.how + (window.OKE_APP ? "" : " Perks are up to the host.");
+    $("tips").replaceChildren(...tipMenu().map((t) => {
       let a;
       if (w.link) { a = el("a", "tip-item"); a.href = w.link(h, t); a.target = "_blank"; a.rel = "noopener"; }
       else { a = el("button", "tip-item"); a.type = "button"; a.onclick = () => copyZelle(t); }

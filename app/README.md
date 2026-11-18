@@ -74,9 +74,10 @@ One-time setup:
 >   Objectionable content is removed by the host, or by us at info@synthwaveweb.com.
 > - **Accounts:** there are none, so there's no account to delete. A singer can remove their photo in the
 >   app, or ask the host or info@synthwaveweb.com to remove their name.
-> - **Payments:** no in-app purchases. A bar's page can show a Tip button that opens Venmo to pay the host
->   directly, for things the host does in person at the bar (for example, playing a song sooner). All of it
->   goes to the host, and nothing in the app is unlocked (3.1.3(e), 3.2.1(vii)). The bar's own $20/month
+> - **Payments:** no in-app purchases. A bar's page can show a Tip button that opens the host's own payment
+>   app (Venmo, Cash App, PayPal or Zelle) to thank the host for running the night in person at the bar. In the
+>   app the only choices are thank-you tips ("Thanks for hosting", "Buy the host a drink", any amount). All of
+>   it goes to the host, and nothing in the app is unlocked (3.1.3(e), 3.2.1(vii)). The bar's own $20/month
 >   plan is sold only on the website and never shown in the app.
 > - **Native features:** notifications (karaoke-night reminders, "karaoke is live", "your song request is
 >   in", and for a bar's host only, host alerts after entering their host key), the photo picker or camera
