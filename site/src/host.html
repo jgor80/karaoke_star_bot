@@ -50,6 +50,9 @@ select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg
 .ph-list .s { color: var(--muted); font-size: 14px; }
 .ph-list .row { justify-content: center; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.nights { list-style: none; padding: 0; margin: 8px 0 0; }
+.nights li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.nights li.off .t { text-decoration: line-through; opacity: .7; }
 .btn-secret { background: var(--panel-2); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
 .btn-secret code, #btn-link { font-size: 13px; word-break: break-all; flex: 1 1 200px; }
 #btn-chips button { font-size: 20px; padding: 6px 10px; }
@@ -126,6 +129,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
       <h2>Karaoke laptop</h2>
       <p class="hint" id="laptop-state">Checking…</p>
       <p class="hint">From 30 minutes before each night, you get a push (same ntfy topic as above) if the laptop stops checking in or the karaoke app isn’t open. The laptop’s sync updates itself, so there are no files to copy.</p>
+    </section>
+
+    <section class="card" id="nights-card">
+      <h2>Karaoke nights</h2>
+      <p class="hint">Bar closed or the night moved? Turn a night off and the site treats it as an off night: no “karaoke tonight” push to the crowd, no laptop alerts, no TV countdown or morning report, and phones show the next night instead.</p>
+      <ul class="nights" id="nights-list"></ul>
     </section>
 
     <section class="card">
@@ -534,6 +543,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     renderSongbook(d);
     renderLaptop(d.sync_health);
     renderOwner(d.owner_topic);
+    renderNights(d.nights || [], d.nights_off || []);
     const du = d.duets || [], dul = $("duet-list"); dul.replaceChildren();
     $("duet-h").textContent = "Duet finder (" + du.length + ")";
     if (!du.length) dul.append(el("li", "s", "Nobody is looking for a duet partner right now."));
@@ -733,6 +743,18 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     });
   }
 
+  function renderNights(nights, off) {
+    const list = $("nights-list"), offSet = new Set(off), sig = JSON.stringify([nights, off]);
+    if (list.dataset.sig === sig) return; // only rebuild when something changed, so focus stays put while polling
+    list.dataset.sig = sig; list.replaceChildren();
+    nights.forEach((n) => {
+      const isOff = offSet.has(n.date), li = el("li", isOff ? "off" : null);
+      const b = el("button", "ghost small", isOff ? "Turn back on" : "No karaoke"); b.type = "button";
+      b.setAttribute("aria-label", (isOff ? "Turn karaoke back on for " : "No karaoke on ") + n.label);
+      b.onclick = () => { if (isOff || confirm("No karaoke on " + n.label + "? The crowd won’t get the reminder and the site will show the next night.")) act({ action: "night_off", date: n.date, off: !isOff }); };
+      li.append(el("span", "t", n.label + (isOff ? " · off" : "")), b); list.append(li);
+    });
+  }
   async function act(body) { const r = await api("POST", body); if (!r.ok) alert(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {

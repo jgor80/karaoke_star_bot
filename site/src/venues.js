@@ -98,3 +98,20 @@ export function km(aLat, aLng, bLat, bLng) {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(dLng / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));
 }
+
+// Nights the host turned off on /host (host_config "nights_off": ["YYYY-MM-DD", ...]), added to the venue
+// as nights_off so scheduleStatus (schedule.js) treats them as off nights: no reminder push, no laptop alert,
+// no TV countdown, no report, and "next night" skips them. Kept for a minute per Worker instance.
+const offCache = new Map();
+export function forgetNightsOff(v) { offCache.delete(v.slug); }
+export async function withNightsOff(env, v) {
+  const hit = offCache.get(v.slug);
+  if (hit && Date.now() - hit.at < 60000) return { ...v, nights_off: hit.list };
+  let list = [];
+  try {
+    const r = await env.DB.prepare("SELECT v FROM host_config WHERE k = ?").bind(cfgKey(v, "nights_off")).first();
+    list = r ? JSON.parse(r.v).filter((d) => /^\d{4}-\d\d-\d\d$/.test(d)) : [];
+  } catch (e) { return v; } // no host_config table yet, or bad JSON: the regular schedule
+  offCache.set(v.slug, { at: Date.now(), list });
+  return { ...v, nights_off: list };
+}
