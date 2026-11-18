@@ -22,7 +22,8 @@ import { hostRequests, hostRequestAction } from "./requests_api.js";
 import { hostLeads, hostLeadAction } from "./leads_api.js";
 import { hostSongbookAction, songbookConfig } from "./songbook_api.js";
 import { eraseSinger, erasedSingers } from "./privacy_api.js";
-import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn } from "./venues.js";
+import { DEFAULT_VENUE, cfgKey, venueConfig, ensureVenueColumn, forgetNightsOff } from "./venues.js";
+import { upcomingNights } from "./schedule.js";
 import { hostDuetAction, duetBoard } from "./duets_api.js";
 import { hostReportAction } from "./report_api.js";
 import { syncHealth } from "./health_api.js";
@@ -293,6 +294,15 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
     } else if (body.action === "duet_remove") {
       const r = await hostDuetAction(env, body, venue); // duet finder: take a post down
       if (r.error) return json(r, 400);
+    } else if (body.action === "night_off") {
+      // "No karaoke this night" (or back on): one of the next few nights from upcomingNights. Past dates drop off.
+      const date = String(body.date || "");
+      if (!upcomingNights(now(), venue, 12).some((n) => n.date === date)) return json({ error: "Pick one of the coming nights." }, 400);
+      const today = new Date(Date.now() - 86400000 * 2).toISOString().slice(0, 10);
+      const cur = (() => { try { return JSON.parse(cfg.nights_off || "[]"); } catch (e) { return []; } })().filter((d) => d >= today && d !== date);
+      if (body.off) cur.push(date);
+      await env.DB.prepare("INSERT OR REPLACE INTO host_config (k, v) VALUES (?, ?)").bind(K("nights_off"), JSON.stringify(cur.sort())).run();
+      forgetNightsOff(venue);
     } else if (body.action === "owner_topic") {
       return json(await hostReportAction(env, body, venue)); // the bar owner's report alerts
     } else if (body.action === "singer_erase") {
@@ -314,5 +324,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }
