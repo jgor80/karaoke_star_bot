@@ -118,9 +118,11 @@ export async function handleAvatar(req, env, ctx, venue, url) {
   if (lim.limited) return json({ error: "Too many photo changes. Try again tomorrow." }, 429);
 
   // The version goes in the photo's link, which phones and the edge cache keep for a year. It must never
-  // repeat for a name, even after the photo was removed (the row is deleted then), so it is at least the
-  // current time in seconds: a new photo always gets a link no one has cached.
-  const t = now(), ver = Math.max(((row && row.ver) || 0) + 1, t);
+  // repeat for a name, even after the photo was removed (the row is deleted then, so the old version is
+  // gone). Seconds alone could repeat (remove and re-add within the same second), so it is the time in
+  // milliseconds times 1000 plus a random 0-999: still a whole number well under 2^53, and never one an
+  // earlier photo of this name had.
+  const t = now(), ver = Math.max(((row && row.ver) || 0) + 1, Date.now() * 1000 + Math.floor(Math.random() * 1000));
   // The owner and block checks above are repeated inside the write, so two phones claiming the same name
   // at once can't both win: the second one's update matches no row and is turned away.
   const put = await env.DB.prepare("INSERT INTO avatars (venue, k, name, img, ver, owner, blocked, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7) " +
