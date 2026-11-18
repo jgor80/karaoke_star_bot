@@ -180,7 +180,7 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
-    if (path === "/") return html(HOME.replace("/*VENUES*/[]", JSON.stringify(await venueList(env)).replace(/</g, "\\u003c")), "public, max-age=300");
+    if (path === "/") return html(billingLinks(HOME, env).replace("/*VENUES*/[]", JSON.stringify(await venueList(env)).replace(/</g, "\\u003c")), "public, max-age=300");
     if (path === "/api/venues") {
       return new Response(JSON.stringify({ venues: await venueList(env) }), {
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
@@ -232,3 +232,13 @@ export default {
     ctx.waitUntil(warmArt(env).catch(() => {}));
   },
 };
+
+// Fill the bar billing links on the home page from the STRIPE_CHECKOUT_URL / STRIPE_PORTAL_URL vars
+// (wrangler.toml). Only Stripe https links are used; anything else leaves the placeholder, so the page hides the box.
+function billingLinks(page, env) {
+  const safe = (u) => (typeof u === "string" && /^https:\/\/(buy|billing)\.stripe\.com\/[A-Za-z0-9_\/-]+$/.test(u) ? u : null);
+  const c = safe(env.STRIPE_CHECKOUT_URL), p = safe(env.STRIPE_PORTAL_URL);
+  if (c) page = page.replace("__STRIPE_CHECKOUT_URL__", c);
+  if (p) page = page.replace("__STRIPE_PORTAL_URL__", p);
+  return page;
+}

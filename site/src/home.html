@@ -111,6 +111,8 @@ input, textarea, select { width: 100%; background: var(--bg); border: 1px solid 
 textarea { min-height: 90px; resize: vertical; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 #lead-msg { min-height: 1.5em; }
+.billing { margin: 0 0 20px; }
+.billing .welcome { background: var(--panel); border: 1px solid var(--good); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
 #lead-msg.ok { color: var(--good); }
 #lead-msg.err { color: var(--hot); }
 
@@ -188,8 +190,16 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
       <li><b>A Windows laptop running your karaoke app.</b> Oke Night works with one popular karaoke app for now. Tell us which one you use in the form and we’ll let you know if it fits.</li>
       <li><b>A TV or screen</b> for the scan code and the big-screen recap (optional, but the crowd loves it).</li>
       <li><b>Wifi for the laptop.</b> Guests use their own phones. No app to install, no sign-ups.</li>
-      <li><b>$20 a month for the bar.</b> Always free for singers. Send the form below and we’ll get you set up.</li>
+      <li><b>$20 a month for the bar, first month free.</b> Always free for singers. Cancel anytime.</li>
     </ul>
+    <div class="billing" id="bar-billing" hidden>
+      <p id="billing-welcome" class="welcome" role="status" hidden><b>You’re in. Thanks!</b> Your free month has started. We’ll email or text you within a day to set up your bar’s page.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+        <a class="act" id="billing-start" href="__STRIPE_CHECKOUT_URL__" rel="noopener">Start your free month</a>
+        <a class="act ghost" id="billing-manage" href="__STRIPE_PORTAL_URL__" rel="noopener">Manage billing</a>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">Secure checkout by Stripe. $0 today, then $20 a month after 30 days. Cancel from “Manage billing” anytime. Not sure it fits your karaoke setup? Send the form below first.</p>
+    </div>
     <p class="muted small">The owner gets the numbers from each night (songs, singers, first-timers, busiest hour, applause) the next morning. No names or song titles. <a href="/sample-report">See a sample report</a> (real numbers from one night, with the bar’s name left out).</p>
     <form class="lead" id="lead" novalidate>
       <b style="font-size:19px">Bring Oke Night to your bar</b>
@@ -303,6 +313,23 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 calc(28px + env(safe
     navigator.permissions.query({ name: "geolocation" }).then((s) => { if (s.state === "granted") locate(true); }).catch(() => {});
   }
   if (/[?&]pick=1/.test(location.search)) $("find").scrollIntoView();
+
+  // Bar billing (Stripe Payment Link + customer portal). The Worker fills in the links from
+  // STRIPE_CHECKOUT_URL / STRIPE_PORTAL_URL; with no link set the box stays hidden. It also stays hidden
+  // inside a future Oke Night phone app (?app=1 or "OkeNightApp" in the user agent): bars sign up on the
+  // website, not in the app, so the app store's in-app purchase rules don't come into play.
+  (() => {
+    const box = $("bar-billing"), start = $("billing-start"), manage = $("billing-manage");
+    const inApp = /OkeNightApp/.test(navigator.userAgent) || new URLSearchParams(location.search).get("app") === "1";
+    const ok = (a) => a && /^https:\/\//.test(a.getAttribute("href") || "");
+    if (!box || inApp || !ok(start)) return;
+    if (!ok(manage)) manage.remove();
+    box.hidden = false;
+    if (new URLSearchParams(location.search).get("welcome") === "bar") {
+      $("billing-welcome").hidden = false; start.remove();
+      box.scrollIntoView({ block: "center" });
+    }
+  })();
 
   // "Bring Oke Night to your bar" form -> /api/lead (saved for the owner, never shown publicly).
   $("lead").addEventListener("submit", async (ev) => {
