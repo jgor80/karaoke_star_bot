@@ -985,7 +985,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   let plays = [], nights = [], awardsNight = null, serverNow = Date.now() / 1000, clockSkew = 0, lastJson = "";
   let singerLimit = 40, songLimit = 30, feedOpen = false;
   let people = new Map(); // personKey -> {name, rows, badges}, from KaraokeFun
-  let tips = null; // {venmo, cashapp, paypal, zelle, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
+  let tips = null; // {venmo, cashapp, paypal, zelle, card, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
   let queue = null; // the karaoke app's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
@@ -2211,8 +2211,11 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     paypal: { name: "PayPal", sub: (h) => "PayPal paypal.me/" + h, how: "Opens PayPal with the amount filled in.",
       link: (h, t) => "https://paypal.me/" + encodeURIComponent(h) + (t.amount ? "/" + money(t.amount) + "USD" : "") },
     zelle: { name: "Zelle", sub: () => "", how: "Zelle has no pay link. Copy the host’s Zelle above, then send it from your bank’s app.", link: null },
+    // The host's own Stripe "pay what you want" payment link, set on /host. Website only, never in the phone app.
+    card: { name: "Card", sub: () => "Card, Apple Pay or Google Pay", how: "Opens a secure Stripe checkout with the amount filled in. You can change it there.",
+      link: (h, t) => h + (t.amount ? "?prefilled_amount=" + Math.round(t.amount * 100) : "") },
   };
-  function tipWays() { return tips ? Object.keys(TIP_WAYS).filter((k) => tips[k]) : []; }
+  function tipWays() { return tips ? Object.keys(TIP_WAYS).filter((k) => tips[k] && !(k === "card" && (window.OKE_APP || !/^https:\/\/buy\.stripe\.com\//.test(tips.card)))) : []; }
   // In the phone app the menu is always these thank-you gifts, whatever the host set on /host: no perks like
   // moving up the line, so nothing paid for in the app looks like it buys a place or a feature (Apple 3.1.1).
   const APP_TIPS = [
