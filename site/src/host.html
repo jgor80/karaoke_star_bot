@@ -275,10 +275,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
         <label>PayPal<input id="paypal" maxlength="60" placeholder="paypal.me/yourname" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
         <label>Zelle (email or US mobile number you enrolled with)<input id="zelle" maxlength="100" placeholder="you@example.com or 312-555-0123" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
         <p class="hint">Zelle has no pay link, so phones show it with a Copy button and people send it from their bank app.</p>
+        <label>Card tips (a Stripe payment link)<input id="card" maxlength="120" placeholder="https://buy.stripe.com/…" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <p class="hint">Lets people tip with a card, Apple Pay or Google Pay on the website (not in the phone app). In your Stripe account, make a payment link with “Customers choose what to pay” and paste it here. Tips go to your Stripe account, and Stripe takes its usual card fee.</p>
         <p class="hint">Tip menu. Each one opens the tipper’s pick with the amount filled in (Venmo adds the note too). Leave the amount empty to let people type their own. Perks are on the honor system: you’ll see the note in Venmo (other apps show just the amount).</p>
         <div class="list" id="tip-rows"></div>
         <div class="row"><button type="button" class="ghost small" id="tip-add">Add an item</button><button type="button" class="ghost small" id="tip-default">Use the default menu</button></div>
-        <div class="row"><button type="submit" class="small">Save tips</button><a class="hint" id="venmo-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Venmo</a><a class="hint" id="cashapp-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Cash App</a><a class="hint" id="paypal-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check PayPal</a><span class="hint" id="tips-saved"></span></div>
+        <div class="row"><button type="submit" class="small">Save tips</button><a class="hint" id="venmo-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Venmo</a><a class="hint" id="cashapp-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check Cash App</a><a class="hint" id="paypal-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check PayPal</a><a class="hint" id="card-test" target="_blank" rel="noopener" style="color:var(--hot)" hidden>Check card link</a><span class="hint" id="tips-saved"></span></div>
       </form>
     </section>
 
@@ -450,11 +452,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   const testUrl = { venmo: (h) => "https://venmo.com/u/" + h, cashapp: (h) => "https://cash.app/$" + h, paypal: (h) => "https://paypal.me/" + h };
   function testLink(k) { const a = $(k + "-test"), h = handleOf[k](($(k).value || "").trim()); a.hidden = !h; a.href = testUrl[k](encodeURIComponent(h)); }
   ["venmo", "cashapp", "paypal"].forEach((k) => $(k).addEventListener("input", () => testLink(k)));
+  $("card").addEventListener("input", () => { const u = $("card").value.trim().split(/[?#]/)[0], ok = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9_]{6,80}$/.test(u); $("card-test").hidden = !ok; $("card-test").href = ok ? u : "#"; });
   $("tip-add").addEventListener("click", () => { $("tip-rows").append(tipRow({})); $("tip-rows").lastChild.querySelector(".lab").focus(); });
   $("tip-default").addEventListener("click", () => fillTips(defaultTips));
   $("tips-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const r = await api("POST", { action: "tips", venmo: $("venmo").value, cashapp: $("cashapp").value, paypal: $("paypal").value, zelle: $("zelle").value, menu: readTips() });
+    const r = await api("POST", { action: "tips", venmo: $("venmo").value, cashapp: $("cashapp").value, paypal: $("paypal").value, zelle: $("zelle").value, card: $("card").value, menu: readTips() });
     $("tips-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
     if (r.ok) { tipsSet = false; load(); }
   });
@@ -574,7 +577,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
   function render(d) {
     // Fill the host name once, so polling doesn't overwrite what's being typed.
     if (!hostNameSet) { $("host-name").value = d.host_name || ""; hostNameSet = true; }
-    if (!tipsSet && d.tips) { defaultTips = d.default_tips || []; $("venmo").value = d.tips.venmo ? "@" + d.tips.venmo : ""; $("cashapp").value = d.tips.cashapp ? "$" + d.tips.cashapp : ""; $("paypal").value = d.tips.paypal ? "paypal.me/" + d.tips.paypal : ""; $("zelle").value = d.tips.zelle || ""; ["venmo", "cashapp", "paypal"].forEach(testLink); fillTips(d.tips.menu || []); tipsSet = true; }
+    if (!tipsSet && d.tips) { defaultTips = d.default_tips || []; $("venmo").value = d.tips.venmo ? "@" + d.tips.venmo : ""; $("cashapp").value = d.tips.cashapp ? "$" + d.tips.cashapp : ""; $("paypal").value = d.tips.paypal ? "paypal.me/" + d.tips.paypal : ""; $("zelle").value = d.tips.zelle || ""; $("card").value = d.tips.card || ""; $("card-test").hidden = !d.tips.card; $("card-test").href = d.tips.card || "#"; ["venmo", "cashapp", "paypal"].forEach(testLink); fillTips(d.tips.menu || []); tipsSet = true; }
     if (d.ntfy_topic) { $("topic").textContent = d.ntfy_topic; $("topic-link").href = "https://ntfy.sh/" + d.ntfy_topic; }
     const hid = d.secrets.filter((s) => !s.found_uuid), fnd = d.secrets.filter((s) => s.found_uuid);
     $("hidden-h").textContent = "Hidden (" + hid.length + ")";
