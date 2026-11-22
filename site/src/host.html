@@ -168,6 +168,14 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     </section>
 
     <section>
+      <h2 id="fp-h">⚡ Fast passes</h2>
+      <p class="hint" style="margin-bottom:8px">People who tipped to move up the line (website only, never in the phone app). Nothing moves on its own: check the tip came in, tap <b>Paid</b>, then move their slip up in the karaoke app. Paid names get a ⚡ on the phones and the TV. The order is always your call, and the crowd is told so. New ones also push to the ntfy topic below.</p>
+      <ul class="list" id="fp-list"></ul>
+      <details id="fp-done-box" hidden><summary class="hint">Handled tonight</summary><ul class="list" id="fp-done"></ul></details>
+      <form class="row" id="fp-form" style="margin-top:8px"><label style="flex:1">Fast pass price in dollars (0 turns it off)<input id="fp-price" type="number" min="0" max="200" step="1" inputmode="numeric"></label><button type="submit" class="small">Save</button><span class="hint" id="fp-saved"></span></form>
+    </section>
+
+    <section>
       <h2 id="req-h">Song requests</h2>
       <p class="hint" style="margin-bottom:8px">Songs people asked for that aren’t in the song list, most asked first. Mark each one so the person who asked sees it on their phone. New requests also push to the ntfy topic below. Bought a track? Download it on the karaoke laptop and the sync files it into your karaoke songs folder and marks the request added by itself.</p>
       <ul class="list" id="req-list"></ul>
@@ -428,7 +436,7 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     hostNameSet = false; load();
   });
   // ---------- tips ----------
-  let tipsSet = false, defaultTips = [];
+  let tipsSet = false, defaultTips = [], fpSet = false;
   function tipRow(t) {
     const row = el("div", "tip-row");
     const inp = (cls, ph, val, max, extra) => { const i = el("input", cls); i.placeholder = ph; i.value = val == null ? "" : val; i.maxLength = max; Object.assign(i, extra || {}); return i; };
@@ -609,6 +617,23 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     renderPhotos(d.photos || [], d.reports || [], d.photo_approval !== false);
     renderStyled(d.styled || []);
     renderButtons(d.buttons || []);
+    // Fast passes: tonight's, waiting first. Paid / No tip; the host moves the slip in the karaoke app.
+    const fps = d.fast_passes || [], fw = fps.filter((x) => x.status === "waiting"), fh = fps.filter((x) => x.status !== "waiting");
+    $("fp-h").textContent = "⚡ Fast passes (" + fw.length + " waiting)";
+    if (!fpSet && d.fastpass_price != null) { $("fp-price").value = d.fastpass_price; fpSet = true; }
+    const fpl = $("fp-list"); fpl.replaceChildren();
+    if (!fw.length) fpl.append(el("li", "s", d.fastpass_price ? "No fast passes waiting. Price: $" + d.fastpass_price + "." : "Fast passes are off (price is $0)."));
+    fw.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", "⚡ " + x.singer), el("span", "s", "Asked " + when(x.created_at) + " · check your tips for $" + (d.fastpass_price || "?")));
+      const row = el("div", "row");
+      [["✅ Paid", "paid"], ["❌ No tip", "no"]].forEach(([t, st]) => { const b = el("button", "ghost small", t); b.type = "button"; b.onclick = () => act({ action: "fastpass_set", id: x.id, status: st }); row.append(b); });
+      li.append(row); fpl.append(li); });
+    const fdl = $("fp-done"); fdl.replaceChildren(); $("fp-done-box").hidden = !fh.length;
+    fh.forEach((x) => { const li = el("li");
+      li.append(el("span", "t", (x.status === "paid" ? "⚡ " : "") + x.singer), el("span", "s", (x.status === "paid" ? "✅ Paid" : "❌ No tip") + " · " + when(x.updated_at)));
+      const row = el("div", "row"), b = el("button", "ghost small", "Undo"); b.type = "button"; b.onclick = () => act({ action: "fastpass_set", id: x.id, status: "waiting" });
+      const rm = el("button", "ghost small", "Remove"); rm.type = "button"; rm.onclick = () => act({ action: "fastpass_remove", id: x.id });
+      row.append(b, rm); li.append(row); fdl.append(li); });
     // Song requests from the Songbook
     const rq = d.requests || [], rl = $("req-list"); rl.replaceChildren();
     $("req-h").textContent = "Song requests (" + rq.length + ")";
@@ -902,6 +927,12 @@ main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     });
   }
   const tell = (msg) => ask(msg, "OK", "");
+  $("fp-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault(); $("fp-saved").textContent = "";
+    const r = await api("POST", { action: "fastpass_price", amount: $("fp-price").value });
+    $("fp-saved").textContent = r.ok ? "Saved ✓" : (r.d.error || "Couldn’t save it.");
+    if (r.ok) { fpSet = false; load(); }
+  });
   async function act(body) { const r = await api("POST", body); if (!r.ok) await tell(r.d.error || "That didn’t work."); load(); }
 
   $("add").addEventListener("submit", async (ev) => {

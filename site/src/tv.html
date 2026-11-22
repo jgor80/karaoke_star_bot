@@ -209,6 +209,7 @@ header { grid-column: 1 / -1; }
 .line-tv li.late { opacity: .55; border-style: dashed; }
 .line-tv li.late .w { color: var(--muted); }
 .line-tv .ln-more { font-size: calc(2.2 * var(--u)); color: var(--ink); font-weight: 700; margin: 0; }
+.line-tv .ln-fp { font-size: calc(2 * var(--u)); font-weight: 700; color: var(--gold); border: 2px dashed var(--gold); border-radius: calc(1.4 * var(--u)); padding: calc(.8 * var(--u)) calc(1.2 * var(--u)); margin: 0; line-height: 1.3; }
 .line-tv .ln-note { font-size: calc(1.8 * var(--u)); color: var(--muted); margin: 0; line-height: 1.3; }
 .line-tv .ln-empty { font-size: calc(2.8 * var(--u)); font-weight: 700; margin: 0; line-height: 1.25; }
 .line-tv .ln-end { margin-top: auto; background: var(--panel); border: 2px solid var(--gold); border-radius: calc(2 * var(--u)); padding: calc(1.1 * var(--u)) calc(2 * var(--u));
@@ -750,9 +751,13 @@ body.embed .line-tv { display: none !important; }
     if (!show) { lineSig = ""; return; }
     // Before the first song, waits count from the start time.
     let t = current ? Math.max(0, len - el0) + QUEUE_GAP_S : previewing && sc ? Math.max(0, Number(sc.status === "off" ? sc.next_start : sc.session_start) - now()) : 0;
-    const rows = (items || []).map((x) => { const at = t; t += (Number(x.len) || QUEUE_DEFAULT_LEN) + QUEUE_GAP_S; return { name: String(x.singer || "").trim() || "Someone", at }; });
+    // ⚡ = a fast pass the host marked Paid on /host tonight (fastpass_api.js). Offered on the phones while it's on.
+    const fpKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const paid = new Set((Array.isArray(data.fast_passes) ? data.fast_passes : []).map((f) => fpKey(f.singer)));
+    const tp = data.tips || {}, fpOn = Number(tp.fastpass) > 0 && !!(tp.venmo || tp.cashapp || tp.paypal || tp.zelle || tp.card);
+    const rows = (items || []).map((x) => { const at = t; t += (Number(x.len) || QUEUE_DEFAULT_LEN) + QUEUE_GAP_S; return { name: String(x.singer || "").trim() || "Someone", fp: paid.has(fpKey(x.singer)), at }; });
     const endsAt = end && end.at, finish = now() + t; // when a new sign-up would sing
-    const sig = JSON.stringify([rows.map((r) => [r.name, Math.round(r.at / 60)]), Math.round(t / 60), !!items, endsAt, end && end.over]);
+    const sig = JSON.stringify([rows.map((r) => [r.name, r.fp, Math.round(r.at / 60)]), Math.round(t / 60), !!items, endsAt, end && end.over, fpOn && tp.fastpass]);
     if (sig === lineSig) return tickEnd();
     lineSig = sig; box.replaceChildren();
     if (items) {
@@ -768,13 +773,14 @@ body.embed .line-tv { display: none !important; }
         rows.slice(0, LINE_ROWS).forEach((r, i) => {
           const late = endsAt && now() + r.at > endsAt;
           const li = el("li", late ? "late" : null);
-          li.append(el("span", "n", String(i + 1)), el("span", "nm", r.name),
+          li.append(el("span", "n", String(i + 1)), el("span", "nm", (r.fp ? "⚡ " : "") + r.name),
             el("span", "w", late ? "after close" : i === 0 && r.at < 60 ? "next!" : "~" + waitLabel(r.at)));
           ol.append(li);
         });
         ol.dataset.total = rows.length; lineLis = [...ol.children]; box.append(ol);
         if (rows.length > LINE_ROWS) box.append(el("p", "ln-more", "+ " + (rows.length - LINE_ROWS) + " more in line"));
       }
+      if (fpOn && rows.length >= 2) box.append(el("p", "ln-fp", "⚡ Skip ahead: tip $" + tp.fastpass + " for a fast pass on " + SHOW_URL));
     }
     if (end) {
       const left = endsAt - now();
@@ -792,7 +798,7 @@ body.embed .line-tv { display: none !important; }
       box.append(e);
     }
     if (items && rows.length) {
-      const note = el("p", "ln-note", "Wait times are estimates. The host may shuffle the order.");
+      const note = el("p", "ln-note", "Wait times are estimates. The order can change at the KJ’s discretion.");
       const endBox = box.querySelector(".ln-end"); if (endBox) box.insertBefore(note, endBox); else box.append(note);
     }
     fitLine();

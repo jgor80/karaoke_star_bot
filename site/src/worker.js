@@ -34,6 +34,7 @@ import { maybeImportCatalog } from "./catalog_import.js";
 import { updateDetails } from "./details_import.js";
 import { updateVoices } from "./voice_import.js";
 import { handleRequest } from "./requests_api.js";
+import { handleFastPass, fastPassBoard } from "./fastpass_api.js";
 import { handleCrowd, scoreCrowd, publicCrowd } from "./crowd_api.js";
 import { erasedSingers, relabel, relabelRows, sweepErased, dailyCleanup } from "./privacy_api.js";
 import PRIVACY from "./privacy.html";
@@ -138,6 +139,7 @@ async function handleApi(name, req, env, ctx, venue, url) {
   if (name === "crowd") { await ensureCore(env); return handleCrowd(req, env, venue); } // the /host phone's crowd meter (host key only)
   if (name === "push") return handlePush(req, env, venue); // the phone app's push notifications, see push_api.js
   if (name === "request") return handleRequest(req, env, ctx, venue); // song requests for the host, see requests_api.js
+  if (name === "fastpass") { await ensureCore(env); return handleFastPass(req, env, ctx, venue); } // tip-to-skip, host confirms, see fastpass_api.js
   if (name === "avatar") { await ensureCore(env); return handleAvatar(req, env, ctx, venue, url); } // singer photos, see avatars_api.js
   if (name === "styled") { await ensureCore(env); return handleStyled(req, env, ctx, venue, url); } // AI rock-star looks of a singer photo, see styled_api.js
   if (name === "art" && req.method === "POST") return handleArt(req, env, ctx); // a phone reports a cover it found (art.js)
@@ -165,13 +167,13 @@ async function handleApi(name, req, env, ctx, venue, url) {
       await ensureCore(env);
       await checkSecrets(env, venue).catch(() => {}); // a new song may have found a secret: mark it before reading
       const playsQ = delta ? env.DB.prepare(PLAYS_SINCE_SQL).bind(venue.slug, delta) : env.DB.prepare(PLAYS_SQL).bind(venue.slug);
-      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, styled, erased] = await Promise.all([
+      const [[plays, sync], reax, secrets, queue, drafts, crowd, duets, avatars, styled, erased, fast] = await Promise.all([
         env.DB.batch([playsQ, env.DB.prepare(SYNC_SQL).bind(venue.slug)]),
         reactionTotals(env, venue, delta), publicSecrets(env, venue), liveQueue(env, venue), draftBoard(env, venue), publicCrowd(env, venue), duetBoard(env, venue), avatarMap(env, venue), styledMap(env, venue),
-        erasedSingers(env, venue).catch(() => [])]);
+        erasedSingers(env, venue).catch(() => []), fastPassBoard(env, venue)]);
       plays.results = relabelRows(erased, plays.results); // a removed singer's name never goes out, even before the sweep
       res = new Response(
-        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars, ...styled }),
+        JSON.stringify({ venue: publicVenue(venue), ...(delta ? { since: delta } : {}), plays: plays.results, last_sync: sync.results[0]?.last || null, last_sync_ts: localStampToUnix(sync.results[0]?.last, venue), served_at: now, schedule, ...reax, ...secrets, ...queue, ...drafts, ...crowd, ...duets, ...avatars, ...styled, ...fast }),
         { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=" + maxAge } }
       );
       ctx.waitUntil(cache.put(key, res.clone()));
