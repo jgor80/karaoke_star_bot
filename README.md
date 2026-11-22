@@ -131,9 +131,11 @@ Presses only count while a song is on (the same window phones get). Each button 
 
 ## Crowd meter
 
-The crowd meter scores the applause after each song (the PA drowns out the crowd during
-the song, so only the cheering right after it counts). Each song gets 0-10: how far the
-loudest 3 seconds of applause rose above the room's normal chatter, 2.5 dB per point.
+The crowd meter scores the applause at the end of each song: the song's last minute plus the
+15 seconds after it stops. During the last minute the cheering has to rise above the song's own
+loud parts (so a big final chorus mostly doesn't count); after it stops, above the room's normal
+chatter. Each song gets 0-10 from the bigger of the two: how far the loudest 3 seconds rose, 2.5 dB per point.
+A song the host cuts short is scored from when the next song starts.
 The scores show next to songs on the phone site, as a banner on `/tv` about a minute after
 each song, and as the "Loudest Crowd" award (and "Biggest Ovation of the Season").
 Mics aren't calibrated, so it's a relative score: keep the mic in the same spot each week.
