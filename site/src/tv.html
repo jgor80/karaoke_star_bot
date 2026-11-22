@@ -489,6 +489,7 @@ body.embed .line-tv { display: none !important; }
     if (T.cashapp) ways.push(["Cash App", "$" + T.cashapp]);
     if (T.paypal) ways.push(["PayPal", "paypal.me/" + T.paypal]);
     if (T.zelle) ways.push(["Zelle", T.zelle]);
+    if (T.card) ways.push(["Card", "💸 Tip on the website"]);
     const tips = ways.length ? { ways, menu: (T.menu || []).slice(0, 8) } : null;
     return { start, startLabel, venue: sc.venue || "", tips, secretsLeft: Number(data.secrets_left) || 0 };
   }
