@@ -73,6 +73,7 @@ h2 small { font-family: var(--f-mono); font-size: calc(1.9 * var(--u)); color: v
 .award .what { color: var(--muted); font-size: calc(2.5 * var(--u)); line-height: 1.25; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .award .stat { font-family: var(--f-mono); font-size: calc(2.3 * var(--u)); color: var(--hot); }
+.award .lvl { font-family: var(--f-mono); font-size: calc(2.1 * var(--u)); color: var(--gold); }
 
 .ub { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(.4 * var(--u)) calc(2 * var(--u)); align-items: center; }
 .ub .ic { font-size: calc(6 * var(--u)); grid-row: span 3; }
@@ -306,7 +307,11 @@ body.embed .line-tv { display: none !important; }
     const reax = OkeAwards.reactionIndex(data);
     const people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, tonight ? night : null, reax.bySong) : null;
     const totals = (r) => OkeAwards.personTotals(r, people, plays);
-    const awards = OkeAwards.awardsFor(rows, totals, reax).sort((a, b) => !!b.headline - !!a.headline).map((a) => ({ ...a, photo: NOT_SINGER.has(a.id) ? null : photoSrc(a.who) }));
+    // Award wins add up across nights into levels ("3rd win · Silver"), counted up to this night.
+    const byN = new Map(); plays.forEach((p) => { if (p.night && p.night <= night) (byN.get(p.night) || byN.set(p.night, []).get(p.night)).push(p); });
+    const trophies = OkeAwards.trophyCase([...byN.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([n, r]) => ({ night: n, rows: r })),
+      (r) => OkeAwards.awardsFor(r, totals, reax), people, tonight ? night : null);
+    const awards = OkeAwards.awardsFor(rows, totals, reax).sort((a, b) => !!b.headline - !!a.headline).map((a) => ({ ...a, photo: NOT_SINGER.has(a.id) ? null : photoSrc(a.who), win: OkeAwards.winLine(trophies.at(a.who, a.id, night)) }));
     // Crowd reactions for the night: totals per emoji and the most-reacted songs
     const rxTot = {}; const rxSongs = [];
     rows.forEach((p) => { const c = p.uuid && reax.bySong.get(p.uuid); if (!c) return; Object.entries(c).forEach(([k, n]) => { rxTot[k] = (rxTot[k] || 0) + n; });
@@ -316,11 +321,13 @@ body.embed .line-tv { display: none !important; }
     const topReacted = rxSongs.sort((a, b) => b.n - a.n).slice(0, 6);
     // The song on the mic right now, so phones' reactions can float up the screen
     const singing = live && last.uuid && now() - last.played_at < (last.length_s || 300) + 180;
-    // Badges first earned this night, one card per badge with everyone who got it. First-timers get their own card.
+    // Badges earned or leveled up this night, one card per badge and level ("Regular · Gold") with everyone who
+    // reached it. First-timers get their own card.
     const groups = new Map();
     if (people) KaraokeFun.unlockedOn(people, night).slice().reverse().forEach((u) => {
-      const g = groups.get(u.badge.id) || { id: u.badge.id, name: u.badge.name, desc: u.badge.desc, who: [] };
-      if (!g.who.includes(u.who)) g.who.push(u.who); groups.set(u.badge.id, g); });
+      const gk = u.badge.id + ":" + u.badge.level;
+      const g = groups.get(gk) || { id: u.badge.id, name: (u.badge.up ? "⬆ " : "") + u.badge.label, desc: u.badge.desc, who: [] };
+      if (!g.who.includes(u.who)) g.who.push(u.who); groups.set(gk, g); });
     const badges = [...groups.values()].sort((a, b) => b.who.length - a.who.length);
     const debut = [];
     if (people) people.forEach((e) => { const d = e.badges.find((b) => b.id === "debut"); if (d && d.at.night === night) debut.push(e.name); });
@@ -373,6 +380,7 @@ body.embed .line-tv { display: none !important; }
     c.append(el("div", "who", a.who.replace(/\//g, "/\u200b")));
     if (OkeAwards.whatOf(a)) c.append(el("div", "what", OkeAwards.whatOf(a)));
     c.append(el("div", "stat", a.stat));
+    if (a.win) c.append(el("div", "lvl", "🏆 " + a.win));
     return c;
   }
   function badgeCard(g) {
@@ -440,7 +448,7 @@ body.embed .line-tv { display: none !important; }
       box.append(heading("React from your phone"), el("p", "rxnote", "Open " + SHOW_URL + " and tap 🔥 🎤 🍅 😴 on whoever is singing. The crowd’s reactions decide some of tonight’s awards."));
     }
     if (v.badges.length) {
-      const h2 = el("h2", null, v.tonight ? "Badges unlocked tonight" : "Badges unlocked"); h2.append(el("small", null, plural(v.nBadges, "badge") + " earned"));
+      const h2 = el("h2", null, v.tonight ? "Badges and level-ups tonight" : "Badges and level-ups"); h2.append(el("small", null, plural(v.nBadges, "badge") + " earned"));
       const g2 = el("div", "grid"); v.badges.forEach((b) => g2.append(badgeCard(b)));
       box.append(h2, g2);
     }

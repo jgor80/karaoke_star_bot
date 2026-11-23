@@ -19,7 +19,7 @@
   const localHour = (ts) => venueHM(ts).h;
   const songLine = (p) => (p.title ? "“" + p.title + "”" + (p.artist ? " · " + p.artist : "") : "a mystery song");
 
-  const ICON = { debut: "🎤", regular: "🎟️", lifer: "🏠", streak3: "🔥", streak5: "🔥", streak10: "🫁", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
+  const ICON = { debut: "🎤", songs: "🎶", regular: "🎟️", lifer: "🏠", streak3: "🔥", streak5: "🔥", streak10: "🫁", hattrick: "🎩", hopper: "🕰️", timelord: "⏳", oldie: "📻", fresh: "🌱", marathon: "🏃", sprint: "⚡",
     duet: "👯", plusone: "🫶", broken: "💿", signature: "✍️", loyal: "💖", brit: "🇬🇧", punk: "🤘", owl: "🦉", opener: "🚪", closer: "🌙", trend: "📈",
     mvp: "🎤", dejavu: "🔁", speed: "⚡", time: "🕰️", squad: "👯", open: "🚪", last: "🌙", artist: "🎸", decade: "📼",
     crowd: "👑", loud: "👏", "s-loud": "📢", "rx-micdrop": "🎤", "rx-encore": "🔁", "rx-tomato": "🍅", "rx-pitch": "💪", "rx-snooze": "😴", "rx-key": "📈", "rx-hype": "📣", "rx-critic": "🧐",
@@ -187,6 +187,52 @@
     return out;
   }
 
+  // ---------- trophy case: award wins add up, week after week ----------
+  // Every night award a person wins counts toward that award's level, on the same tiers as badges (fun.js):
+  // 1 win Bronze, 3 Silver, 6 Gold, 10 Platinum, 15 Diamond, 25 Legend, then one more Legend level every 10 wins,
+  // so even a weekly winner keeps leveling for years. Artist and Decade of the Night go to an artist or a decade,
+  // not a person, so they don't count. Season awards are one-offs and aren't counted either.
+  const WIN_AT = [1, 3, 6, 10, 15, 25], WIN_STEP = 10, TIERS = ["Bronze", "Silver", "Gold", "Platinum", "Diamond"];
+  const winNeed = (lv) => (lv <= WIN_AT.length ? WIN_AT[lv - 1] : WIN_AT[WIN_AT.length - 1] + (lv - WIN_AT.length) * WIN_STEP);
+  const winLevel = (n) => { let lv = 0; while (n >= winNeed(lv + 1)) lv++; return lv; };
+  const tierName = (lv) => (lv <= 0 ? "" : lv <= 5 ? TIERS[lv - 1] : "Legend" + (lv > 6 ? " " + (lv - 5) : ""));
+  const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+  const NOT_PERSON = new Set(["artist", "decade"]);
+  const PARTS = /\s*(?:\+|,|&|\/|\band\b)\s*/i;
+  // Person keys an award's "who" stands for: "Maya + Dev" (Déjà Vu) and duet names credit each person.
+  function keysOf(who, people) {
+    const k = key(clean(who)); if (!k) return [];
+    if (!people || people.has(k)) return [k];
+    return [...new Set(k.split(PARTS).map((x) => x.trim()).filter((x) => people.has(x)))];
+  }
+  // nights: [{night, rows}] oldest first; awardsFn(rows) -> awards; people: KaraokeFun.badgesAll map (optional);
+  // liveNight: tonight's night while it's still going ("Last Call" means nothing until it ends).
+  // -> {of(personKey) -> [{id, label, wins, level, tier, next, nights}] most wins first,
+  //     at(who, id, night) -> {wins, level, tier, up} as of that night (up: this win reached a new level), or null,
+  //     total(personKey) -> all award wins}
+  function trophyCase(nights, awardsFn, people, liveNight) {
+    const by = new Map(); // personKey -> Map(id -> {id, label, nights: []})
+    nights.forEach((n) => awardsFn(n.rows).forEach((a) => {
+      if (NOT_PERSON.has(a.id) || (a.id === "last" && n.night === liveNight)) return;
+      keysOf(a.who, people).forEach((k) => { const m = by.get(k) || by.set(k, new Map()).get(k);
+        const e = m.get(a.id) || { id: a.id, label: a.label, nights: [] }; if (e.nights[e.nights.length - 1] !== n.night) e.nights.push(n.night); e.label = a.label; m.set(a.id, e); });
+    }));
+    const of = (k) => [...((by.get(k) || new Map()).values())].map((e) => { const wins = e.nights.length, level = winLevel(wins);
+      return { id: e.id, label: e.label, wins, level, tier: tierName(level), next: winNeed(level + 1), nights: e.nights }; })
+      .sort((a, b) => b.wins - a.wins || a.label.localeCompare(b.label));
+    const at = (who, id, night) => {
+      let best = null;
+      keysOf(who, people).forEach((k) => { const e = by.get(k) && by.get(k).get(id); if (!e) return;
+        const wins = e.nights.filter((x) => x <= night).length; if (!wins || (best && best.wins >= wins)) return;
+        const level = winLevel(wins); best = { wins, level, tier: tierName(level), up: winNeed(level) === wins }; });
+      return best;
+    };
+    const total = (k) => [...((by.get(k) || new Map()).values())].reduce((a, e) => a + e.nights.length, 0);
+    return { of, at, total };
+  }
+  // "3rd win · Silver" for an award card, or "" for a first win (nothing to brag about yet beyond the award).
+  const winLine = (w) => (!w || w.wins < 2 ? "" : ordinal(w.wins) + " win · " + w.tier + (w.up ? " ⬆" : ""));
+
   // One short line per award on what it means and how it's won, shown on every award card (phone + TV).
   const HOW = {
     mvp: "Most songs of the night", broken: "Same song twice in one night", dejavu: "Same song, sung by different people",
@@ -200,7 +246,7 @@
     "rx-pitch": "Most 🎶 own key and 😅 bold choice taps", "rx-snooze": "Most 😴 slow burn taps on one song",
     "rx-hype": "Sent the most reactions tonight", "rx-critic": "Sent the most playful roasts tonight",
     "s-mvp": "Most songs of the season", "s-loyal": "Sang on the most nights", "s-mic": "Most minutes on the mic",
-    "s-badges": "Most badges earned", "s-range": "Songs from the most decades", "s-duet": "Most duets and group songs",
+    "s-badges": "Most badge levels earned", "s-range": "Songs from the most decades", "s-duet": "Most duets and group songs",
     "s-onesong": "Same song the most times", "s-crate": "Most pre-1980 songs (3+ songs)", "s-trend": "Most songs others sang later",
   };
   const how = (id) => HOW[id] || "";
@@ -217,5 +263,5 @@
     return { songs: rows.length, singers, minutes: Math.round(secs / 60), peak: ph ? fmtH(ph[0]) : "—" };
   }
 
-  global.OkeAwards = { HOW, how, whatOf, venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf, crowdScore, crowdOf, CROWD_MIN_DB };
+  global.OkeAwards = { trophyCase, winLevel, winNeed, tierName, ordinal, winLine, HOW, how, whatOf, venueHM, ICON, icon, groupSize, personTotals, awardsFor, setHost, isHost, tallyFor, songLine, REACTIONS, HYPE, ROAST, reactionIndex, reactionAwards, sumOf, crowdScore, crowdOf, CROWD_MIN_DB };
 })(typeof window !== "undefined" ? window : globalThis);
