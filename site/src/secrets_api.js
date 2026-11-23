@@ -33,6 +33,7 @@ import { networkOf } from "./net.js";
 import { hostPhotos, hostPhotoAction } from "./avatars_api.js";
 import { hostStyled, hostStyledAction } from "./styled_api.js";
 import { hostButtons, hostButtonAction } from "./buttons_api.js";
+import { hostFastPasses, hostFastPassAction, fastPassPrice } from "./fastpass_api.js";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS secret_songs (
@@ -165,7 +166,7 @@ function cleanTips(list) {
 function tipsFrom(cfg) {
   let menu = null;
   try { menu = cfg.tip_menu ? cleanTips(JSON.parse(cfg.tip_menu)) : null; } catch (e) {}
-  return { venmo: cfg.venmo === undefined ? DEFAULT_VENMO : cfg.venmo, cashapp: cfg.cashapp || "", paypal: cfg.paypal || "", zelle: cfg.zelle || "", card: cfg.card || "", menu: menu || DEFAULT_TIPS };
+  return { venmo: cfg.venmo === undefined ? DEFAULT_VENMO : cfg.venmo, cashapp: cfg.cashapp || "", paypal: cfg.paypal || "", zelle: cfg.zelle || "", card: cfg.card || "", fastpass: fastPassPrice(cfg.fastpass), menu: menu || DEFAULT_TIPS };
 }
 
 // Found secrets (with who sang them) and how many are still hidden. Never includes unfound titles.
@@ -178,7 +179,7 @@ export async function publicSecrets(env, venue = DEFAULT_VENUE) {
     ]);
     const cfg = await config(env, venue);
     return { secrets_found: found.results, secrets_left: left.results[0]?.n || 0, host: cfg.host_name === undefined ? hostDefault(venue) : cfg.host_name, tips: tipsFrom(cfg) };
-  } catch (e) { return { secrets_found: [], secrets_left: 0, host: hostDefault(venue), tips: { venmo: DEFAULT_VENMO, cashapp: "", paypal: "", zelle: "", card: "", menu: DEFAULT_TIPS } }; }
+  } catch (e) { return { secrets_found: [], secrets_left: 0, host: hostDefault(venue), tips: { venmo: DEFAULT_VENMO, cashapp: "", paypal: "", zelle: "", card: "", fastpass: 0, menu: DEFAULT_TIPS } }; }
 }
 
 // True when `given` is the host key. Used by other host-only endpoints (the crowd meter's /api/crowd).
@@ -332,6 +333,9 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
       const r = await hostButtonAction(env, body, venue); // wireless bar buttons: add, change, new link, remove
       if (r.error) return json(r, 400);
       return json(r); // button_add / button_rotate carry the secret link, shown once
+    } else if (String(body.action || "").startsWith("fastpass_")) {
+      const r = await hostFastPassAction(env, body, venue); // fast pass: mark paid / no tip, remove, or set the price
+      if (r.error) return json(r, 400);
     } else if (body.action === "duet_remove") {
       const r = await hostDuetAction(env, body, venue); // duet finder: take a post down
       if (r.error) return json(r, 400);
@@ -374,5 +378,5 @@ export async function handleHost(req, env, venue = DEFAULT_VENUE) {
   const fresh = await config(env, venue);
   const cfgBlocked = (() => { try { return JSON.parse(fresh.draft_blocked || "[]"); } catch (e) { return []; } })();
   const leads = venue.slug === DEFAULT_VENUE.slug ? await hostLeads(env) : {};
-  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostStyled(env, venue)), ...(await hostButtons(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), ...(await lineCheck(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
+  return json({ ...(await draftBoard(env, venue)), ...(await duetBoard(env, venue)), ...(await hostRequests(env, venue)), ...(await hostPhotos(env, venue)), ...(await hostStyled(env, venue)), ...(await hostButtons(env, venue)), ...(await hostFastPasses(env, venue)), ...leads, songbook: await songbookConfig(env, venue), catalog_count: await catalogCount(env), draft_blocked: cfgBlocked, erased_singers: (await erasedSingers(env, venue)).map((x) => ({ as: x.as, at: x.at })), secrets: results, ntfy_topic: cfg.ntfy_topic || null, owner_topic: fresh.owner_topic || null, ...(await syncHealth(env, venue)), ...(await lineCheck(env, venue)), host_name: fresh.host_name === undefined ? hostDefault(venue) : fresh.host_name, venue: { slug: venue.slug, name: venue.name }, nights: upcomingNights(now(), venue, 8), end_night: endNight(venue, fresh), nights_off: (() => { try { return JSON.parse(fresh.nights_off || "[]"); } catch (e) { return []; } })(), tips: tipsFrom(fresh), default_tips: DEFAULT_TIPS, now: now() });
 }

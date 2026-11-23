@@ -358,6 +358,20 @@ details.singer.song summary .main-t { font-weight: 600; }
 .line-next b { color: var(--ink); font-weight: 600; }
 .line-mine { font-size: 16px; color: var(--gold); font-weight: 600; }
 .line-note { font-size: 15px; color: var(--muted); }
+/* fast pass: tip the host to move up the line (website only; the host confirms and moves the slip) */
+.fp-btn { display: flex; align-items: center; gap: 10px; width: 100%; font: inherit; text-align: left; cursor: pointer; color: var(--ink); background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 12px; padding: 10px 12px; }
+.fp-btn .fe { font-size: 24px; }
+.fp-btn b { display: block; font-size: 17px; }
+.fp-btn small { display: block; color: var(--muted); font-size: 15px; }
+.fp-btn .fa { margin-left: auto; font-weight: 800; font-size: 18px; color: var(--gold); white-space: nowrap; }
+.fp-state { font-size: 16px; color: var(--gold); font-weight: 600; }
+#fp-dlg { width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+#fp-dlg ol { margin: 10px 0 12px; padding-left: 22px; font-size: 16px; color: var(--muted); }
+#fp-dlg ol li { margin-bottom: 4px; }
+#fp-dlg label { display: block; font-size: 15px; color: var(--muted); margin-top: 8px; }
+#fp-dlg .search { margin-top: 4px; }
+#fp-pay { display: block; text-align: center; text-decoration: none; width: 100%; margin: 12px 0 8px; font-size: 18px; min-height: 50px; }
+.fp-err { color: var(--hot); font-size: 15px; min-height: 1em; margin: 0; }
 .line-warn { font-size: 16px; font-weight: 600; color: var(--ink); background: var(--hot-soft, rgba(255,92,157,.15)); border: 1px solid var(--hot); border-radius: 10px; padding: 8px 10px; }
 
 /* "that's me" card */
@@ -956,6 +970,24 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   <div class="btns" style="justify-content:center"><button class="act ghost" id="tip-close" type="button">Close</button></div>
 </dialog>
 
+<dialog id="fp-dlg" aria-labelledby="fp-h">
+  <h3 id="fp-h">⚡ Fast pass</h3>
+  <p class="muted small" style="margin:0">Tip the host to get moved up the line.</p>
+  <ol>
+    <li>Make sure your slip is in at the KJ booth.</li>
+    <li>Type the name on your slip and pay the tip below.</li>
+    <li>When the host sees your tip, they move you up and you get a ⚡ on the line.</li>
+  </ol>
+  <label for="fp-name">Name on your slip</label>
+  <input class="search" id="fp-name" type="text" maxlength="24" placeholder="Your name" autocomplete="nickname" enterkeyhint="done">
+  <div class="seg tip-pay" id="fp-way" role="group" aria-label="Pay with" hidden></div>
+  <div class="tip-zelle" id="fp-zelle" hidden><span><small>Zelle to</small><b id="fp-zelle-to"></b></span></div>
+  <a class="act" id="fp-pay" href="#" target="_blank" rel="noopener">Pay</a>
+  <p class="fp-err" id="fp-err" role="status" aria-live="polite"></p>
+  <p class="muted small" style="margin:0 0 12px">The order of the line is always at the KJ’s discretion. A fast pass moves you up a few spots, not always to next. Not on tonight? Ask the host about your tip at the booth.</p>
+  <div class="btns" style="justify-content:center"><button class="act ghost" id="fp-close" type="button">Close</button></div>
+</dialog>
+
 <div class="secret-pop" id="secret-pop" hidden role="alertdialog" aria-modal="true" aria-labelledby="sp-big" aria-describedby="sp-who sp-rw"><div class="sp-in"><div class="sp-big" id="sp-big">🤫 Secret song!</div><div class="sp-who" id="sp-who"></div><div class="sp-rw" id="sp-rw"></div><button type="button" class="sp-close" id="sp-close">Close</button></div></div>
 <script src="/bingo.js"></script>
 <script src="/fun.js"></script>
@@ -988,6 +1020,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   let tips = null; // {venmo, cashapp, paypal, zelle, card, menu: [{emoji, label, amount, note}]} from /api/plays; set on /host
   let hostKey = ""; // the host's singer name (lower case), from /api/plays "host"; set on /host
   let lastSyncTs = 0; // when the laptop last synced, from /api/plays
+  let fastPasses = []; // paid fast passes tonight from /api/plays: [{singer, at}] (the host marked them Paid on /host)
   let queue = null; // the karaoke app's queue from /api/plays: {updated_at, items: [{id, singer, len}]}
   const QUEUE_DEFAULT_LEN = 240; // a queued song with no known length counts as 4 minutes
   const QUEUE_GAP_S = 25;       // changeover between singers (start-to-start runs ~25s past song length)
@@ -1209,8 +1242,10 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       if (now() + t > endAt) box.append(el("div", "line-warn", "⏰ The line already runs past " + endLbl + ", when karaoke ends. Sign up now and you might not get on tonight."));
       else if (endAt - now() < 30 * 60) box.append(el("div", "line-warn", "🔔 Last call! Karaoke ends at " + endLbl + ". Get your slip in now."));
     }
-    if (!items.length) { box.append(el("div", "line-next", current ? "Nobody's queued after this song. Grab the mic!" : "Nobody's in line. Grab the mic!")); return; }
-    const names = items.slice(0, 3).map((q) => clean(q.singer) || "someone");
+    const fpOn = fastPassOn(), mineFp = myFastPass();
+    if (!items.length) { box.append(el("div", "line-next", current ? "Nobody's queued after this song. Grab the mic!" : "Nobody's in line. Grab the mic!")); if (mineFp) box.append(fastPassState(mineFp)); return; }
+    const paid = new Set(fastPasses.map((f) => fpKey(f.singer)));
+    const names = items.slice(0, 3).map((q) => (paid.has(fpKey(q.singer)) ? "⚡ " : "") + (clean(q.singer) || "someone"));
     const nx = el("div", "line-next"); nx.append(document.createTextNode("Next up: "), el("b", null, names[0]));
     if (names.length > 1) nx.append(document.createTextNode(", then " + names.slice(1).join(", ") + (items.length > 3 ? " and " + (items.length - 3) + " more" : "")));
     box.append(nx);
@@ -1218,7 +1253,15 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     const mine = [getMe(), key(clean(store.get(NAME_KEY) || ""))].filter(Boolean);
     const at = mine.length ? items.findIndex((q) => mine.includes(key(clean(q.singer)))) : -1;
     if (at >= 0) box.append(el("div", "line-mine", at === 0 && starts[0] < 60 ? "🎤 You're up next, get ready!" : "🎟️ You're #" + (at + 1) + " in line · about " + waitLabel(starts[at]) + (endAt && now() + starts[at] > endAt ? " · that’s after karaoke ends, ask the host" : "")));
-    box.append(el("div", "line-note", "Wait times are estimates from song lengths. The host may shuffle the order."));
+    if (mineFp) box.append(fastPassState(mineFp));
+    // Fast pass: worth offering once there's a real wait, and not to whoever is already up next.
+    else if (fpOn && items.length >= 2 && !(at >= 0 && at < 2)) {
+      const b = el("button", "fp-btn"); b.type = "button";
+      const mid = el("span"); mid.append(el("b", null, at >= 0 ? "Skip ahead with a fast pass" : "Fast pass"), el("small", null, "Tip the host to move up the line"));
+      b.append(el("span", "fe", "⚡"), mid, el("span", "fa", "$" + money(tips.fastpass)));
+      b.onclick = openFastPass; box.append(b);
+    }
+    box.append(el("div", "line-note", "Wait times are estimates from song lengths. The order of the line can change at the KJ’s discretion."));
   }
 
   // ---------- dares, watch, unlocked badges ----------
@@ -1897,6 +1940,8 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       tips = data.tips || null; $("tip-btn").hidden = !(tips && tipWays().length && tips.menu && tips.menu.length);
       lastSyncTs = Number(data.last_sync_ts) || 0;
       queue = data.queue || null;
+      fastPasses = Array.isArray(data.fast_passes) ? data.fast_passes : [];
+      checkMyFastPass();
       if (data.avatars) avatars = mergeAvatars(data.avatars);
       if (data.styled) styled = data.styled;
       // Only rebuild everything (awards, bingo, records, Songbook...) when the songs, reactions, applause scores
@@ -2259,6 +2304,76 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     tipDlg.showModal();
   });
   $("tip-close").addEventListener("click", () => tipDlg.close());
+
+  // ---------- fast pass: tip the host to move up the line ----------
+  // Website only (never in the phone app, Apple 3.1.1). Nothing moves on its own: the phone tells the host
+  // (/api/fastpass), the person pays in the host's payment app, the host checks it came in, taps Paid on /host
+  // and moves the slip in the karaoke app. Then the name gets a ⚡ on the line here and on the TV.
+  const FP_KEY = "oke-fastpass", fpDlg = $("fp-dlg");
+  const fpKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  function fastPassOn() { return !window.OKE_APP && !!(tips && Number(tips.fastpass) > 0 && tipWays().length); }
+  // This phone's pass tonight: {id, name, at, status}. Dropped after 12 hours.
+  function myFastPass() {
+    let m = null; try { m = JSON.parse(store.get(FP_KEY) || "null"); } catch (e) {}
+    if (!m || !m.id || Date.now() / 1000 - m.at > 12 * 3600) return null;
+    if (fastPasses.some((f) => fpKey(f.singer) === fpKey(m.name))) m.status = "paid";
+    return m;
+  }
+  function saveMyFastPass(m) { store.set(FP_KEY, m ? JSON.stringify(m) : ""); }
+  let fpChecked = 0;
+  async function checkMyFastPass() {
+    const m = myFastPass();
+    if (!m || m.status === "paid" || Date.now() - fpChecked < 25000) return;
+    fpChecked = Date.now();
+    try {
+      const r = await fetch("api/fastpass?ids=" + m.id, { cache: "no-store" });
+      const p = r.ok ? ((await r.json()).passes || [])[0] : null;
+      if (p && p.status !== m.status) { m.status = p.status; saveMyFastPass(m); renderTonight(); }
+    } catch (e) {}
+  }
+  function fastPassState(m) {
+    const t = m.status === "paid" ? "⚡ Fast pass confirmed for " + m.name + "! The KJ will move you up the line."
+      : m.status === "no" ? "⚡ The host couldn’t find your tip for " + m.name + ". Ask at the booth."
+      : "⚡ Fast pass asked for " + m.name + ". Once the host sees your tip, they’ll move you up.";
+    return el("div", "fp-state", t);
+  }
+  let fpWay = null;
+  function renderFastPass() {
+    const ways = tipWays();
+    if (!ways.includes(fpWay)) fpWay = ways.includes(tipWay) ? tipWay : ways[0];
+    const w = TIP_WAYS[fpWay], h = tips[fpWay], name = clean($("fp-name").value), amt = Number(tips.fastpass);
+    $("fp-way").hidden = ways.length < 2;
+    $("fp-way").replaceChildren(...ways.map((k) => { const b = el("button", null, TIP_WAYS[k].name); b.type = "button"; b.setAttribute("aria-pressed", String(k === fpWay));
+      b.onclick = () => { fpWay = k; renderFastPass(); }; return b; }));
+    $("fp-zelle").hidden = fpWay !== "zelle"; $("fp-zelle-to").textContent = fpWay === "zelle" ? h : "";
+    const pay = $("fp-pay");
+    if (w.link) { pay.href = w.link(h, { emoji: "⚡", label: "Fast pass for " + (name || "me"), amount: amt }); pay.textContent = "Pay $" + money(amt) + " with " + w.name; }
+    else { pay.href = "#"; pay.textContent = "Copy Zelle and ask for it ($" + money(amt) + ")"; }
+  }
+  function openFastPass() {
+    if (!fastPassOn()) return;
+    const m = myFastPass();
+    $("fp-name").value = (m && m.name) || tipName();
+    $("fp-err").textContent = ""; renderFastPass(); fpDlg.showModal();
+  }
+  $("fp-name").addEventListener("input", () => { $("fp-err").textContent = ""; renderFastPass(); });
+  $("fp-pay").addEventListener("click", (ev) => {
+    const name = clean($("fp-name").value);
+    if (!name) { ev.preventDefault(); $("fp-err").textContent = "Type the name on your slip first."; $("fp-name").focus(); return; }
+    renderFastPass(); // the link carries the latest name
+    if (fpWay === "zelle") { ev.preventDefault(); try { navigator.clipboard.writeText(tips.zelle); } catch (e) {} $("fp-err").textContent = "Copied " + tips.zelle + ". Zelle $" + money(tips.fastpass) + " from your bank’s app with the memo “Fast pass for " + name + "”."; }
+    // Tell the host without holding up the payment app opening (keepalive survives the page going to the background).
+    fetch("api/fastpass", { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ name, dev: deviceId }) })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) { $("fp-err").textContent = d.error || "Couldn’t tell the host. Show them your tip at the booth."; return; }
+        saveMyFastPass({ id: d.id, name, at: Math.floor(Date.now() / 1000), status: "waiting" }); fpChecked = Date.now();
+        if (fpWay !== "zelle") $("fp-err").textContent = "Sent to the host ✓ Finish the tip in " + TIP_WAYS[fpWay].name + ".";
+        renderTonight();
+      }).catch(() => { $("fp-err").textContent = "Couldn’t reach the site. Show the host your tip at the booth."; });
+  });
+  $("fp-close").addEventListener("click", () => fpDlg.close());
+  fpDlg.addEventListener("click", (e) => { if (e.target === fpDlg) fpDlg.close(); });
 
   // ---------- how to sign up (paper slips at the KJ booth) ----------
   // Each bar can set its own steps in venues.js (signup_steps); these are the paper-slip default.
