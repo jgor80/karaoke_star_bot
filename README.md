@@ -135,7 +135,8 @@ The crowd meter scores the applause at the end of each song: the song's last min
 15 seconds after it stops. During the last minute the cheering has to rise above the song's own
 loud parts (so a big final chorus mostly doesn't count); after it stops, above the room's normal
 chatter. Each song gets 0-10 from the bigger of the two: how far the loudest 3 seconds rose, 2.5 dB per point.
-A song the host cuts short is scored from when the next song starts.
+The next song's intro never counts. KaraFun only records when songs start, so for a song the host cuts
+short the mic finds when the music stopped (the first 3 seconds in a row clearly quieter than the song).
 The scores show next to songs on the phone site, as a banner on `/tv` about a minute after
 each song, and as the "Loudest Crowd" award (and "Biggest Ovation of the Season").
 Mics aren't calibrated, so it's a relative score: keep the mic in the same spot each week.
