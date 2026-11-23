@@ -211,23 +211,21 @@
     { id: "table", text: "Get your whole table up there", test: (p) => isTable(p.singer) || (p.singer || "").split(SPLIT).filter(Boolean).length >= 3 },
   ];
   // Theme nights: one of that night's 3 dares is swapped for the theme dare (keyed "venue:night", venue-local date).
-  // GTA 6 radio + trailer songs (title, artist-fragment), from the in-game station lists after the Nov 19 2026 launch.
+  // GTA 6 songs Rockstar itself confirms: the official trailer songs plus "Grand Theft Auto VI: The Album"
+  // (rockstargames.com/VI/music). [title, artist-fragment]; songbook copies may be credited to "Grand Theft Auto VI".
   const GTA6 = [
-    ["love is a long road", "petty"], ["hot together", "pointer"], ["everybody have fun tonight", "wang chung"],
-    ["in the air tonight", "collins"], ["against all odds", "collins"], ["take me home tonight", "money"],
-    ["jack and diane", "mellencamp"], ["panama", "van halen"], ["nothin' but a good time", "poison"], ["runaway", "bon jovi"],
-    ["cherry pie", "warrant"], ["dr. feelgood", "tley"], ["i want a new drug", "huey"], ["lawyers, guns and money", "zevon"],
-    ["talking in your sleep", "romantics"], ["cocaine", "clapton"], ["we don't need another hero", "tina turner"],
-    ["listen to your heart", "roxette"], ["angel of the morning", "newton"], ["stop draggin' my heart around", "nicks"],
-    ["lips like sugar", "bunnymen"], ["steppin' out", "joe jackson"], ["loverboy", "billy ocean"], ["rhinestone cowboy", "campbell"],
-    ["master of puppets", "metallica"], ["sober", "tool"], ["good 4 u", "rodrigo"], ["hot to go", "chappell"],
-    ["pumped up kicks", "foster"], ["electric feel", "mgmt"], ["gimme more", "britney"], ["houdini", "dua lipa"],
-    ["lean on", "major lazer"], ["sports car", "tate"], ["only girl", "rihanna"], ["the boy is mine", "brandy"],
-    ["big pimpin", "jay"], ["a milli", "lil wayne"], ["buy u a drank", "t-pain"], ["mi tierra", "estefan"],
+    ["love is a long road", "petty"], ["hot together", "pointer"],
+    ["starting from zero", "justice"], ["that's it", "yung lean"], ["ahh yea", "carti"], ["rhyno", "travis scott"],
+    ["sexy magic", "ca7riel"], ["flower in a hurricane", "justice"], ["go easy", "dua lipa"], ["last thing you need", "wallen"],
+    ["suzuki", "fuerza regida"], ["macacoa 2000", "rauw"], ["dance with me", "boogie"], ["bigger", "burna"],
+    ["count up", "gunna"], ["let's rock", "kodak"], ["wakin up flex", "young thug"], ["ikyfl", "grizzley"], ["tf?", "toliver"],
+    ["don't chart", "cardi"], ["power trip", "jennie"], ["blood in your eyes", "tove lo"], ["fast emotion", "larsson"],
+    ["sweet like candy", "cabello"], ["only one", "fcukers"], ["all again", "rose gray"], ["crazy for you", "lana del rey"],
+    ["no me busques", "apollo"], ["bright lights, big city", "keith richards"], ["overtown lights", "stanley clarke"],
   ];
-  const isGta6 = (p) => { const t = key(p.title), a = key(p.artist); return GTA6.some(([tt, aa]) => t.startsWith(tt) && a.includes(aa)); };
+  const isGta6 = (p) => { const t = key(p.title), a = key(p.artist); return GTA6.some(([tt, aa]) => t.startsWith(tt) && (a.includes(aa) || a.includes("grand theft auto"))); };
   const THEMES = {
-    "wbl:2026-11-22": { id: "gta6", text: "Sing a song off the GTA 6 radio 🎮", test: isGta6 },
+    "wbl:2026-11-22": { id: "gta6", text: "Sing a song from GTA 6 (trailer or official album) 🎮", test: isGta6 },
   };
   function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
   function daresFor(night) {
