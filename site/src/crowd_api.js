@@ -8,6 +8,9 @@
 //   - the last minute: the loudest 3 seconds over the song's own loud level (its 75th percentile before
 //     the last minute), so cheering over the outro counts but a loud final chorus mostly doesn't;
 //   - the 15 seconds after: the loudest 3 seconds over the room's normal chatter (the quiet floor of the last 15 minutes).
+//     The next song's intro never counts (it gave the 2026-11-22 night's top score to a song's successor).
+// KaraFun only records when songs start, so for a song the host cut short the mic finds when the music stopped:
+// the first 3 seconds in a row clearly quieter than the song, in the minute before the next song.
 // That difference in dB is the song's crowd score. Mics aren't calibrated, so it's relative, not a true dB reading.
 //
 // POST /api/crowd {samples: [[unix ts, dBFS], ...]}  (header x-host-key)  -> {ok, saved}
@@ -34,7 +37,9 @@ function ensure(env) {
 export const CROWD = {
   tail: 60,         // listen to the song's last 60 seconds
   after: 15,        // and the 15 seconds after it stops
-  intoNext: 3,      // a few seconds into the next song's intro still count
+  stopDrop: 4,      // a cut song's music has stopped once 3 seconds in a row are 4 dB under its typical level
+  stopRun: 3,
+  lookback: 24 * 3600, // score songs from the last day (a night's scores can be redone by deleting them the next day)
   bodySkip: 20,     // the song's own level comes from 20s after it starts up to its last minute
   bodyPct: 0.75,    // ... its loud parts (75th percentile), so only cheering above the music counts
   minBody: 20,      // need 20 seconds of the song for that, or the last minute isn't scored on its own
@@ -51,17 +56,35 @@ const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const now = () => Math.floor(Date.now() / 1000);
 
-// The applause window for play p (followed by `next`, or null) -> {body, start, stop, end} or null if it
+// The applause window for play p (followed by `next`, or null) -> {body, start, stop, end, next, cut} or null if it
 // can't be placed yet. stop is when the music stopped: the song's length, or the next song's start if the
-// host cut it short. start..stop is the last minute, stop..end the seconds after; body is where the song's own level starts.
+// host cut it short (cut: scoreWindow then looks for the real stop in the samples). start..stop is the last
+// minute, stop..end the seconds after (never into the next song); body is where the song's own level starts.
 export function windowFor(p, next) {
   const full = p.length_s ? p.played_at + Number(p.length_s) : null;
-  const stop = full && next ? Math.min(full, next.played_at) : full || (next ? next.played_at : null);
+  const nx = next ? next.played_at : null;
+  const stop = full && nx ? Math.min(full, nx) : full || nx;
   if (!stop) return null;
-  const body = p.played_at + CROWD.bodySkip;
-  const start = Math.max(p.played_at, stop - CROWD.tail);
-  const end = next ? Math.max(stop + 1, Math.min(stop + CROWD.after, next.played_at + CROWD.intoNext)) : stop + CROWD.after;
-  return { body, start, stop, end };
+  return place(p.played_at, stop, nx, !full || (nx != null && nx < full));
+}
+function place(playedAt, stop, nx, cut) {
+  const start = Math.max(playedAt, stop - CROWD.tail);
+  const end = nx != null ? Math.max(stop, Math.min(stop + CROWD.after, nx)) : stop + CROWD.after;
+  return { body: playedAt + CROWD.bodySkip, playedAt, start, stop, end, next: nx, cut };
+}
+
+// For a cut song: the second the music stopped, from the samples (or null if the mic can't tell).
+export function findStop(samples, w) {
+  const body = samples.filter((s) => s.ts >= w.body && s.ts < w.next - CROWD.tail).map((s) => s.db).sort((a, b) => a - b);
+  if (body.length < CROWD.minBody) return null;
+  const quiet = pct(body, 0.5) - CROWD.stopDrop;
+  const xs = samples.filter((s) => s.ts >= Math.max(w.body, w.next - CROWD.tail) && s.ts < w.next);
+  for (let i = 0; i + CROWD.stopRun <= xs.length; i++) {
+    let ok = true;
+    for (let j = 0; j < CROWD.stopRun; j++) if (xs[i + j].db > quiet || (j && xs[i + j].ts !== xs[i].ts + j)) { ok = false; break; }
+    if (ok) return xs[i].ts - 1;
+  }
+  return null;
 }
 
 const r1 = (x) => Math.round(x * 10) / 10;
@@ -75,6 +98,7 @@ function loudest3(xs) {
 
 // samples: [{ts, db}] for one source, sorted by ts. -> {peak, base, over} or null if there's too little to go on.
 export function scoreWindow(samples, w) {
+  if (w.cut && w.next != null) { const st = findStop(samples, w); if (st) w = place(w.playedAt, st, w.next, false); }
   const inWin = samples.filter((s) => s.ts >= w.start && s.ts <= w.end);
   const pool = samples.filter((s) => s.ts >= w.start - CROWD.baseS && s.ts <= w.end).map((s) => s.db).sort((a, b) => a - b);
   if (inWin.length < CROWD.minWindow || pool.length < CROWD.minBase) return null;
@@ -97,7 +121,7 @@ export async function scoreCrowd(env, venue = DEFAULT_VENUE) {
   const t = now();
   const plays = (await env.DB.prepare(
     "SELECT p.uuid, p.played_at, p.length_s, s.uuid AS scored FROM plays p LEFT JOIN crowd_scores s ON s.uuid = p.uuid WHERE p.played_at > ? AND p.venue = ? ORDER BY p.played_at"
-  ).bind(t - 12 * 3600, venue.slug).all()).results;
+  ).bind(t - CROWD.lookback, venue.slug).all()).results;
   const todo = [];
   plays.forEach((p, i) => {
     if (p.scored) return;
