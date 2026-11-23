@@ -282,6 +282,22 @@ main { padding-block: 16px 24px; }
 .award .who { font-size: 20px; font-weight: 800; overflow-wrap: anywhere; line-height: 1.2; }
 .award .what { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .award .stat { font-size: 15px; font-weight: 700; color: var(--hot); }
+.award .lvl, .bk .me-lv { font-size: 14px; font-weight: 700; color: var(--gold); }
+/* badge and award levels: Bronze, Silver, Gold, Platinum, Diamond, Legend */
+.tier { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 2px; background: rgba(255,255,255,.12); color: var(--ink); }
+.tier.t1 { background: #6b3d1f; color: #f3c89c; } .tier.t2 { background: #4a5260; color: #e6edf5; } .tier.t3 { background: #6a5313; color: #ffe08a; }
+.tier.t4 { background: #2f5a63; color: #c9f4ff; } .tier.t5 { background: #24457a; color: #bfe0ff; } .tier.t6 { background: linear-gradient(90deg, #ff5c9d, #f5b84a); color: #1b0b20; }
+.trophies { display: flex; flex-wrap: wrap; gap: 6px; }
+/* level-up alert (the pinned "That's me" singer) */
+.lvup { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; z-index: 60; width: min(92vw, 420px);
+  background: linear-gradient(180deg, #3a1446, #1d0c24); border: 2px solid var(--gold); border-radius: 18px; padding: 12px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.55);
+  transition: opacity .3s, transform .3s; display: grid; gap: 6px; cursor: pointer; }
+.lvup.on { opacity: 1; transform: translate(-50%, 0); }
+.lvup .k { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.lvup .it { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; align-items: center; }
+.lvup .it .i { font-size: 30px; grid-row: span 2; }
+.lvup .it b { font-size: 17px; } .lvup .it small { color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .lvup { transition: none; } }
 .award.headline { border-color: var(--gold); background: linear-gradient(135deg, var(--win), var(--panel) 75%); grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; }
 .award.headline .ic { grid-row: 1 / span 5; font-size: 52px; align-self: center; }
 .award.headline .who { font-size: 26px; }
@@ -1086,8 +1102,12 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   // ---------- awards (shared with "The Mics" and /tv, see awards.js) ----------
   let reax = OkeAwards.reactionIndex(null); // crowd reactions from /api/plays, see reactions_api.js
   const awardsFor = (rows) => OkeAwards.awardsFor(rows, personTotals, reax);
+  // Award wins add up across nights into levels (awards.js trophyCase). Rebuilt on each load.
+  let trophies = null;
+  // A small colored tier tag: Bronze, Silver, Gold, Platinum, Diamond, Legend (6+).
+  const tierTag = (lv, name) => el("span", "tier t" + Math.min(6, Math.max(1, lv)), name);
   const tallyFor = OkeAwards.tallyFor;
-  function renderAwardCards(box, aw) {
+  function renderAwardCards(box, aw, night) {
     box.replaceChildren();
     if (!aw.length) { box.append(el("div", "card muted", "Awards show up once a few songs are in.")); return; }
     aw.slice().sort((a, b) => !!b.headline - !!a.headline).forEach((a) => { const c = el("article", "award" + (a.headline ? " headline" : ""));
@@ -1097,7 +1117,11 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       if (h) c.append(el("div", "how", h));
       c.append(el("div", "who", a.who));
       if (OkeAwards.whatOf(a)) c.append(el("div", "what", OkeAwards.whatOf(a)));
-      c.append(el("div", "stat", a.stat)); box.append(c); });
+      c.append(el("div", "stat", a.stat));
+      // How many times they've won it, as of that night: "3rd win · Silver"
+      const wl = night && trophies ? OkeAwards.winLine(trophies.at(a.who, a.id, night)) : "";
+      if (wl) c.append(el("div", "lvl", "🏆 " + wl));
+      box.append(c); });
   }
   function renderTally(box, t) {
     box.replaceChildren();
@@ -1201,7 +1225,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     renderFun(n, tonight);
     renderMe(n, tonight);
     renderRemind(live);
-    renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)).slice(0, 4).map((a) => ({ ...a, headline: false })));
+    renderAwardCards($("tonight-awards"), awardsFor(rows).filter((a) => ["mvp", "broken", "marathon", "time", "squad", "dejavu", "artist", "crowd", "rx-tomato", "rx-hype", "rx-micdrop"].includes(a.id)).slice(0, 4).map((a) => ({ ...a, headline: false })), n.night);
   }
 
   // The hero's background is its own cover, blurred, once that cover has loaded.
@@ -1287,13 +1311,14 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     }
     const un = KaraokeFun.unlockedOn(people, n.night);
     $("unlocked-sec").hidden = !un.length;
-    $("unlocked-sec").querySelector("h2").textContent = tonight ? "Badges unlocked tonight" : "Badges unlocked · " + nightLabel(n.night);
+    $("unlocked-sec").querySelector("h2").textContent = tonight ? "Badges and level-ups tonight" : "Badges and level-ups · " + nightLabel(n.night);
     const box2 = $("unlocked"); box2.replaceChildren();
     const groups = new Map();
-    un.forEach((u) => { const g = groups.get(u.badge.id) || { b: u.badge, who: [] }; if (!g.who.includes(u.who)) g.who.push(u.who); groups.set(u.badge.id, g); });
+    // One card per badge and level ("Regular · Gold"), with everyone who reached it.
+    un.forEach((u) => { const gk = u.badge.id + ":" + u.badge.level; const g = groups.get(gk) || { b: u.badge, who: [] }; if (!g.who.includes(u.who)) g.who.push(u.who); groups.set(gk, g); });
     [...groups.values()].slice(0, 8).forEach((g) => { const c = el("div", "ub");
       const ic = el("span", "ic", icon(g.b.id)); ic.setAttribute("aria-hidden", "true");
-      const nm = el("div", "nm", g.b.name); nm.append(el("small", null, g.b.desc));
+      const nm = el("div", "nm", (g.b.up ? "⬆ " : "") + g.b.name); if (g.b.tier) nm.append(tierTag(g.b.level, g.b.tier)); nm.append(el("small", null, g.b.desc));
       c.append(ic, nm, el("div", "hd", g.who.slice(0, 5).join(", ") + (g.who.length > 5 ? " and " + (g.who.length - 5) + " more" : ""))); box2.append(c); });
   }
 
@@ -1313,7 +1338,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     const n = nights.find((x) => x.night === awardsNight); if (!n) return;
     $("awards-h").textContent = isTonightNight(n) ? "Tonight's winners so far" : "Winners, " + nightLabel(n.night, true);
     const t = tallyFor(n.rows), aw = awardsFor(n.rows);
-    renderAwardCards($("awards"), aw);
+    renderAwardCards($("awards"), aw, n.night);
     drawCard(n, t, aw);
     if (window.KaraokeFun) { renderAwardCards($("season-awards"), KaraokeFun.seasonAwards(plays, people, OkeAwards.isHost).concat(OkeAwards.reactionAwards(plays, reax, true))); $("season-note").textContent = "Across all " + plural(nights.length, "night") + " so far."; }
   }
@@ -1485,7 +1510,12 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
       }
       if (person && draft) { const db = el("button", "act ghost me-btn", "🎯 Draft " + e.name + " to sing…"); db.type = "button"; db.addEventListener("click", () => draft.open(e.name)); extra.push(db); }
       const earned = el("div", "badges");
-      if (person) person.badges.filter((x) => x.id !== "debut").forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.append(el("small", null, x.desc)); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
+      // Award wins across all nights, with their level ("Mic Hog ×4 · Silver")
+      const tro = el("div", "trophies");
+      if (trophies) trophies.of(key(e.name)).forEach((t) => { const bd = el("span", "badge", icon(t.id) + " " + t.label + (t.wins > 1 ? " ×" + t.wins : "")); bd.append(tierTag(t.level, t.tier));
+        bd.append(el("small", null, plural(t.wins, "win") + " · next level at " + t.next)); tro.append(bd); });
+      if (tro.childNodes.length) extra.unshift(el("div", "me-kicker", "Trophies"), tro);
+      if (person) person.badges.filter((x) => x.id !== "debut").sort((a, b) => b.level - a.level).forEach((x) => { const bd = el("span", "badge earned", icon(x.id) + " " + x.name); bd.append(tierTag(x.level, x.tier)); bd.append(el("small", null, x.desc + (x.next ? " · next level at " + x.next + " " + x.unit : ""))); bd.title = x.desc + " (" + nightLabel(x.at.night) + ")"; earned.append(bd); });
       const ol = el("ol");
       e.rows.slice().reverse().forEach((p) => { const li = el("li");
         li.append(el("span", "time", nightLabel(p.night).replace(/^\w+, /, "") + " " + clock(p.played_at).replace(" ", "").toLowerCase()));
@@ -1545,16 +1575,20 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
   function renderBadgeBook() {
     if (!window.KaraokeFun) return;
     const bb = KaraokeFun.badgeBook(people);
-    fillTop($("collectors"), bb.collectors, (e) => e.name, () => "", (e) => plural(e.n, "badge"), (e) => e.name);
+    fillTop($("collectors"), bb.collectors, (e) => e.name, (e) => plural(e.badges, "badge"), (e) => plural(e.n, "level"), (e) => e.name);
     const meE = getMe() && people.get(getMe()), mine = new Set(meE ? meE.badges.map((x) => x.id) : []);
     $("collectors").querySelectorAll("li").forEach((li, i) => { if (meE && bb.collectors[i] && bb.collectors[i].name === meE.name) li.classList.add("mine"); });
     $("book-aside").textContent = meE ? "you have " + bb.book.filter((b) => mine.has(b.id)).length + " of " + bb.book.length : bb.book.length + " badges";
-    $("book-note").textContent = meE ? "Gold ones are yours. Rarest first." : "Every badge you can earn, rarest first. Pin your name in Singers to see which ones you have.";
+    $("book-note").textContent = "Every badge levels up the more you do it: Bronze, Silver, Gold, Platinum, Diamond, then Legend and beyond. " +
+      (meE ? "Gold ones are yours. Rarest first." : "Rarest first. Pin your name in Singers to see which ones you have.");
     const box = $("book"); box.replaceChildren();
     bb.book.forEach((b) => { const c = el("div", "bk" + (b.holders.length ? "" : " none") + (mine.has(b.id) ? " got" : ""));
       const ic = el("span", "ic", icon(b.id)); ic.setAttribute("aria-hidden", "true");
-      c.append(ic, el("span", "nm", b.name), el("span", "ds", b.desc), el("span", "pc", b.holders.length ? plural(b.holders.length, "singer") + " · " + b.pct + "%" : "Unclaimed: be the first"),
-        el("span", "hd", b.holders.length ? b.holders.slice(0, 4).join(", ") + (b.holders.length > 4 ? " +" + (b.holders.length - 4) : "") : ""));
+      c.append(ic, el("span", "nm", b.name), el("span", "ds", b.desc), el("span", "pc", b.holders.length ? plural(b.holders.length, "singer") + " · " + b.pct + "%" : "Unclaimed: be the first"));
+      const myB = meE && meE.badges.find((x) => x.id === b.id);
+      if (myB) { const ml = el("span", "me-lv", "You: "); ml.append(tierTag(myB.level, myB.tier)); if (myB.next) ml.append(document.createTextNode(" " + myB.value + "/" + myB.next + " to the next")); c.append(ml); }
+      // Holders, highest level first: "Val (Gold), Sam (Silver)…"
+      c.append(el("span", "hd", b.top.length ? b.top.slice(0, 4).map((x) => x.name + " (" + x.tier + ")").join(", ") + (b.top.length > 4 ? " +" + (b.top.length - 4) : "") : ""));
       box.append(c); });
   }
 
@@ -1580,14 +1614,17 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     const chip = (cls, ic, text, title, label, why) => { if (labels.has(label || text)) return; labels.add(label || text); const c = el("span", "win " + cls); const i = el("span", "i", ic); i.setAttribute("aria-hidden", "true");
       const t = el("span", "t", text); if (why) t.append(el("small", null, why)); c.append(i, t); if (title) c.title = title; chips.push(c); };
     const pk = window.KaraokeFun ? KaraokeFun.personKey(last.singer) : null, e = pk && people.get(pk);
-    if (e) e.badges.forEach((b) => { if (b.at === last && b.id !== "debut") { chip("w-new", icon(b.id), "New: " + b.name, b.desc, b.name, b.desc); seen.add(b.id); } });
+    // Badges this very song earned or leveled up (the highest level it reached)
+    if (e) e.badges.forEach((b) => { if (b.id === "debut") return; const lv = b.ups.lastIndexOf(last) + 1; if (!lv) return;
+      const tier = KaraokeFun.tierName(lv);
+      chip("w-new", icon(b.id), (lv > 1 ? "Level up: " : "New: ") + b.name + " · " + tier, b.desc, b.name, lv === b.level ? b.desc : tier); seen.add(b.id); });
     if (e && e.rows.length === 1 && e.rows[0] === last) chip("w-new", "🎤", "First song here!", "Welcome to Oke Night");
     // "Last Call" is whoever sang last, so it means nothing while the night is still going.
     const aw = awardsFor(n.rows).filter((a) => sameName(a.who, who) && !(tonight && a.id === "last"));
     aw.filter((a) => a.what === line).forEach((a) => chip("w-award", icon(a.id), a.label, a.stat, a.label, OkeAwards.how(a.id)));
     aw.filter((a) => a.what !== line).forEach((a) => chip("w-award", icon(a.id), a.label + (tonight ? " tonight" : ""), a.what + " · " + a.stat, a.label, OkeAwards.how(a.id)));
     if (last.title) pastSongAwards(last).slice(-2).forEach((x) => chip("w-award w-past", icon(x.a.id), x.a.label + " · " + nightLabel(x.night), "Won with this song before", x.a.label + x.night, OkeAwards.how(x.a.id)));
-    if (e) e.badges.filter((b) => b.id !== "debut" && !seen.has(b.id) && b.at !== last).reverse().forEach((b) => chip("", icon(b.id), b.name, b.desc, b.name, b.desc));
+    if (e) e.badges.filter((b) => b.id !== "debut" && !seen.has(b.id)).sort((a, b) => b.level - a.level).forEach((b) => chip("", icon(b.id), b.label, b.desc, b.name, b.desc));
     // Keep the box short: the 4 most interesting chips (new badges, then awards, then held badges), and a count for the rest.
     const MAX = 4, extra = chips.length - MAX;
     box.hidden = !chips.length; box.append(...chips.slice(0, extra > 1 ? MAX : MAX + 1));
@@ -1775,7 +1812,7 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     top.append(who, nb); box.append(top);
     const row = el("div", "me-row");
     [[tonight ? "Tonight" : "That night", plural(mine.length, "song").replace(" songs", "").replace(" song", "")],
-     ["Rank", meHost ? "Host" : rank ? "#" + rank : "—"], ["Badges", String(e.badges.filter((b) => b.id !== "debut").length)]].forEach(([l, v]) => {
+     ["Rank", meHost ? "Host" : rank ? "#" + rank : "—"], ["Badge levels", String(KaraokeFun.levelsOf(e))]].forEach(([l, v]) => {
       const d = el("div"); d.append(el("strong", null, v), document.createTextNode(l)); row.append(d); });
     box.append(row);
     const st = KaraokeFun.streakOf(e, plays);
@@ -1785,7 +1822,10 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     if (myBands.length) box.append(bandList(myBands, "Your favorite bands"));
     const prog = KaraokeFun.progress(e, plays).slice(0, 2);
     prog.forEach((x) => { const r = el("div", "prog"); const bar = el("span", "pb"); const i = el("i"); i.style.width = Math.round(100 * x.have / x.need) + "%"; bar.append(i);
-      r.append(el("span", null, icon(x.id) + " Next: " + x.name + " · " + x.desc), el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
+      const t = el("span", null, icon(x.id) + " Next: " + x.name); t.append(tierTag(x.level, x.tier), document.createTextNode(" " + x.desc));
+      r.append(t, el("span", "n", x.have + "/" + x.need), bar); box.append(r); });
+    const tw = trophies ? trophies.total(k) : 0;
+    if (tw) { const best = trophies.of(k)[0]; box.append(el("div", "me-stats", "🏆 " + plural(tw, "award") + " won here · most: " + best.label + " ×" + best.wins + " (" + best.tier + ")")); }
   }
 
   // ---------- Sunday reminder + hot streaks ----------
@@ -1872,7 +1912,47 @@ button.tip-item { width: 100%; font: inherit; text-align: left; cursor: pointer;
     const liveNight = last && now() - last.played_at < TONIGHT_WINDOW_S ? last.night : null;
     reax = OkeAwards.reactionIndex(data);
     people = window.KaraokeFun ? KaraokeFun.badgesAll(plays, liveNight, reax.bySong) : new Map();
+    trophies = OkeAwards.trophyCase(nights, awardsFor, window.KaraokeFun ? people : null, liveNight);
     renderAll();
+    checkLevelUps();
+  }
+
+  // ---------- level-up alerts ----------
+  // When the singer pinned on this phone ("That's me") earns a badge, levels one up or wins an award, a card pops up.
+  // The levels last seen are kept on the phone, so it also catches up on what happened while the page was closed.
+  // The first look at a name just remembers where they are. Each level is celebrated once: awards that change
+  // hands during the night (a longer song takes Marathon, say) don't pop up again when they come back.
+  const LV_KEY = "oke-levels";
+  function checkLevelUps() {
+    const k = getMe(), e = k && window.KaraokeFun && people.get(k);
+    if (!e) return;
+    const sk = LV_KEY + ":" + VENUE.slug + ":" + k;
+    let seen = null; try { seen = JSON.parse(localStorage.getItem(sk) || "null"); } catch (x) {}
+    const nowLv = {}, news = [];
+    e.badges.forEach((b) => { if (b.id !== "debut") nowLv["b:" + b.id] = b.level; });
+    (trophies ? trophies.of(k) : []).forEach((t) => { nowLv["a:" + t.id] = t.wins; });
+    if (seen) {
+      e.badges.forEach((b) => { const was = seen["b:" + b.id] || 0; if (b.id === "debut" || b.level <= was) return;
+        news.push({ i: icon(b.id), t: (was ? "Level up! " : "New badge: ") + b.name + " · " + b.tier, s: b.desc + (b.next ? ". Next level at " + b.next + " " + b.unit + "." : "") }); });
+      (trophies ? trophies.of(k) : []).forEach((t) => { const was = seen["a:" + t.id] || 0; if (t.wins <= was) return;
+        const up = t.level > OkeAwards.winLevel(was);
+        news.push({ i: icon(t.id), t: (t.wins > 1 ? "You won " + t.label + " again!" : "You won " + t.label + "!"), s: OkeAwards.ordinal(t.wins) + " win" + (up ? " · up to " + t.tier : " · " + t.tier) + "." + (OkeAwards.how(t.id) ? " " + OkeAwards.how(t.id) + "." : "") }); });
+    }
+    const keep = { ...(seen || {}) }; Object.entries(nowLv).forEach(([x, v]) => { keep[x] = Math.max(keep[x] || 0, v); });
+    try { localStorage.setItem(sk, JSON.stringify(keep)); } catch (x) {}
+    if (news.length) showLevelUps(news);
+  }
+  let lvT = 0;
+  function showLevelUps(news) {
+    let box = $("lvup");
+    if (!box) { box = el("div", "lvup"); box.id = "lvup"; box.setAttribute("role", "status"); box.setAttribute("aria-live", "polite");
+      box.addEventListener("click", () => { box.classList.remove("on"); }); document.body.append(box); }
+    box.replaceChildren(el("div", "k", news.length > 1 ? "🎉 " + news.length + " new for you" : "🎉 Nice one"));
+    news.slice(0, 3).forEach((x) => { const it = el("div", "it"); const i = el("span", "i", x.i); i.setAttribute("aria-hidden", "true"); it.append(i, el("b", null, x.t), el("small", null, x.s)); box.append(it); });
+    if (news.length > 3) box.append(el("small", null, "+" + (news.length - 3) + " more on your profile in Singers"));
+    requestAnimationFrame(() => box.classList.add("on"));
+    try { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); } catch (x) {}
+    clearTimeout(lvT); lvT = setTimeout(() => box.classList.remove("on"), 9000);
   }
   // Songbook: song catalog search + "my list" (songs.js).
   const songbook = window.OkeSongs ? OkeSongs.mount({

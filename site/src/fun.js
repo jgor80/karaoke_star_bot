@@ -100,43 +100,79 @@
   const COLOR = /\b(red|blue|black|white|green|pink|gold|golden|purple|yellow|silver|orange)\b/i;
 
   // ---------- badges ----------
-  // Each badge looks at one person's rows (solo and group songs) plus the whole history.
-  // test(rows, i, ctx) is called after each of that person's songs; the first true call earns the badge at rows[i].
+  // Every badge but Debut keeps leveling up, so a weekly regular still has something to chase after a year or more.
+  // A ladder lists the count needed for levels 1, 2, 3...; past its end each new level needs `step` more, forever.
+  // Levels 1-5 are Bronze, Silver, Gold, Platinum, Diamond; 6 is Legend, then Legend 2, Legend 3...
+  // Tuned for one karaoke night a week: Silver in a couple of months, Diamond around 9 months, Legend at about a year.
+  // The two "collect them all" badges (decades, genres) top out at Legend once you've sung nearly all of them.
+  const TIERS = ["Bronze", "Silver", "Gold", "Platinum", "Diamond"];
+  const tierName = (lv) => (lv <= 0 ? "" : lv <= 5 ? TIERS[lv - 1] : "Legend" + (lv > 6 ? " " + (lv - 5) : ""));
+  const LADDERS = {
+    once:    { at: [1], step: 0 },
+    nights:  { at: [3, 8, 16, 26, 40, 52], step: 13 },    // nights sung: Legend after a year of Sundays, then one level a quarter
+    streak:  { at: [3, 6, 10, 16, 26, 52], step: 13 },    // weeks in a row
+    songs:   { at: [10, 25, 50, 80, 120, 160], step: 40 },
+    rare:    { at: [1, 3, 6, 10, 15, 25], step: 10 },     // things that happen now and then (an oldie, a 6-minute song, opening the night)
+    often:   { at: [1, 5, 10, 20, 35, 50], step: 15 },    // duets
+    genre:   { at: [2, 5, 10, 18, 28, 40], step: 12 },
+    artist:  { at: [3, 5, 8, 12, 18, 25], step: 8 },
+    repeat:  { at: [2, 3, 5, 8, 12, 18], step: 6 },       // the same song on N nights
+    decades: { at: [4, 5, 6, 7, 8, 9], step: 0 },
+    genres:  { at: [5, 7, 9, 11, 13, 15], step: 0 },
+  };
+  const needFor = (ld, lv) => (lv <= ld.at.length ? ld.at[lv - 1] : ld.step ? ld.at[ld.at.length - 1] + (lv - ld.at.length) * ld.step : Infinity);
+  const levelOf = (ld, v) => { let lv = 0; while (v >= needFor(ld, lv + 1)) lv++; return lv; };
+  // Trackers: made fresh for each person, then called after each of their songs (rows r, index i) with the
+  // running value so far. count(hit) counts songs where hit() is true; distinct(f) counts different values of f.
+  const count = (hit) => () => { let n = 0; return (r, i, ctx) => (n += hit(r, i, ctx) ? 1 : 0); };
+  const distinct = (f) => () => { const s = new Set(); return (r, i, ctx) => { f(r[i], ctx).forEach((x) => s.add(x)); return s.size; }; };
+  // The biggest group: songs grouped by group(p), sized by how many different size(p) values (or songs) each has.
+  const biggest = (group, size) => () => { const m = new Map(); let best = 0; return (r, i) => { const g = group(r[i]); if (!g) return best;
+    const s = m.get(g) || new Set(); s.add(size ? size(r[i]) : i); m.set(g, s); return (best = Math.max(best, s.size)); }; };
+  // desc: [line for 1, line for n with {n}] or a single line with {n}
+  const B = (id, name, ld, unit, desc, track, extra) => ({ id, name, ld: LADDERS[ld], unit, desc, track, ...(extra || {}) });
   const BADGES = [
-    { id: "debut", name: "Debut", desc: "Sang a first song here", test: () => true },
-    { id: "regular", name: "Regular", desc: "Sang on 3 different nights", test: (r, i) => new Set(r.slice(0, i + 1).map((p) => p.night)).size >= 3 },
-    { id: "lifer", name: "Lifer", desc: "Sang on 6 different nights", test: (r, i) => new Set(r.slice(0, i + 1).map((p) => p.night)).size >= 6 },
-    { id: "streak3", name: "Three-Peat", desc: "Sang 3 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 3 },
-    { id: "streak5", name: "On a Roll", desc: "Sang 5 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 5 },
-    { id: "streak10", name: "Iron Lungs", desc: "Sang 10 karaoke weeks in a row", test: (r, i, ctx) => ctx.runAt(r, i) >= 10 },
-    { id: "hattrick", name: "Hat Trick", desc: "3 songs in one night", test: (r, i) => r.slice(0, i + 1).filter((p) => p.night === r[i].night).length >= 3 },
-    { id: "hopper", name: "Decade Hopper", desc: "Songs from 4 different decades", test: (r, i) => new Set(r.slice(0, i + 1).filter((p) => p.release_year).map((p) => decade(p.release_year))).size >= 4 },
-    { id: "timelord", name: "Time Lord", desc: "Songs from 6 different decades", test: (r, i) => new Set(r.slice(0, i + 1).filter((p) => p.release_year).map((p) => decade(p.release_year))).size >= 6 },
-    { id: "oldie", name: "Golden Oldie", desc: "Sang a song from before 1970", test: (r, i) => r[i].release_year && r[i].release_year < 1970 },
-    { id: "fresh", name: "Fresh Ears", desc: "Sang a song less than 2 years old", test: (r, i) => r[i].release_year && Number(r[i].night.slice(0, 4)) - r[i].release_year <= 1 },
-    { id: "marathon", name: "Marathoner", desc: "Finished a song over 6 minutes", test: (r, i) => r[i].length_s > 360 },
-    { id: "sprint", name: "Sprinter", desc: "Sang a song under 2 minutes", test: (r, i) => r[i].length_s && r[i].length_s < 120 },
-    { id: "duet", name: "Duet Partner", desc: "Shared the mic with someone", test: (r, i) => isGroup(r[i].singer) },
+    B("debut", "Debut", "once", "songs", ["Sang a first song here"], count(() => true)),
+    B("songs", "Setlist", "songs", "songs", ["{n} songs sung here"], count(() => true)),
+    B("regular", "Regular", "nights", "nights", ["Sang on {n} different nights"], distinct((p) => [p.night])),
+    B("streak3", "Hot Streak", "streak", "weeks in a row", ["Sang {n} karaoke weeks in a row"], () => { const mine = new Set(); let best = 0;
+      return (r, i, ctx) => { const w = weekOf(r[i].night); mine.add(w); return (best = Math.max(best, runEndingAt(w, mine, ctx.weeks))); }; }),
+    B("hattrick", "Hat Trick", "rare", "nights with 3+ songs", ["3 songs in one night", "3+ songs on {n} different nights"], count((r, i) => {
+      let n = 0; for (let j = i; j >= 0 && r[j].night === r[i].night; j--) n++; return n === 3; })),
+    B("hopper", "Decade Hopper", "decades", "decades", ["Songs from {n} different decades"], distinct((p) => (p.release_year ? [decade(p.release_year)] : []))),
+    B("oldie", "Golden Oldie", "rare", "songs from before 1970", ["Sang a song from before 1970", "{n} songs from before 1970"], count((r, i) => r[i].release_year && r[i].release_year < 1970)),
+    B("fresh", "Fresh Ears", "rare", "brand-new songs", ["Sang a song less than 2 years old", "{n} songs less than 2 years old"], count((r, i) => r[i].release_year && Number(r[i].night.slice(0, 4)) - r[i].release_year <= 1)),
+    B("marathon", "Marathoner", "rare", "songs over 6 minutes", ["Finished a song over 6 minutes", "Finished {n} songs over 6 minutes"], count((r, i) => r[i].length_s > 360)),
+    B("sprint", "Sprinter", "rare", "songs under 2 minutes", ["Sang a song under 2 minutes", "{n} songs under 2 minutes"], count((r, i) => r[i].length_s && r[i].length_s < 120)),
+    B("duet", "Duet Partner", "often", "duets", ["Shared the mic with someone", "Shared the mic {n} times"], count((r, i) => isGroup(r[i].singer))),
     // Brought someone new up: a group song that was someone else's first song here (and not yours).
-    { id: "plusone", name: "Plus One", desc: "Got a first-timer up on the mic with you", test: (r, i, ctx) => i > 0 && isGroup(r[i].singer) && ctx.debutRows.has(r[i]) },
-    { id: "broken", name: "Broken Record", desc: "Same song twice in one night", test: (r, i) => r[i].title && r.slice(0, i).some((p) => p.night === r[i].night && key(p.title) === key(r[i].title)) },
-    { id: "signature", name: "Signature Song", desc: "Same song on 2 different nights", test: (r, i) => r[i].title && r.slice(0, i).some((p) => p.night !== r[i].night && key(p.title) === key(r[i].title)) },
-    { id: "loyal", name: "Superfan", desc: "Same artist 3 times", test: (r, i) => r[i].artist && r.slice(0, i + 1).filter((p) => key(p.artist) === key(r[i].artist)).length >= 3 },
-    { id: "brit", name: "Britpop Lifer", desc: "2 Britpop songs (Oasis, Pulp, Blur…)", test: (r, i) => r.slice(0, i + 1).filter(art(BRIT)).length >= 2 },
-    { id: "punk", name: "Punk Points", desc: "2 punk songs", test: (r, i) => r.slice(0, i + 1).filter(art(PUNK)).length >= 2 },
-    // Genre badges: 2 songs in the genre. Genre Hopper: songs from 5 different genres.
-    ...GENRES.map((g) => ({ id: g.id, name: g.name, desc: "2 " + g.genre + " songs", genre: true, test: (r, i) => inGenre(g.id)(r[i]) && r.slice(0, i + 1).filter(inGenre(g.id)).length >= 2 })),
-    { id: "g-hopper", name: "Genre Hopper", desc: "Songs from 5 different genres", test: (r, i) => new Set(r.slice(0, i + 1).flatMap((p) => (p.title ? genresOf(p.artist) : []))).size >= 5 },
-    { id: "owl", name: "Night Owl", desc: "Sang after 1:30am", test: (r, i) => lateNight(r[i]) },
-    { id: "opener", name: "Opening Act", desc: "Sang the first song of a night", test: (r, i, ctx) => ctx.firstOf.get(r[i].night) === r[i] },
-    { id: "closer", name: "Closer", desc: "Sang the last song of a night", test: (r, i, ctx) => ctx.lastOf.get(r[i].night) === r[i] && r[i].night !== ctx.liveNight },
+    B("plusone", "Plus One", "rare", "first-timers brought up", ["Got a first-timer up on the mic with you", "Got {n} first-timers up on the mic with you"], count((r, i, ctx) => i > 0 && isGroup(r[i].singer) && ctx.debutRows.has(r[i]))),
+    B("broken", "Broken Record", "rare", "repeats", ["Same song twice in one night", "Same song twice in a night, {n} times"], count((r, i) => { if (!r[i].title) return false;
+      for (let j = i - 1; j >= 0 && r[j].night === r[i].night; j--) if (key(r[j].title) === key(r[i].title)) return true; return false; })),
+    B("signature", "Signature Song", "repeat", "nights for one song", ["Same song on {n} different nights"], biggest((p) => p.title && key(p.title), (p) => p.night)),
+    B("loyal", "Superfan", "artist", "songs by one artist", ["Same artist {n} times"], biggest((p) => p.artist && key(p.artist))),
+    B("brit", "Britpop Lifer", "genre", "Britpop songs", ["{n} Britpop songs (Oasis, Pulp, Blur…)"], count((r, i) => art(BRIT)(r[i]))),
+    B("punk", "Punk Points", "genre", "punk songs", ["{n} punk songs"], count((r, i) => art(PUNK)(r[i]))),
+    // Genre badges: songs in the genre. Genre Hopper: songs from different genres.
+    ...GENRES.map((g) => B(g.id, g.name, "genre", g.genre + " songs", ["{n} " + g.genre + " songs"], count((r, i) => inGenre(g.id)(r[i])), { genre: true })),
+    B("g-hopper", "Genre Hopper", "genres", "genres", ["Songs from {n} different genres"], distinct((p) => (p.title ? genresOf(p.artist) : []))),
+    B("owl", "Night Owl", "rare", "songs after 1:30am", ["Sang after 1:30am", "Sang after 1:30am {n} times"], count((r, i) => lateNight(r[i]))),
+    B("opener", "Opening Act", "rare", "nights opened", ["Sang the first song of a night", "Opened {n} nights"], count((r, i, ctx) => ctx.firstOf.get(r[i].night) === r[i])),
+    B("closer", "Closer", "rare", "nights closed", ["Sang the last song of a night", "Closed {n} nights"], count((r, i, ctx) => ctx.lastOf.get(r[i].night) === r[i] && r[i].night !== ctx.liveNight)),
     // Crowd reactions (live emoji taps on the phone site). ctx.rx(row) -> {reaction: count} for that song.
-    { id: "b-crowd", name: "Crowd Pleaser", desc: "10 hype reactions on one song", test: (r, i, ctx) => hypeOf(ctx.rx(r[i])) >= 10 },
-    { id: "b-drop", name: "Mic Dropper", desc: "3 mic drops on one song", test: (r, i, ctx) => (ctx.rx(r[i]).micdrop || 0) >= 3 },
-    { id: "b-encore", name: "Encore Earned", desc: "3 encore calls on one song", test: (r, i, ctx) => (ctx.rx(r[i]).encore || 0) >= 3 },
-    { id: "b-tomato", name: "Tomato Survivor", desc: "Took 3 tomatoes on one song", test: (r, i, ctx) => (ctx.rx(r[i]).tomato || 0) >= 3 },
-    { id: "trend", name: "Trendsetter", desc: "Sang a song someone else picked up later", test: (r, i, ctx) => r[i].title && ctx.byTitle.get(key(r[i].title)).some((p) => p.played_at > r[i].played_at && key(p.singer) !== key(r[i].singer)) },
+    B("b-crowd", "Crowd Pleaser", "rare", "songs", ["10 hype reactions on one song", "10+ hype reactions on {n} songs"], count((r, i, ctx) => hypeOf(ctx.rx(r[i])) >= 10)),
+    B("b-drop", "Mic Dropper", "rare", "songs", ["3 mic drops on one song", "3+ mic drops on {n} songs"], count((r, i, ctx) => (ctx.rx(r[i]).micdrop || 0) >= 3)),
+    B("b-encore", "Encore Earned", "rare", "songs", ["3 encore calls on one song", "3+ encore calls on {n} songs"], count((r, i, ctx) => (ctx.rx(r[i]).encore || 0) >= 3)),
+    B("b-tomato", "Tomato Survivor", "rare", "songs", ["Took 3 tomatoes on one song", "Took 3+ tomatoes on {n} songs"], count((r, i, ctx) => (ctx.rx(r[i]).tomato || 0) >= 3)),
+    B("trend", "Trendsetter", "often", "songs others picked up", ["Sang a song someone else picked up later", "{n} songs someone else picked up later"], count((r, i, ctx) => r[i].title && ctx.byTitle.get(key(r[i].title)).some((p) => p.played_at > r[i].played_at && key(p.singer) !== key(r[i].singer)))),
   ];
+  const BADGE_BY = new Map(BADGES.map((b) => [b.id, b]));
+  // The rule for reaching a badge's level, e.g. "Sang on 16 different nights".
+  function descAt(b, lv) {
+    const n = needFor(b.ld, Math.max(1, lv)), d = b.desc;
+    return (n === 1 || d.length === 1 ? d[0] : d[1]).replace("{n}", String(n));
+  }
+  const labelOf = (b, lv) => (b.ld === LADDERS.once ? b.name : b.name + " · " + tierName(lv));
 
   // People: solo singer names, plus each part of a duet or group name ("Val and bleacher jeff" -> val, bleacher jeff).
   // Someone who only ever sings in duets still gets leaderboard credit and badges. Parts are only split on
@@ -173,22 +209,45 @@
     return { firstOf, lastOf, byTitle, liveNight, weeks, runAt, debutRows, rx: (p) => (reax && p.uuid && reax.get(p.uuid)) || none };
   }
 
-  // -> Map(personKey -> {name, rows, badges: [{id, name, desc, at: row}]})
+  // One earned badge at level lv: {id, name, label ("Regular · Gold"), tier, level, desc, at (row it was first earned),
+  // lvAt (row it reached this level), value (count so far), next (count for the next level, null if it tops out), ups}
+  function badgeAt(b, t, lv) {
+    const next = needFor(b.ld, lv + 1);
+    return { id: b.id, name: b.name, label: labelOf(b, lv), tier: b.ld === LADDERS.once ? "" : tierName(lv), level: lv, desc: descAt(b, lv), unit: b.unit,
+      at: t.ups[0], lvAt: t.ups[lv - 1], value: t.value, next: isFinite(next) ? next : null, ups: t.ups };
+  }
+  // -> Map(personKey -> {name, rows, badges: [earned badge, see badgeAt], track: Map(id -> {value, level, ups})})
   function badgesAll(plays, liveNight, reax) {
     const ctx = context(plays, liveNight, reax);
     const ppl = people(plays);
     ppl.forEach((e) => {
-      e.badges = [];
-      BADGES.forEach((b) => { for (let i = 0; i < e.rows.length; i++) if (b.test(e.rows, i, ctx)) { e.badges.push({ id: b.id, name: b.name, desc: b.desc, at: e.rows[i] }); break; } });
+      e.badges = []; e.track = new Map();
+      BADGES.forEach((b) => {
+        const step = b.track(), t = { value: 0, level: 0, ups: [] }; // ups[k] = the row that reached level k + 1
+        for (let i = 0; i < e.rows.length; i++) {
+          t.value = Math.max(t.value, step(e.rows, i, ctx));
+          while (t.value >= needFor(b.ld, t.level + 1)) { t.level++; t.ups.push(e.rows[i]); }
+        }
+        e.track.set(b.id, t);
+        if (t.level) e.badges.push(badgeAt(b, t, t.level));
+      });
     });
     return ppl;
   }
+  // Total badge levels (Debut left out): the collector score.
+  const levelsOf = (e) => (e.badges || []).reduce((a, b) => a + (b.id === "debut" ? 0 : b.level), 0);
 
-  // Badges first earned on `night` (Debut left out: everyone gets it)
+  // Badges earned or leveled up on `night`, at the highest level reached that night (Debut left out: everyone gets it).
+  // badge.up is true for a level-up of a badge they already had.
   function unlockedOn(ppl, night) {
     const out = [];
-    ppl.forEach((e) => e.badges.forEach((b) => { if (b.at.night === night && b.id !== "debut") out.push({ who: e.name, badge: b }); }));
-    return out.sort((a, b) => b.badge.at.played_at - a.badge.at.played_at);
+    ppl.forEach((e) => e.badges.forEach((b) => { if (b.id === "debut") return;
+      let lv = 0; b.ups.forEach((row, k) => { if (row.night === night) lv = k + 1; });
+      if (!lv) return;
+      const x = badgeAt(BADGE_BY.get(b.id), e.track.get(b.id), lv);
+      x.up = b.ups[0].night !== night; x.lvAt = b.ups[lv - 1];
+      out.push({ who: e.name, badge: x }); }));
+    return out.sort((a, b) => b.badge.lvAt.played_at - a.badge.lvAt.played_at);
   }
 
   // ---------- dares ----------
@@ -277,7 +336,7 @@
     if ((w = best((e) => e.rows.length, 0, guests))) out.push({ id: "s-mvp", label: "Season MVP", who: w.e.name, what: "Most songs of the season", stat: w.v + " songs" });
     if ((w = best(nightsOf, 0, guests)) && w.v > 1) out.push({ id: "s-loyal", label: "Perfect Attendance", who: w.e.name, what: "Showed up and sang the most nights", stat: w.v + " nights" });
     if ((w = best((e) => e.rows.reduce((a, p) => a + (p.length_s || 0), 0), 0, guests))) out.push({ id: "s-mic", label: "Mic Time Champ", who: w.e.name, what: "Most minutes on the mic", stat: Math.round(w.v / 60) + " minutes" });
-    if ((w = best((e) => e.badges.filter((b) => b.id !== "debut").length))) out.push({ id: "s-badges", label: "Badge Hunter", who: w.e.name, what: "Most badges earned", stat: w.v + " badges" });
+    if ((w = best(levelsOf))) out.push({ id: "s-badges", label: "Badge Hunter", who: w.e.name, what: "Most badge levels earned", stat: w.v + " badge levels" });
     if ((w = best((e) => new Set(e.rows.filter((p) => p.release_year).map((p) => decade(p.release_year))).size, 3))) out.push({ id: "s-range", label: "Widest Range", who: w.e.name, what: "Songs from the most decades", stat: w.v + " decades" });
     if ((w = best((e) => e.rows.filter((p) => isGroup(p.singer)).length)) && w.v > 1) out.push({ id: "s-duet", label: "Best Duet Partner", who: w.e.name, what: "Shared the mic the most", stat: w.v + " group songs" });
     if ((w = best((e) => { const c = new Map(); e.rows.forEach((p) => { if (p.title) c.set(key(p.title), (c.get(key(p.title)) || 0) + 1); }); return Math.max(0, ...c.values()); })) && w.v > 2) {
@@ -292,13 +351,16 @@
   }
 
   // ---------- badge book ----------
+  // Every badge, rarest first, with who holds it (highest level first). Collectors rank by total badge levels.
   function badgeBook(ppl) {
     const list = [...ppl.values()].filter((e) => e.rows.length), total = list.length || 1;
     const book = BADGES.filter((b) => b.id !== "debut").map((b) => {
-      const holders = list.filter((e) => e.badges.some((x) => x.id === b.id));
-      return { id: b.id, name: b.name, desc: b.desc, holders: holders.map((e) => e.name), pct: Math.round((100 * holders.length) / total) };
+      const held = list.map((e) => ({ name: e.name, b: e.badges.find((x) => x.id === b.id) })).filter((x) => x.b)
+        .sort((x, y) => y.b.level - x.b.level || y.b.value - x.b.value || x.b.lvAt.played_at - y.b.lvAt.played_at);
+      return { id: b.id, name: b.name, desc: descAt(b, 1), holders: held.map((x) => x.name), top: held.map((x) => ({ name: x.name, tier: x.b.tier, level: x.b.level })),
+        pct: Math.round((100 * held.length) / total), maxed: !b.ld.step };
     }).sort((a, b) => a.holders.length - b.holders.length || a.name.localeCompare(b.name));
-    const collectors = list.map((e) => ({ name: e.name, n: e.badges.filter((b) => b.id !== "debut").length })).filter((x) => x.n).sort((a, b) => b.n - a.n).slice(0, 10);
+    const collectors = list.map((e) => ({ name: e.name, n: levelsOf(e), badges: e.badges.filter((b) => b.id !== "debut").length })).filter((x) => x.n).sort((a, b) => b.n - a.n || b.badges - a.badges).slice(0, 10);
     return { book, collectors, singers: list.length };
   }
 
@@ -324,30 +386,24 @@
       .filter((x) => x.alive && x.current >= 2).sort((a, b) => b.current - a.current || a.name.localeCompare(b.name));
   }
 
-  // ---------- progress toward badges not earned yet ----------
+  // ---------- progress toward each badge's next level ----------
+  // -> [{id, name, label, tier, level (the next one), desc, have, need, unit}], closest first.
+  // Genre badges show up only once you've sung one song in that genre; Hot Streak only while the streak is alive
+  // (a broken one starts over), counting the current streak toward the level above your best.
   function progress(e, plays) {
-    if (!e) return [];
-    const r = e.rows, has = new Set(e.badges.map((b) => b.id));
-    const nights = new Set(r.map((p) => p.night)).size;
-    const decs = new Set(r.filter((p) => p.release_year).map((p) => decade(p.release_year))).size;
-    const perNight = Math.max(0, ...[...new Set(r.map((p) => p.night))].map((n) => r.filter((p) => p.night === n).length));
-    const artistMax = Math.max(0, ...[...new Set(r.map((p) => key(p.artist)).filter(Boolean))].map((a) => r.filter((p) => key(p.artist) === a).length));
-    const cand = [
-      ["regular", nights, 3, "nights"], ["lifer", nights, 6, "nights"], ["hattrick", perNight, 3, "songs in a night"],
-      ["hopper", decs, 4, "decades"], ["timelord", decs, 6, "decades"], ["loyal", artistMax, 3, "songs by one artist"],
-      ["brit", r.filter(art(BRIT)).length, 2, "Britpop songs"], ["punk", r.filter(art(PUNK)).length, 2, "punk songs"],
-      // Genre badges show up as "next" only once you've sung one song in that genre.
-      ...GENRES.map((g) => [g.id, r.filter(inGenre(g.id)).length, 2, g.genre + " songs"]).filter((x) => x[1] >= 1),
-      ["g-hopper", new Set(r.flatMap((p) => (p.title ? genresOf(p.artist) : []))).size, 5, "genres"],
-    ];
-    // Streak badges: only while the streak is alive, since a broken one starts over.
-    if (plays) { const st = streakOf(e, plays), cur = st.alive ? st.current : 0;
-      [["streak3", 3], ["streak5", 5], ["streak10", 10]].forEach(([id, need]) => cand.push([id, cur, need, "weeks in a row"])); }
-    return cand.filter(([id, have, need]) => !has.has(id) && have < need && !(id === "lifer" && !has.has("regular")) && !(id === "timelord" && !has.has("hopper"))
-        && !(id === "streak5" && !has.has("streak3")) && !(id === "streak10" && !has.has("streak5")) && !(id.startsWith("streak") && have < 1))
-      .map(([id, have, need, unit]) => { const b = BADGES.find((x) => x.id === id); return { id, name: b.name, desc: b.desc, have, need, unit }; })
-      .sort((a, b) => b.have / b.need - a.have / a.need);
+    if (!e || !e.track) return [];
+    const st = plays ? streakOf(e, plays) : null;
+    return BADGES.filter((b) => b.ld !== LADDERS.once).map((b) => {
+      const t = e.track.get(b.id); if (!t) return null;
+      const lv = t.level + 1, need = needFor(b.ld, lv), from = needFor(b.ld, t.level) || 0;
+      let have = t.value;
+      if (!isFinite(need)) return null;
+      if (b.id === "streak3") { if (!st || !st.alive || st.current < 1) return null; have = st.current; }
+      if (have < 1) return null;
+      return { id: b.id, name: b.name, label: labelOf(b, lv), tier: tierName(lv), level: lv, desc: descAt(b, lv), have, need, unit: b.unit,
+        part: Math.max(0, (have - (b.id === "streak3" ? 0 : from)) / Math.max(1, need - (b.id === "streak3" ? 0 : from))) };
+    }).filter(Boolean).sort((a, b) => b.part - a.part || b.have / b.need - a.have / a.need);
   }
 
-  global.KaraokeFun = { GENRES, genresOf, favoriteBands, BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, streakOf, hotStreaks, weekOf, personKey: (s) => key(s) };
+  global.KaraokeFun = { TIERS, tierName, LADDERS, needFor, levelOf, levelsOf, GENRES, genresOf, favoriteBands, BADGES, DARES, badgesAll, unlockedOn, daresStatus, daresFor, watchSong, people, canonicalize, seasonAwards, badgeBook, progress, streakOf, hotStreaks, weekOf, personKey: (s) => key(s) };
 })(typeof window !== "undefined" ? window : globalThis);
