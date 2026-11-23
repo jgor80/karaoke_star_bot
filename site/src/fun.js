@@ -210,10 +210,31 @@
     { id: "firsttimer", text: "A first-timer takes the mic after 11pm", test: (p, ctx) => !ctx.pastSingers.has(key(p.singer)) && key(p.singer) && (venueHM(p.played_at).h >= 23 || venueHM(p.played_at).h < 6) },
     { id: "table", text: "Get your whole table up there", test: (p) => isTable(p.singer) || (p.singer || "").split(SPLIT).filter(Boolean).length >= 3 },
   ];
+  // Theme nights: one of that night's 3 dares is swapped for the theme dare (keyed "venue:night", venue-local date).
+  // GTA 6 radio + trailer songs (title, artist-fragment), from the in-game station lists after the Nov 19 2026 launch.
+  const GTA6 = [
+    ["love is a long road", "petty"], ["hot together", "pointer"], ["everybody have fun tonight", "wang chung"],
+    ["in the air tonight", "collins"], ["against all odds", "collins"], ["take me home tonight", "money"],
+    ["jack and diane", "mellencamp"], ["panama", "van halen"], ["nothin' but a good time", "poison"], ["runaway", "bon jovi"],
+    ["cherry pie", "warrant"], ["dr. feelgood", "tley"], ["i want a new drug", "huey"], ["lawyers, guns and money", "zevon"],
+    ["talking in your sleep", "romantics"], ["cocaine", "clapton"], ["we don't need another hero", "tina turner"],
+    ["listen to your heart", "roxette"], ["angel of the morning", "newton"], ["stop draggin' my heart around", "nicks"],
+    ["lips like sugar", "bunnymen"], ["steppin' out", "joe jackson"], ["loverboy", "billy ocean"], ["rhinestone cowboy", "campbell"],
+    ["master of puppets", "metallica"], ["sober", "tool"], ["good 4 u", "rodrigo"], ["hot to go", "chappell"],
+    ["pumped up kicks", "foster"], ["electric feel", "mgmt"], ["gimme more", "britney"], ["houdini", "dua lipa"],
+    ["lean on", "major lazer"], ["sports car", "tate"], ["only girl", "rihanna"], ["the boy is mine", "brandy"],
+    ["big pimpin", "jay"], ["a milli", "lil wayne"], ["buy u a drank", "t-pain"], ["mi tierra", "estefan"],
+  ];
+  const isGta6 = (p) => { const t = key(p.title), a = key(p.artist); return GTA6.some(([tt, aa]) => t.startsWith(tt) && a.includes(aa)); };
+  const THEMES = {
+    "wbl:2026-11-22": { id: "gta6", text: "Sing a song off the GTA 6 radio 🎮", test: isGta6 },
+  };
   function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
   function daresFor(night) {
     const pool = DARES.slice(); let h = hash("dares:" + night); const out = [];
     while (out.length < 3 && pool.length) { out.push(pool.splice(h % pool.length, 1)[0]); h = hash(String(h)); }
+    const theme = THEMES[((global.OKE_VENUE && global.OKE_VENUE.slug) || "wbl") + ":" + night];
+    if (theme) out[out.length - 1] = theme;
     return out;
   }
   // -> [{id, text, claimedBy: row|null}]
