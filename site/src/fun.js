@@ -210,10 +210,29 @@
     { id: "firsttimer", text: "A first-timer takes the mic after 11pm", test: (p, ctx) => !ctx.pastSingers.has(key(p.singer)) && key(p.singer) && (venueHM(p.played_at).h >= 23 || venueHM(p.played_at).h < 6) },
     { id: "table", text: "Get your whole table up there", test: (p) => isTable(p.singer) || (p.singer || "").split(SPLIT).filter(Boolean).length >= 3 },
   ];
+  // Theme nights: one of that night's 3 dares is swapped for the theme dare (keyed "venue:night", venue-local date).
+  // GTA 6 songs Rockstar itself confirms: the official trailer songs plus "Grand Theft Auto VI: The Album"
+  // (rockstargames.com/VI/music). [title, artist-fragment]; songbook copies may be credited to "Grand Theft Auto VI".
+  const GTA6 = [
+    ["love is a long road", "petty"], ["hot together", "pointer"],
+    ["starting from zero", "justice"], ["that's it", "yung lean"], ["ahh yea", "carti"], ["rhyno", "travis scott"],
+    ["sexy magic", "ca7riel"], ["flower in a hurricane", "justice"], ["go easy", "dua lipa"], ["last thing you need", "wallen"],
+    ["suzuki", "fuerza regida"], ["macacoa 2000", "rauw"], ["dance with me", "boogie"], ["bigger", "burna"],
+    ["count up", "gunna"], ["let's rock", "kodak"], ["wakin up flex", "young thug"], ["ikyfl", "grizzley"], ["tf?", "toliver"],
+    ["don't chart", "cardi"], ["power trip", "jennie"], ["blood in your eyes", "tove lo"], ["fast emotion", "larsson"],
+    ["sweet like candy", "cabello"], ["only one", "fcukers"], ["all again", "rose gray"], ["crazy for you", "lana del rey"],
+    ["no me busques", "apollo"], ["bright lights, big city", "keith richards"], ["overtown lights", "stanley clarke"],
+  ];
+  const isGta6 = (p) => { const t = key(p.title), a = key(p.artist); return GTA6.some(([tt, aa]) => t.startsWith(tt) && (a.includes(aa) || a.includes("grand theft auto"))); };
+  const THEMES = {
+    "wbl:2026-11-22": { id: "gta6", text: "Sing a song from GTA 6 (trailer or official album) 🎮", test: isGta6 },
+  };
   function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
   function daresFor(night) {
     const pool = DARES.slice(); let h = hash("dares:" + night); const out = [];
     while (out.length < 3 && pool.length) { out.push(pool.splice(h % pool.length, 1)[0]); h = hash(String(h)); }
+    const theme = THEMES[((global.OKE_VENUE && global.OKE_VENUE.slug) || "wbl") + ":" + night];
+    if (theme) out[out.length - 1] = theme;
     return out;
   }
   // -> [{id, text, claimedBy: row|null}]
